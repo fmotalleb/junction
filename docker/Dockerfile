@@ -29,7 +29,9 @@ RUN dpkg -i /singbox/${SINGBOX_BIN_NAME} \
 COPY ./docker/root/ /
 COPY --from=builder /app/junction /usr/bin/junction
 
-ENV VLESS_PROXY=
+ENV VLESS_PROXY= \
+  CA_KEY="/etc/ssl/private/ca-key.pem" \
+  CA_CERT="/etc/ssl/certs/ca-cert.pem"
 
 ENTRYPOINT [ "/docker-entrypoint.sh" ]
 CMD [ "supervisord" ]
