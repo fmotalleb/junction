@@ -1,0 +1,10 @@
+services:
+  junction:
+    build:
+      context: .
+    volumes:
+      - "./root/docker-entrypoint.sh:/docker-entrypoint.sh"
+    ports:
+      - 8090:80
+    env_file:
+      - .env
