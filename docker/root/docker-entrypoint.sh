@@ -33,7 +33,7 @@ export PACKET_ENCODING="${packetEncoding:-'xudp'}"
 
 envsubst </etc/singbox/config.json.template >/etc/singbox/config.json
 
-mkdir /etc/junction
+mkdir /etc/junction || true
 env | awk 'BEGIN {
     proxy_address = "127.0.0.1:6980";
 }
@@ -50,4 +50,5 @@ env | awk 'BEGIN {
     print "";
 }' >/etc/junction/config.toml
 
+/tools/generate-ca.sh
 exec "$@"

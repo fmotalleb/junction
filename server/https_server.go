@@ -10,7 +10,7 @@ import (
 
 func serveHttps(target config.Target) error {
 
-	cert, key, err := generateSelfSignedCert(target.Target.Host)
+	cert, key, err := generateCert(target.Target.Host)
 	if err != nil {
 		return fmt.Errorf("Failed to generate cert: %w", err)
 	}
