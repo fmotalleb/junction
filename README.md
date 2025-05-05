@@ -22,12 +22,12 @@
 
 ## 📋 **Table of Contents**
 
-1. [Getting Started](#🚀-getting-started)  
-2. [Configuration](#🛠-configuration)  
-3. [Environment Variables](#💡-docker-environment-variables)  
-4. [Usage](#▶️-usage)  
-5. [Development](#🛠-development)  
-6. [License](#📜-license)  
+1. [Getting Started](#-getting-started)  
+2. [Configuration](#-configuration)  
+3. [Environment Variables](#-docker-environment-variables)  
+4. [Usage](#%EF%B8%8F-usage)  
+5. [Development](#-development)  
+6. [License](#-license)  
 
 ---
 
