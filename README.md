@@ -134,6 +134,18 @@ These variables help configure VLESS proxies and expose specific endpoints for H
 
 ---
 
+### **Using CA-Certificate**
+
+In order to use a CA-certificate, please set the `CA_KEY` and `CA_CERT` environment variables to valid CA-certificate files.
+
+If you want to create a new CA-certificate, you can use the script located at:
+
+```bash
+docker/root/tools/generate-ca.sh
+```
+
+---
+
 ### **Running with Docker**
 
 To build and launch the Docker container:
