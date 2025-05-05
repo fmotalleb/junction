@@ -2,9 +2,12 @@ services:
   junction:
     build:
       context: .
+      dockerfile: docker/Dockerfile
     volumes:
       - "./root/docker-entrypoint.sh:/docker-entrypoint.sh"
+      - "./proxy/:/usr/local/etc/haproxy/"
     ports:
-      - 8090:80
+      - 80:80
+      - 443:443
     env_file:
       - .env

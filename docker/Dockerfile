@@ -1,11 +1,20 @@
-ARG NGINX_TAG=stable-bookworm
-FROM library/nginx:$NGINX_TAG
+FROM golang:latest AS builder
+RUN mkdir /app
+COPY go.mod /app/
+COPY go.sum /app/
+WORKDIR /app
+RUN go mod download
+COPY ./ /app
+RUN CGO_ENABLED=0 go build -o junction
+RUN chmod +x junction
+
+FROM library/debian:bookworm-slim
 
 RUN --mount=type=cache,target=/var/lib/apt/lists/ \
   --mount=type=cache,target=/var/cache/apt/archives/ \
   apt-get update \
   && apt-get full-upgrade -y \
-  && apt-get install -y supervisor
+  && apt-get install -y supervisor gettext
 
 ARG SINGBOX_VERSION=1.11.9
 ARG SINGBOX_ARCH=amd64
@@ -15,11 +24,12 @@ ADD ${SINGBOX_URL} /singbox/
 
 RUN dpkg -i /singbox/${SINGBOX_BIN_NAME} \
   && rm -rf /singbox \
-  && mkdir /etc/singbox/ \
-  && mv /docker-entrypoint.sh /nginx-entrypoint.sh
+  && mkdir /etc/singbox/
 
 COPY ./root/ /
+COPY --from=builder /app/junction /usr/bin/junction
 
 ENV VLESS_PROXY=
 
+ENTRYPOINT [ "/docker-entrypoint.sh" ]
 CMD [ "supervisord" ]
