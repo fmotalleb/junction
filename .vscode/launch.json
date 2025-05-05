@@ -11,8 +11,7 @@
       "mode": "auto",
       "program": "${workspaceFolder}",
       "args": [
-        "http:8080",
-        "https:8443"
+        "--config=config.yaml",
       ]
     }
   ]

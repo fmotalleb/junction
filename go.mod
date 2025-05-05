@@ -3,6 +3,7 @@ module github.com/FMotalleb/junction
 go 1.24.2
 
 require (
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	golang.org/x/net v0.39.0
