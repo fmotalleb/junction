@@ -1,0 +1,4 @@
+[[targets]]
+port = 8443
+proxy = "127.0.0.1:7890"
+target = "https://example.com"

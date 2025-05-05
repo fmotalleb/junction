@@ -33,14 +33,21 @@ export PACKET_ENCODING="${packetEncoding:-'xudp'}"
 
 envsubst </etc/singbox/config.json.template >/etc/singbox/config.json
 
-openssl req -x509 -nodes -days 365 \
-  -newkey rsa:2048 \
-  -keyout /etc/ssl/private/haproxy.key \
-  -out /etc/ssl/certs/haproxy.crt \
-  -subj "/CN=*"
+mkdir /etc/junction
+env | awk 'BEGIN {
+    proxy_address = "127.0.0.1:6980";
+}
 
-mkdir -p /usr/local/etc/ssl/private/
-cat /etc/ssl/certs/haproxy.crt /etc/ssl/private/haproxy.key >/usr/local/etc/ssl/private/haproxy.pem
-chown haproxy:haproxy /usr/local/etc/ssl/ -R
-# exit 1
+/^EXPOSE_[0-9]+=/ {
+    split($0, parts, "=");
+    port = substr(parts[1], 8);
+    url = parts[2];
+    
+    print "[[targets]]";
+    print "port =", port;
+    print "proxy = \"" proxy_address "\"";
+    print "target = \"" url "\"";
+    print "";
+}' >/etc/junction/config.toml
+
 exec "$@"

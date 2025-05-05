@@ -4,8 +4,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     volumes:
-      - "./root/docker-entrypoint.sh:/docker-entrypoint.sh"
-      - "./proxy/:/usr/local/etc/haproxy/"
+      - "./docker/root/docker-entrypoint.sh:/docker-entrypoint.sh"
     ports:
       - 80:80
       - 443:443

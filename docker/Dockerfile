@@ -26,7 +26,7 @@ RUN dpkg -i /singbox/${SINGBOX_BIN_NAME} \
   && rm -rf /singbox \
   && mkdir /etc/singbox/
 
-COPY ./root/ /
+COPY ./docker/root/ /
 COPY --from=builder /app/junction /usr/bin/junction
 
 ENV VLESS_PROXY=

@@ -3,7 +3,7 @@
     {
       "domain_strategy": "",
       "listen": "127.0.0.1",
-      "listen_port": 2080,
+      "listen_port": 6980,
       "sniff": true,
       "sniff_override_destination": false,
       "tag": "mixed-in",
