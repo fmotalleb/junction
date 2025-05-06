@@ -110,6 +110,8 @@ Use environment variables for dynamic runtime configuration. Below is an example
 VLESS_PROXY=
 EXPOSE_80=http://example.com
 EXPOSE_443=https://example.com
+
+# EXPOSE_<PORT>=<PROTOCOL>://<TARGET ADDRESS>(:<PORT>)
 ```
 
 These variables help configure VLESS proxies and expose specific endpoints for HTTP/HTTPS traffic.
@@ -179,7 +181,6 @@ Junction's project structure is organized as follows:
 ├── config/ # Configuration parsing and helpers
 ├── docker/ # Docker-related files
 ├── server/ # Core server logic
-├── ssl/ # SSL certificates and configuration
 ├── main.go # Main entry point
 └── docker-compose.yml # Docker Compose configuration
 ```
