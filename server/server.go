@@ -19,19 +19,25 @@ func Serve(c config.Config) error {
 	if err != nil {
 		return err
 	}
-	for _, t := range c.Targets {
+	for _, e := range c.EntryPoints {
 		wg.Add(1)
-		go handleTarget(ctx, t, wg)
+		go handleEntry(ctx, e, wg)
 	}
 	wg.Wait()
 	return errors.New("every listener died")
 }
 
-func handleTarget(ctx context.Context, t config.Target, wg *sync.WaitGroup) {
+func handleEntry(ctx context.Context, e config.EntryPoint, wg *sync.WaitGroup) {
 	defer wg.Done()
-	l := log.FromContext(ctx).Named("handleTarget")
-	if err := router.Handle(ctx, t); err != nil {
-		l.Warn("failed to start handler", zap.Any("target", t), zap.Error(err))
+	if err := router.Handle(ctx, e); err != nil {
+		log.
+			FromContext(ctx).
+			Named("handleEntry").
+			Warn(
+				"failed to start handler",
+				zap.Any("entry", e),
+				zap.Error(err),
+			)
 		return
 	}
 }

@@ -22,16 +22,16 @@ func init() {
 	registerHandler(httpHandler)
 }
 
-func httpHandler(ctx context.Context, target config.Target) error {
-	if target.Routing != "http-header" {
+func httpHandler(ctx context.Context, entry config.EntryPoint) error {
+	if entry.Routing != "http-header" {
 		return nil
 	}
 
-	l := log.FromContext(ctx).Named("router.http").With(zap.Any("target", target))
+	l := log.FromContext(ctx).Named("router.http").With(zap.Any("entry", entry))
 
 	targetPort := "80"
-	if target.TargetPort != 0 {
-		targetPort = strconv.Itoa(target.TargetPort)
+	if entry.TargetPort != 0 {
+		targetPort = strconv.Itoa(entry.TargetPort)
 	}
 
 	server := &http.Server{
@@ -39,19 +39,19 @@ func httpHandler(ctx context.Context, target config.Target) error {
 		BaseContext: func(_ net.Listener) context.Context {
 			return ctx
 		},
-		Addr: target.GetListenAddr(),
+		Addr: entry.GetListenAddr(),
 		Handler: &httpProxyHandler{
 			ctx:        ctx,
 			logger:     l,
-			proxyAddr:  target.Proxy,
+			proxyAddr:  entry.Proxy,
 			targetPort: targetPort,
-			listenPort: strconv.Itoa(target.ListenPort),
+			listenPort: strconv.Itoa(entry.ListenPort),
 		},
 	}
 
 	l.Info("HTTP proxy listening",
-		zap.String("listenAddr", target.GetListenAddr()),
-		zap.String("proxyAddr", target.Proxy),
+		zap.String("listenAddr", entry.GetListenAddr()),
+		zap.String("proxyAddr", entry.Proxy),
 		zap.String("targetPort", targetPort),
 	)
 

@@ -1,10 +1,10 @@
-[[targets]]
+[[entrypoints]]
 routing = "sni"
 port = 8443
 to = 443
 proxy = "127.0.0.1:7890"
 
-[[targets]]
+[[entrypoints]]
 routing = "http-header"
 port = 8080
 to = 80

@@ -75,29 +75,34 @@ Steps to install Junction:
 
 ### Config File
 
-Junction supports configuration files in **TOML** or **YAML** formats for flexible target management.
+Junction supports configuration files in **TOML** or **YAML** formats for flexible entrypoint management.
 
 #### **Example: TOML Configuration**
 
 ```toml
-[[targets]]
+[[entrypoints]]
 port = 8443 # Listen port
 to = 443  # Reroutes connections to this port (defaults to 443)
 routing = "sni" # Routing method
 proxy = "127.0.0.1:7890" # socks5 proxy address
 
-[[targets]]
+[[entrypoints]]
 port = 8080
 to = 80 # Defaults to 80
 routing = "http-header" 
 proxy = "127.0.0.1:7890"
 
+[[entrypoints]]
+port = 8090
+to = 80 # Defaults to 80
+routing = "http-header" 
+proxy = "direct" # Do not handle using proxy just reverse proxy it directly
 ```
 
 #### **Example: YAML Configuration**
 
 ```yaml
-targets:
+entrypoints:
 - routing: "sni" # Routing method
   port: 8443 # Listen port
   to: 443 # Reroutes connections to this port (defaults to 443)

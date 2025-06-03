@@ -16,15 +16,15 @@ func init() {
 	registerHandler(sniRouter)
 }
 
-func sniRouter(ctx context.Context, target config.Target) error {
-	if target.Routing != "sni" {
+func sniRouter(ctx context.Context, entry config.EntryPoint) error {
+	if entry.Routing != "sni" {
 		return nil
 	}
 	l := log.FromContext(ctx).
 		Named("router.sni").
-		With(zap.Any("target", target))
+		With(zap.Any("entry", entry))
 
-	listenAddr := target.GetListenAddr()
+	listenAddr := entry.GetListenAddr()
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		l.Error("failed to listen", zap.String("addr", listenAddr), zap.Error(err))
@@ -33,10 +33,10 @@ func sniRouter(ctx context.Context, target config.Target) error {
 	defer listener.Close()
 
 	targetPort := "443"
-	if target.TargetPort != 0 {
-		targetPort = strconv.Itoa(target.TargetPort)
+	if entry.TargetPort != 0 {
+		targetPort = strconv.Itoa(entry.TargetPort)
 	}
-	l.Info("SNI proxy booted", zap.String("listen", listenAddr), zap.String("proxy", target.Proxy), zap.String("targetPort", targetPort))
+	l.Info("SNI proxy booted", zap.String("listen", listenAddr), zap.String("proxy", entry.Proxy), zap.String("targetPort", targetPort))
 
 	go func() {
 		<-ctx.Done()
@@ -55,7 +55,7 @@ func sniRouter(ctx context.Context, target config.Target) error {
 				continue
 			}
 		}
-		go handleSNIConnection(l, conn, target.Proxy, targetPort)
+		go handleSNIConnection(l, conn, entry.Proxy, targetPort)
 	}
 }
 

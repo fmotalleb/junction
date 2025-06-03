@@ -5,20 +5,20 @@ import (
 )
 
 type Config struct {
-	Targets []Target `mapstructure:"targets"`
+	EntryPoints []EntryPoint `mapstructure:"entrypoints"`
 }
 
-type Target struct {
+type EntryPoint struct {
 	ListenPort int    `mapstructure:"port"`
 	TargetPort int    `mapstructure:"to"`
 	Proxy      string `mapstructure:"proxy"`
 	Routing    string `mapstructure:"routing"`
 }
 
-func (t *Target) GetListenAddr() string {
+func (t *EntryPoint) GetListenAddr() string {
 	return fmt.Sprintf(":%d", t.ListenPort)
 }
 
-func (t *Target) HasProxy() bool {
-	return t.Proxy != "direct"
+func (t *EntryPoint) IsDirect() bool {
+	return t.Proxy == "direct"
 }
