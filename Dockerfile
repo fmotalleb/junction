@@ -8,7 +8,7 @@
 # RUN CGO_ENABLED=0 go build -o junction
 # RUN chmod +x junction
 
-FROM library/debian:bookworm-slim
+FROM library/debian:bookworm-slim as slim
 
 RUN --mount=type=cache,target=/var/lib/apt/lists/ \
   --mount=type=cache,target=/var/cache/apt/archives/ \
