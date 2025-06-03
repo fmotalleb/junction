@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/FMotalleb/junction/config"
+	"github.com/FMotalleb/junction/proxy"
 	"github.com/FMotalleb/junction/utils"
 	"github.com/FMotalleb/log"
 	"go.uber.org/zap"
-	"golang.org/x/net/proxy"
 )
 
 func init() {
@@ -110,7 +110,8 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
-	dialer, err := proxy.SOCKS5("tcp", h.proxyAddr, nil, proxy.Direct)
+
+	dialer, err := proxy.NewDialer(h.proxyAddr)
 	if err != nil {
 		h.logger.Error("Failed to create SOCKS5 dialer", zap.Error(err))
 		http.Error(w, "Failed to create SOCKS5 dialer", http.StatusInternalServerError)
@@ -169,7 +170,7 @@ func (h *httpProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request, ta
 		RawQuery: r.URL.RawQuery,
 	}
 
-	dialer, err := proxy.SOCKS5("tcp", h.proxyAddr, nil, proxy.Direct)
+	dialer, err := proxy.NewDialer(h.proxyAddr)
 	if err != nil {
 		h.logger.Error("Failed to create SOCKS5 dialer", zap.Error(err))
 		http.Error(w, "Failed to create SOCKS5 dialer", http.StatusInternalServerError)

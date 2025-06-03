@@ -6,10 +6,10 @@ import (
 	"strconv"
 
 	"github.com/FMotalleb/junction/config"
+	"github.com/FMotalleb/junction/proxy"
 	"github.com/FMotalleb/junction/utils"
 	"github.com/FMotalleb/log"
 	"go.uber.org/zap"
-	"golang.org/x/net/proxy"
 )
 
 func init() {
@@ -77,7 +77,7 @@ func handleSNIConnection(l *zap.Logger, clientConn net.Conn, proxyAddr, targetPo
 	connLogger := l.With(zap.String("SNI", serverName))
 	connLogger.Debug("SNI detected")
 
-	dialer, err := proxy.SOCKS5("tcp", proxyAddr, nil, proxy.Direct)
+	dialer, err := proxy.NewDialer(proxyAddr)
 	if err != nil {
 		connLogger.Error("failed to create SOCKS5 dialer", zap.Error(err))
 		return
