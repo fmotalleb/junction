@@ -8,7 +8,7 @@
 # RUN CGO_ENABLED=0 go build -o junction
 # RUN chmod +x junction
 
-FROM library/debian:bookworm-slim as slim
+FROM library/debian:bookworm-slim AS slim
 
 RUN --mount=type=cache,target=/var/lib/apt/lists/ \
   --mount=type=cache,target=/var/cache/apt/archives/ \
@@ -26,7 +26,7 @@ RUN dpkg -i /singbox/${SINGBOX_BIN_NAME} \
   && rm -rf /singbox \
   && mkdir /etc/singbox/
 
-COPY ./docker/root/ /
+COPY /docker/root/ /
 COPY junction /usr/bin/junction
 
 ENV VLESS_PROXY= \
