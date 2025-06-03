@@ -21,29 +21,40 @@ func sniRouter(ctx context.Context, target config.Target) error {
 		return nil
 	}
 	l := log.FromContext(ctx).
-		Named("sni-router").
+		Named("router.sni").
 		With(zap.Any("target", target))
-	listener, err := net.Listen("tcp", target.GetListenAddr())
+
+	listenAddr := target.GetListenAddr()
+	listener, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		l.Error("failed to listen", zap.String("addr", listenAddr), zap.Error(err))
+		return err
+	}
+	defer listener.Close()
+
 	targetPort := "443"
 	if target.TargetPort != 0 {
 		targetPort = strconv.Itoa(target.TargetPort)
 	}
-	l.Info("SNI proxy booted")
-	if err != nil {
-		return err
-	}
-	defer listener.Close()
+	l.Info("SNI proxy booted", zap.String("listen", listenAddr), zap.String("proxy", target.Proxy), zap.String("targetPort", targetPort))
+
 	go func() {
 		<-ctx.Done()
 		listener.Close()
 	}()
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			l.Error("failed to accept connection", zap.Error(err))
-			continue
+			select {
+			case <-ctx.Done():
+				l.Info("listener closed due to context cancellation")
+				return nil
+			default:
+				l.Error("failed to accept connection", zap.Error(err))
+				continue
+			}
 		}
-
 		go handleSNIConnection(l, conn, target.Proxy, targetPort)
 	}
 }
@@ -51,7 +62,6 @@ func sniRouter(ctx context.Context, target config.Target) error {
 func handleSNIConnection(l *zap.Logger, clientConn net.Conn, proxyAddr, targetPort string) {
 	defer clientConn.Close()
 
-	// Read the first few bytes to extract SNI
 	buffer := make([]byte, 4096)
 	n, err := clientConn.Read(buffer)
 	if err != nil {
@@ -64,31 +74,43 @@ func handleSNIConnection(l *zap.Logger, clientConn net.Conn, proxyAddr, targetPo
 		l.Error("failed to extract SNI from connection")
 		return
 	}
-	finalLogger := l.With(zap.String("SNI", serverName))
-	finalLogger.Debug("SNI detected")
+	connLogger := l.With(zap.String("SNI", serverName))
+	connLogger.Debug("SNI detected")
 
-	// Create SOCKS5 dialer
 	dialer, err := proxy.SOCKS5("tcp", proxyAddr, nil, proxy.Direct)
 	if err != nil {
-		finalLogger.Error("failed to create SOCKS5 dialer", zap.Error(err))
+		connLogger.Error("failed to create SOCKS5 dialer", zap.Error(err))
 		return
 	}
 
-	// Connect to target server through SOCKS5 proxy
 	targetConn, err := dialer.Dial("tcp", net.JoinHostPort(serverName, targetPort))
 	if err != nil {
-		finalLogger.Error("failed to connect to target", zap.Error(err))
+		connLogger.Error("failed to connect to target", zap.Error(err))
 		return
 	}
 	defer targetConn.Close()
 
-	// Send the initial buffer to target
-	if _, err := targetConn.Write(buffer[:n]); err != nil {
-		finalLogger.Error("failed to write initial buffer to target", zap.Error(err))
+	_, err = targetConn.Write(buffer[:n])
+	if err != nil {
+		connLogger.Error("failed to write initial buffer to target", zap.Error(err))
 		return
 	}
 
-	// Start bidirectional copying
-	go utils.Copy(clientConn, targetConn)
-	utils.Copy(targetConn, clientConn)
+	// Bidirectional copy with error handling
+	errCh := make(chan error, 2)
+	go func() {
+		err := utils.Copy(clientConn, targetConn)
+		errCh <- err
+	}()
+	go func() {
+		err := utils.Copy(targetConn, clientConn)
+		errCh <- err
+	}()
+
+	// Wait for one side to finish (close/error)
+	for i := 0; i < 2; i++ {
+		if err := <-errCh; err != nil {
+			connLogger.Debug("copy finished", zap.Error(err))
+		}
+	}
 }

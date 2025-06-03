@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/utils"
+	"github.com/FMotalleb/log"
+	"go.uber.org/zap"
 	"golang.org/x/net/proxy"
 )
 
@@ -24,25 +26,37 @@ func httpHandler(ctx context.Context, target config.Target) error {
 	if target.Routing != "http-header" {
 		return nil
 	}
+
+	l := log.FromContext(ctx).Named("router.http").With(zap.Any("target", target))
+
 	targetPort := "80"
 	if target.TargetPort != 0 {
 		targetPort = strconv.Itoa(target.TargetPort)
 	}
+
 	server := &http.Server{
-		BaseContext: func(l net.Listener) context.Context {
+		ReadHeaderTimeout: time.Second * 30,
+		BaseContext: func(_ net.Listener) context.Context {
 			return ctx
 		},
 		Addr: target.GetListenAddr(),
 		Handler: &httpProxyHandler{
+			ctx:        ctx,
+			logger:     l,
 			proxyAddr:  target.Proxy,
 			targetPort: targetPort,
 			listenPort: strconv.Itoa(target.ListenPort),
 		},
 	}
 
-	log.Printf("HTTP proxy listening on port %d", target.ListenPort)
+	l.Info("HTTP proxy listening",
+		zap.String("listenAddr", target.GetListenAddr()),
+		zap.String("proxyAddr", target.Proxy),
+		zap.String("targetPort", targetPort),
+	)
+
 	if err := server.ListenAndServe(); err != nil {
-		log.Printf("HTTP server error: %v", err)
+		l.Error("HTTP server error", zap.Error(err))
 		return errors.Join(
 			errors.New("failed to start listener for http webserver"),
 			err,
@@ -52,6 +66,8 @@ func httpHandler(ctx context.Context, target config.Target) error {
 }
 
 type httpProxyHandler struct {
+	ctx        context.Context
+	logger     *zap.Logger
 	proxyAddr  string
 	targetPort string
 	listenPort string
@@ -64,9 +80,11 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if targetHost == "" {
+		h.logger.Warn("No host specified in request")
 		http.Error(w, "No host specified", http.StatusBadRequest)
 		return
 	}
+
 	targetHostSplit := strings.Split(targetHost, ":")
 	lt := len(targetHostSplit)
 	if h.listenPort == targetHostSplit[lt-1] {
@@ -74,60 +92,76 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		targetHostSplit = append(targetHostSplit, h.targetPort)
 	}
-
 	targetHost = strings.Join(targetHostSplit, ":")
-	log.Printf("HTTP request to: %s", targetHost)
+
+	h.logger.Info("HTTP request received",
+		zap.String("method", r.Method),
+		zap.String("targetHost", targetHost),
+		zap.String("remoteAddr", r.RemoteAddr),
+	)
 
 	// Handle CONNECT method for HTTPS
-	if r.Method == "CONNECT" {
+	if r.Method == http.MethodConnect {
 		h.handleConnect(w, r, targetHost)
 		return
 	}
-
 	// Handle regular HTTP requests
 	h.handleHTTP(w, r, targetHost)
 }
 
-func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, r *http.Request, targetHost string) {
-	// Create SOCKS5 dialer
+func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
 	dialer, err := proxy.SOCKS5("tcp", h.proxyAddr, nil, proxy.Direct)
 	if err != nil {
+		h.logger.Error("Failed to create SOCKS5 dialer", zap.Error(err))
 		http.Error(w, "Failed to create SOCKS5 dialer", http.StatusInternalServerError)
 		return
 	}
 
-	// Connect to target through SOCKS5 proxy
 	targetConn, err := dialer.Dial("tcp", targetHost)
 	if err != nil {
+		h.logger.Error("Failed to connect to target (CONNECT)", zap.String("targetHost", targetHost), zap.Error(err))
 		http.Error(w, "Failed to connect to target", http.StatusBadGateway)
 		return
 	}
 	defer targetConn.Close()
 
-	// Send 200 Connection Established
 	w.WriteHeader(http.StatusOK)
 
-	// Hijack the connection
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
+		h.logger.Error("Hijacking not supported")
 		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
 		return
 	}
 
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
+		h.logger.Error("Failed to hijack connection", zap.Error(err))
 		http.Error(w, "Failed to hijack connection", http.StatusInternalServerError)
 		return
 	}
 	defer clientConn.Close()
 
-	// Start bidirectional copying
-	go utils.Copy(clientConn, targetConn)
-	utils.Copy(targetConn, clientConn)
+	// Bidirectional copy with error handling
+	errCh := make(chan error, 2)
+	go func() {
+		err := utils.Copy(clientConn, targetConn)
+		errCh <- err
+	}()
+	go func() {
+		err := utils.Copy(targetConn, clientConn)
+		errCh <- err
+	}()
+
+	// Wait for one side to finish
+	for i := 0; i < 2; i++ {
+		if err := <-errCh; err != nil {
+			h.logger.Debug("Copy finished with error", zap.Error(err))
+		}
+	}
 }
 
 func (h *httpProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request, targetHost string) {
-	// Parse target URL
 	targetURL := &url.URL{
 		Scheme:   "http",
 		Host:     targetHost,
@@ -135,9 +169,9 @@ func (h *httpProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request, ta
 		RawQuery: r.URL.RawQuery,
 	}
 
-	// Create SOCKS5 transport
 	dialer, err := proxy.SOCKS5("tcp", h.proxyAddr, nil, proxy.Direct)
 	if err != nil {
+		h.logger.Error("Failed to create SOCKS5 dialer", zap.Error(err))
 		http.Error(w, "Failed to create SOCKS5 dialer", http.StatusInternalServerError)
 		return
 	}
@@ -145,12 +179,16 @@ func (h *httpProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request, ta
 	transport := &http.Transport{
 		Dial: dialer.Dial,
 	}
-
 	client := &http.Client{Transport: transport}
 
-	// Create new request
-	req, err := http.NewRequest(r.Method, targetURL.String(), r.Body)
+	req, err := http.NewRequestWithContext(
+		h.ctx,
+		r.Method,
+		targetURL.String(),
+		r.Body,
+	)
 	if err != nil {
+		h.logger.Error("Failed to create new HTTP request", zap.Error(err))
 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
 		return
 	}
@@ -162,21 +200,21 @@ func (h *httpProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request, ta
 		}
 	}
 
-	// Make request
 	resp, err := client.Do(req)
 	if err != nil {
+		h.logger.Error("Failed to make HTTP request to target", zap.String("targetURL", targetURL.String()), zap.Error(err))
 		http.Error(w, "Failed to make request", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
-	// Copy response headers
 	for key, values := range resp.Header {
 		for _, value := range values {
 			w.Header().Add(key, value)
 		}
 	}
-
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		h.logger.Error("Failed to copy response body", zap.Error(err))
+	}
 }

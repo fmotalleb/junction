@@ -21,6 +21,7 @@ func detectFormatAndSet(v *viper.Viper, path string) error {
 		return fmt.Errorf("unsupported file extension: %s", ext)
 	}
 }
+
 func Parse(dst *Config, path string) error {
 	v := viper.New()
 	v.SetConfigFile(path)
@@ -51,7 +52,7 @@ func Parse(dst *Config, path string) error {
 	return nil
 }
 
-// DecodeHook converts strings to url.URL
+// DecodeHook converts strings to url.URL.
 func stringToURLHookFunc() mapstructure.DecodeHookFunc {
 	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
 		if from.Kind() != reflect.String || to != reflect.TypeOf(url.URL{}) {
