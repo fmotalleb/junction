@@ -7,7 +7,7 @@ if [ -z "$input" ]; then
   exit 1
 fi
 
-# Parse the input string
+# Proxy config
 sanitized="$(sed <<<"$input" -e 's|.*://||')"
 
 IFS="?" read <<<"$sanitized" authority query
@@ -33,22 +33,14 @@ export PACKET_ENCODING="${packetEncoding:-'xudp'}"
 
 envsubst </etc/singbox/config.json.template >/etc/singbox/config.json
 
+# Server Config
 mkdir /etc/junction || true
-env | awk 'BEGIN {
-    proxy_address = "127.0.0.1:6980";
+
+function writeConf() {
+  echo "$1
+" >>/etc/junction/config.toml
 }
 
-/^EXPOSE_[0-9]+=/ {
-    split($0, parts, "=");
-    port = substr(parts[1], 8);
-    url = parts[2];
-    
-    print "[[targets]]";
-    print "port =", port;
-    print "proxy = \"" proxy_address "\"";
-    print "target = \"" url "\"";
-    print "";
-}' >/etc/junction/config.toml
+writeConf ""
 
-/tools/generate-ca.sh
 exec "$@"
