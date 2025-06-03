@@ -11,8 +11,9 @@
       "mode": "auto",
       "program": "${workspaceFolder}",
       "env": {
-        "CA_KEY": "ssl/private/ca-key.pem",
-        "CA_CERT": "ssl/certs/ca-cert.pem",
+        "ZAPLOG_DEVELOPMENT": "true",
+        "ZAPLOG_LEVEL": "debug",
+        "ZAPLOG_LEVEL_FORMAT": "color",
       },
       "args": [
         "--config=config.toml",

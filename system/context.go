@@ -19,6 +19,5 @@ func NewSystemContext() context.Context {
 		<-signalChan
 		cancel()
 	}()
-
 	return ctx
 }
