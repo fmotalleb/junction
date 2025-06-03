@@ -6,14 +6,11 @@
 
 ## 🌟 **Features**
 
-- 🔐 **Dynamic SSL Certificate Generation**  
-   Automatically generates self-signed or CA-signed certificates for secure connections.  
+- 🔐 **Sni Passthrough**  
+   No certificate required, reroutes tls packets using sni header.  
 
 - 🧦 **SOCKS5 Proxy Support**  
-   Routes traffic using SOCKS5 proxies, with internal support for VLESS proxies via Docker image.  
-
-- ⚙️ **Configurable Targets**  
-   Easily configure multiple targets for HTTP/HTTPS traffic across different endpoints.  
+   Routes traffic using SOCKS5 proxies, with built-in support for VLESS proxies via Docker image.  
 
 - 🐳 **Dockerized Deployment**  
    Includes a ready-to-use Docker setup for seamless deployment in any environment.  
@@ -84,18 +81,33 @@ Junction supports configuration files in **TOML** or **YAML** formats for flexib
 
 ```toml
 [[targets]]
-port = 8443
+port = 8443 # Listen port
+to = 443  # Reroutes connections to this port (defaults to 443)
+routing = "sni" # Routing method
+proxy = "127.0.0.1:7890" # socks5 proxy address
+
+[[targets]]
+port = 8080
+to = 80 # Defaults to 80
+routing = "http-header" 
 proxy = "127.0.0.1:7890"
-target = "https://example.com"
+
 ```
 
 #### **Example: YAML Configuration**
 
 ```yaml
 targets:
- - port: 8443
-   proxy: "127.0.0.1:7890"
-   target: "https://example.com"
+- routing: "sni" # Routing method
+  port: 8443 # Listen port
+  to: 443 # Reroutes connections to this port (defaults to 443)
+  proxy: 127.0.0.1:7890  # socks5 proxy address
+
+- routing: http-header
+  port: 8080
+  to: 80 # Defaults to 80 
+  proxy: 127.0.0.1:7890
+
 ```
 
 Place the configuration file in the root directory or specify its path using the `--config` flag.
@@ -108,10 +120,8 @@ Use environment variables for dynamic runtime configuration. Below is an example
 
 ```env
 VLESS_PROXY=
-EXPOSE_80=http://example.com
-EXPOSE_443=https://example.com
-
-# EXPOSE_<PORT>=<PROTOCOL>://<TARGET ADDRESS>(:<PORT>)
+HTTP_PORT=80
+SNI_PORT=443
 ```
 
 These variables help configure VLESS proxies and expose specific endpoints for HTTP/HTTPS traffic.
@@ -133,18 +143,6 @@ These variables help configure VLESS proxies and expose specific endpoints for H
    ```bash
    ./junction --config=config.toml
    ```
-
----
-
-### **Using CA-Certificate**
-
-In order to use a CA-certificate, please set the `CA_KEY` and `CA_CERT` environment variables to valid CA-certificate files.
-
-If you want to create a new CA-certificate, you can use the script located at:
-
-```bash
-docker/root/tools/generate-ca.sh
-```
 
 ---
 
@@ -180,12 +178,11 @@ Junction's project structure is organized as follows:
 ├── cmd/ # CLI entry point
 ├── config/ # Configuration parsing and helpers
 ├── docker/ # Docker-related files
+├── router/ # Routers (sni,http,...) logic
 ├── server/ # Core server logic
 ├── main.go # Main entry point
 └── docker-compose.yml # Docker Compose configuration
 ```
-
-This structure ensures modularity and ease of navigation within the codebase.
 
 ---
 

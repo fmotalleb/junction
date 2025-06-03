@@ -5,7 +5,6 @@ services:
       dockerfile: docker/Dockerfile
     volumes:
       - "./docker/root/docker-entrypoint.sh:/docker-entrypoint.sh"
-      - "./ssl:/etc/ssl/"
     ports:
       - 80:80
       - 443:443

@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 )
 
 type Config struct {
@@ -10,9 +9,10 @@ type Config struct {
 }
 
 type Target struct {
-	ListenPort int     `mapstructure:"port"`
-	Proxy      string  `mapstructure:"proxy"`
-	Target     url.URL `mapstructure:"target"`
+	ListenPort int    `mapstructure:"port"`
+	TargetPort int    `mapstructure:"to"`
+	Proxy      string `mapstructure:"proxy"`
+	Routing    string `mapstructure:"routing"`
 }
 
 func (t *Target) GetListenAddr() string {
