@@ -2,7 +2,7 @@ services:
   junction:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
     volumes:
       - "./docker/root/docker-entrypoint.sh:/docker-entrypoint.sh"
     ports:
