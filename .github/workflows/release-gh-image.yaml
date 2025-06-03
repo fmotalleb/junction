@@ -17,7 +17,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: fmotalleb/crontab-go
+  IMAGE_NAME: fmotalleb/junction
 
 jobs:
   build-and-push-image:

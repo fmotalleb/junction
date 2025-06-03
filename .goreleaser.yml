@@ -47,7 +47,7 @@ archives:
 release:
   github:
     owner: FMotalleb
-    name: crontab-go
+    name: junction
   name_template: "{{.Version}}"
   prerelease: auto
   mode: append
