@@ -30,8 +30,8 @@ COPY ./docker/root/ /
 COPY --from=builder /app/junction /usr/bin/junction
 
 ENV VLESS_PROXY= \
-  CA_KEY="/etc/ssl/private/ca-key.pem" \
-  CA_CERT="/etc/ssl/certs/ca-cert.pem"
+  HTTP_PORT=80 \
+  SNI_PORT=443
 
 ENTRYPOINT [ "/docker-entrypoint.sh" ]
 CMD [ "supervisord" ]

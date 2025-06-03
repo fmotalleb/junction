@@ -36,11 +36,22 @@ envsubst </etc/singbox/config.json.template >/etc/singbox/config.json
 # Server Config
 mkdir /etc/junction || true
 
-function writeConf() {
-  echo "$1
-" >>/etc/junction/config.toml
-}
+: "${HTTP_PORT:=80}"
+: "${SNI_PORT:=443}"
 
-writeConf ""
+cat <<EOF >/etc/junction/config.toml
+[[targets]]
+routing = "sni"
+port = $SNI_PORT
+to = 443
+proxy = "127.0.0.1:6980"
+
+[[targets]]
+routing = "http-header"
+port = $HTTP_PORT
+to = 80
+proxy = "127.0.0.1:6980"
+
+EOF
 
 exec "$@"
