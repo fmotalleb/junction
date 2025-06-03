@@ -1,12 +1,12 @@
-FROM golang:latest AS builder
-RUN mkdir /app
-COPY go.mod /app/
-COPY go.sum /app/
-WORKDIR /app
-RUN go mod download
-COPY ./ /app
-RUN CGO_ENABLED=0 go build -o junction
-RUN chmod +x junction
+# FROM golang:latest AS builder
+# RUN mkdir /app
+# COPY go.mod /app/
+# COPY go.sum /app/
+# WORKDIR /app
+# RUN go mod download
+# COPY ./ /app
+# RUN CGO_ENABLED=0 go build -o junction
+# RUN chmod +x junction
 
 FROM library/debian:bookworm-slim
 
@@ -27,7 +27,7 @@ RUN dpkg -i /singbox/${SINGBOX_BIN_NAME} \
   && mkdir /etc/singbox/
 
 COPY ./docker/root/ /
-COPY --from=builder /app/junction /usr/bin/junction
+COPY junction /usr/bin/junction
 
 ENV VLESS_PROXY= \
   HTTP_PORT=80 \

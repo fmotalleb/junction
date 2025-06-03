@@ -21,35 +21,13 @@ builds:
     goarch:
       - amd64
     ldflags: "-s -w"
-    binary: crontab-go
-    skip: "archive"
-  - id: static
-    goos:
-      - linux
-    goarch:
-      - amd64
-    env:
-      - CGO_ENABLED=0
-    ldflags: "-s -w -extldflags '-static'"
-    binary: crontab-go
+    binary: junction
     skip: "archive"
 
 dockers:
   - image_templates:
-      - "ghcr.io/fmotalleb/crontab-go:{{ .Version }}-static"
-      - "ghcr.io/fmotalleb/crontab-go:latest-static"
-    dockerfile: Dockerfile
-    goos: linux
-    goarch: amd64
-    ids:
-      - static
-    build_flag_templates:
-      - "--target=static"
-    use: buildx
-
-  - image_templates:
-      - "ghcr.io/fmotalleb/crontab-go:{{ .Version }}-slim"
-      - "ghcr.io/fmotalleb/crontab-go:latest-slim"
+      - "ghcr.io/fmotalleb/junction:{{ .Version }}-slim"
+      - "ghcr.io/fmotalleb/junction:latest-slim"
     dockerfile: Dockerfile
     goos: linux
     goarch: amd64
