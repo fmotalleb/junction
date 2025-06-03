@@ -2,6 +2,12 @@ module github.com/FMotalleb/junction
 
 go 1.24.2
 
+tool (
+	github.com/client9/misspell/cmd/misspell
+	github.com/golangci/golangci-lint/cmd/golangci-lint
+	golang.org/x/vuln/cmd/govulncheck
+)
+
 require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/spf13/cobra v1.9.1
