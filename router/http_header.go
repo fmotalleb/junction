@@ -110,7 +110,6 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
-
 	dialer, err := proxy.NewDialer(h.proxyAddr)
 	if err != nil {
 		h.logger.Error("Failed to create SOCKS5 dialer", zap.Error(err))
