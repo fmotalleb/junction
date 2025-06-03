@@ -33,6 +33,8 @@ dockers:
     goarch: amd64
     ids:
       - slim
+    extra_files:
+      - docker
     build_flag_templates:
       - "--target=slim"
     use: buildx

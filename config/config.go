@@ -18,3 +18,7 @@ type Target struct {
 func (t *Target) GetListenAddr() string {
 	return fmt.Sprintf(":%d", t.ListenPort)
 }
+
+func (t *Target) HasProxy() bool {
+	return t.Proxy != "direct"
+}
