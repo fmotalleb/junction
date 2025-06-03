@@ -39,7 +39,12 @@ mkdir /etc/junction || true
 : "${HTTP_PORT:=80}"
 : "${SNI_PORT:=443}"
 
-cat <<EOF >/etc/junction/config.toml
+if [ -f "/etc/junction/config.toml" ]; then
+  echo "config file already exists, skipping config generation"
+elif [ -n "$JUNCTION_CONF_B64" ]; then
+  base64 -d <<<"$JUNCTION_CONF_B64" >/etc/junction/config.toml
+else
+  cat <<EOF >/etc/junction/config.toml
 [[entrypoints]]
 routing = "sni"
 port = $SNI_PORT
@@ -51,7 +56,6 @@ routing = "http-header"
 port = $HTTP_PORT
 to = 80
 proxy = "127.0.0.1:6980"
-
 EOF
-
+fi
 exec "$@"
