@@ -97,7 +97,7 @@ func ReadAndExtractSNI(conn net.Conn, logger *zap.Logger) (string, []byte, int, 
 	serverName := utils.ExtractSNI(buffer[:n])
 	if serverName == "" {
 		logger.Error("failed to extract SNI from connection")
-		return "", nil, 0, err
+		return "", nil, 0, nil
 	}
 
 	return serverName, buffer, n, nil
