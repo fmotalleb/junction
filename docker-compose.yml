@@ -16,13 +16,13 @@ services:
     networks:
       custom_net:
         ipv4_address: 10.10.34.36
-  # dns:
-  #   image: fmotalleb/cord-locator:v2.0.11
-  #   ports:
-  #     - 53:53/udp
-  #   configs:
-  #     - source: cord-locator
-  #       target: /app/config.yaml
+  dns:
+    image: fmotalleb/cord-locator:v2.0.11
+    ports:
+      - 53:53/udp
+    configs:
+      - source: cord-locator
+        target: /app/config.yaml
 
 networks:
   custom_net:
@@ -31,28 +31,28 @@ networks:
       config:
         - subnet: 10.10.0.0/16
 
-# configs:
-#   cord-locator:
-#     content: |
-#       global:
-#         address: ":53"
-#         allowTransfer:
-#           - "0.0.0.0"
-#           - "127.0.0.1"
-#           - "::1"
-#         defaultProviders: opendns
+configs:
+  cord-locator:
+    content: |
+      global:
+        address: ":53"
+        allowTransfer:
+          - "0.0.0.0"
+          - "127.0.0.1"
+          - "::1"
+        defaultProviders: opendns
 
-#       providers:
-#         - name: opendns
-#           ip:
-#             - 208.67.222.123:53
-#             - 208.67.220.123:53
+      providers:
+        - name: opendns
+          ip:
+            - 208.67.222.123:53
+            - 208.67.220.123:53
       
-#       rules:
-#         - name: Raw proxy
-#           matcher: regex
-#           matcherParams:
-#             - .
-#           raw:
-#             A: "{{ .address }} 60	IN	A	158.58.185.186"
-#             AAAA: "{{ .address }} 60	IN	AAAA	158.58.185.186"
+      rules:
+        - name: Raw proxy
+          matcher: regex
+          matcherParams:
+            - .
+          raw:
+            A: "{{ .address }} 60	IN	A	10.10.34.36"
+            AAAA: "{{ .address }} 60	IN	AAAA	10.10.34.36"

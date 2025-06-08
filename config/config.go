@@ -20,17 +20,22 @@ type EntryPoint struct {
 	Timeout    time.Duration `mapstructure:"timeout"`
 }
 
-func (t *EntryPoint) GetListenAddr() string {
-	return fmt.Sprintf(":%d", t.ListenPort)
+func (e *EntryPoint) GetListenAddr() string {
+	return fmt.Sprintf(":%d", e.ListenPort)
 }
 
-func (t *EntryPoint) IsDirect() bool {
-	return t.Proxy == "direct"
+func (e *EntryPoint) IsDirect() bool {
+	return e.Proxy == "direct"
 }
 
-func (t *EntryPoint) GetTimeout() time.Duration {
+func (e *EntryPoint) GetTimeout() time.Duration {
 	return cmp.Or(
-		t.Timeout,
+		e.Timeout,
 		env.DurationOr("TIMEOUT", time.Hour*24),
 	)
+}
+
+func (e *EntryPoint) GetTargetOr(def ...string) string {
+	items := append([]string{e.Target}, def...)
+	return cmp.Or(items...)
 }

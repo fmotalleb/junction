@@ -14,9 +14,10 @@ import (
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/proxy"
-	"github.com/FMotalleb/junction/utils"
 	"go.uber.org/zap"
 )
+
+const DefaultHTTPPort = "80"
 
 func init() {
 	registerHandler(httpHandler)
@@ -27,36 +28,25 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 		return nil
 	}
 
-	l := log.FromContext(ctx).Named("router.http").With(zap.Any("entry", entry))
-
-	targetPort := "80"
-	if entry.Target != "" {
-		targetPort = entry.Target
-	}
+	logger := log.FromContext(ctx).Named("router.http").With(zap.Any("entry", entry))
 
 	server := &http.Server{
 		ReadHeaderTimeout: time.Second * 30,
-		BaseContext: func(_ net.Listener) context.Context {
-			return ctx
-		},
-		Addr: entry.GetListenAddr(),
+		BaseContext:       func(_ net.Listener) context.Context { return ctx },
+		Addr:              entry.GetListenAddr(),
 		Handler: &httpProxyHandler{
 			ctx:        ctx,
-			logger:     l,
+			logger:     logger,
 			proxyAddr:  entry.Proxy,
-			targetPort: targetPort,
+			targetPort: entry.GetTargetOr(DefaultHTTPPort),
 			listenPort: strconv.Itoa(entry.ListenPort),
 		},
 	}
 
-	l.Info("HTTP proxy listening",
-		zap.String("listenAddr", entry.GetListenAddr()),
-		zap.String("proxyAddr", entry.Proxy),
-		zap.String("targetPort", targetPort),
-	)
+	logger.Info("HTTP proxy booted")
 
 	if err := server.ListenAndServe(); err != nil {
-		l.Error("HTTP server error", zap.Error(err))
+		logger.Error("HTTP server error", zap.Error(err))
 		return errors.Join(
 			errors.New("failed to start listener for http webserver"),
 			err,
@@ -74,25 +64,12 @@ type httpProxyHandler struct {
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	targetHost := r.Host
-	if targetHost == "" {
-		targetHost = r.Header.Get("Host")
-	}
-
+	targetHost := prepareTargetHost(r.Host, r.Header.Get("Host"), h.targetPort, h.listenPort)
 	if targetHost == "" {
 		h.logger.Warn("No host specified in request")
 		http.Error(w, "No host specified", http.StatusBadRequest)
 		return
 	}
-
-	targetHostSplit := strings.Split(targetHost, ":")
-	lt := len(targetHostSplit)
-	if h.listenPort == targetHostSplit[lt-1] {
-		targetHostSplit[lt-1] = h.targetPort
-	} else {
-		targetHostSplit = append(targetHostSplit, h.targetPort)
-	}
-	targetHost = strings.Join(targetHostSplit, ":")
 
 	h.logger.Info("HTTP request received",
 		zap.String("method", r.Method),
@@ -100,26 +77,40 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		zap.String("remoteAddr", r.RemoteAddr),
 	)
 
-	// Handle CONNECT method for HTTPS
 	if r.Method == http.MethodConnect {
 		h.handleConnect(w, r, targetHost)
-		return
+	} else {
+		h.handleHTTPRequest(w, r, targetHost)
 	}
-	// Handle regular HTTP requests
-	h.handleHTTP(w, r, targetHost)
+}
+
+func prepareTargetHost(hostHeader, fallback string, targetPort, listenPort string) string {
+	host := hostHeader
+	if host == "" {
+		host = fallback
+	}
+	if host == "" {
+		return ""
+	}
+	split := strings.Split(host, ":")
+	if len(split) > 1 && split[len(split)-1] == listenPort {
+		split[len(split)-1] = targetPort
+	} else if len(split) == 1 {
+		split = append(split, targetPort)
+	}
+	return strings.Join(split, ":")
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
 	dialer, err := proxy.NewDialer(h.proxyAddr)
 	if err != nil {
-		h.logger.Error("Failed to create SOCKS5 dialer", zap.Error(err))
-		http.Error(w, "Failed to create SOCKS5 dialer", http.StatusInternalServerError)
+		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
 		return
 	}
 
 	targetConn, err := dialer.Dial("tcp", targetHost)
 	if err != nil {
-		h.logger.Error("Failed to connect to target (CONNECT)", zap.String("targetHost", targetHost), zap.Error(err))
+		h.logger.Error("CONNECT failed", zap.String("target", targetHost), zap.Error(err))
 		http.Error(w, "Failed to connect to target", http.StatusBadGateway)
 		return
 	}
@@ -129,39 +120,29 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request,
 
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		h.logger.Error("Hijacking not supported")
-		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
+		h.logger.Error("Hijacking unsupported")
+		http.Error(w, "Hijacking unsupported", http.StatusInternalServerError)
 		return
 	}
 
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
-		h.logger.Error("Failed to hijack connection", zap.Error(err))
-		http.Error(w, "Failed to hijack connection", http.StatusInternalServerError)
+		h.logger.Error("Hijack failed", zap.Error(err))
+		http.Error(w, "Hijack failed", http.StatusInternalServerError)
 		return
 	}
 	defer clientConn.Close()
 
-	// Bidirectional copy with error handling
-	errCh := make(chan error, 2)
-	go func() {
-		err := utils.Copy(clientConn, targetConn)
-		errCh <- err
-	}()
-	go func() {
-		err := utils.Copy(targetConn, clientConn)
-		errCh <- err
-	}()
-
-	// Wait for one side to finish
-	for i := 0; i < 2; i++ {
-		if err := <-errCh; err != nil {
-			h.logger.Debug("Copy finished with error", zap.Error(err))
-		}
-	}
+	RelayTraffic(clientConn, targetConn, h.logger)
 }
 
-func (h *httpProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request, targetHost string) {
+func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Request, targetHost string) {
+	dialer, err := proxy.NewDialer(h.proxyAddr)
+	if err != nil {
+		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
+		return
+	}
+
 	targetURL := &url.URL{
 		Scheme:   "http",
 		Host:     targetHost,
@@ -169,52 +150,35 @@ func (h *httpProxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request, ta
 		RawQuery: r.URL.RawQuery,
 	}
 
-	dialer, err := proxy.NewDialer(h.proxyAddr)
+	req, err := http.NewRequestWithContext(h.ctx, r.Method, targetURL.String(), r.Body)
 	if err != nil {
-		h.logger.Error("Failed to create SOCKS5 dialer", zap.Error(err))
-		http.Error(w, "Failed to create SOCKS5 dialer", http.StatusInternalServerError)
-		return
-	}
-
-	transport := &http.Transport{
-		Dial: dialer.Dial,
-	}
-	client := &http.Client{Transport: transport}
-
-	req, err := http.NewRequestWithContext(
-		h.ctx,
-		r.Method,
-		targetURL.String(),
-		r.Body,
-	)
-	if err != nil {
-		h.logger.Error("Failed to create new HTTP request", zap.Error(err))
-		http.Error(w, "Failed to create request", http.StatusInternalServerError)
+		h.logger.Error("Request creation failed", zap.Error(err))
+		http.Error(w, "Request creation failed", http.StatusInternalServerError)
 		return
 	}
 
 	// Copy headers
-	for key, values := range r.Header {
-		for _, value := range values {
-			req.Header.Add(key, value)
+	for k, v := range r.Header {
+		for _, val := range v {
+			req.Header.Add(k, val)
 		}
 	}
 
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{Transport: &http.Transport{Dial: dialer.Dial}}).Do(req)
 	if err != nil {
-		h.logger.Error("Failed to make HTTP request to target", zap.String("targetURL", targetURL.String()), zap.Error(err))
-		http.Error(w, "Failed to make request", http.StatusBadGateway)
+		h.logger.Error("Request to target failed", zap.String("url", targetURL.String()), zap.Error(err))
+		http.Error(w, "Request failed", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
-	for key, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(key, value)
+	for k, v := range resp.Header {
+		for _, val := range v {
+			w.Header().Add(k, val)
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
-		h.logger.Error("Failed to copy response body", zap.Error(err))
+		h.logger.Error("Response copy failed", zap.Error(err))
 	}
 }

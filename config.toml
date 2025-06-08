@@ -1,18 +1,30 @@
 [[entrypoints]]
 routing = "sni"
-port = 8443
+port = 443
 to = "443"
-proxy = "127.0.0.1:7890"
+proxy = "127.0.0.1:6980"
 
 [[entrypoints]]
 routing = "http-header"
-port = 8080
+port = 80
 to = "80"
-proxy = "127.0.0.1:7890"
+proxy = "127.0.0.1:6980"
 
 [[entrypoints]]
-routing = "tcp-raw"
-port = 8022
-to = "192.168.250.240:8586"
-proxy = "direct"
-timeout = "30s"
+routing = "sni"
+port = 8080
+to = "8080"
+proxy = "127.0.0.1:6980"
+
+[[entrypoints]]
+routing = "sni"
+port = 5060
+to = "5060"
+proxy = "127.0.0.1:6980"
+
+# [[entrypoints]]
+# routing = "tcp-raw"
+# port = 8022
+# to = "192.168.250.240:8586"
+# proxy = "direct"
+# timeout = "30s"

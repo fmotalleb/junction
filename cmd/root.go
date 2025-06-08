@@ -43,9 +43,6 @@ to quickly create a Cobra application.`,
 		if err := config.Parse(&cfg, cfgFile); err != nil {
 			return err
 		}
-		for _, i := range cfg.EntryPoints {
-			println(i.GetTimeout())
-		}
 		if err := server.Serve(cfg); err != nil {
 			return err
 		}
