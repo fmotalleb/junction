@@ -3,6 +3,7 @@ package config
 import (
 	"cmp"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/FMotalleb/go-tools/env"
@@ -15,7 +16,7 @@ type Config struct {
 type EntryPoint struct {
 	ListenPort int           `mapstructure:"port"`
 	Target     string        `mapstructure:"to"`
-	Proxy      string        `mapstructure:"proxy"`
+	Proxy      []url.URL     `mapstructure:"proxy"`
 	Routing    string        `mapstructure:"routing"`
 	Timeout    time.Duration `mapstructure:"timeout"`
 }
@@ -25,7 +26,7 @@ func (e *EntryPoint) GetListenAddr() string {
 }
 
 func (e *EntryPoint) IsDirect() bool {
-	return e.Proxy == "direct"
+	return len(e.Proxy) == 0
 }
 
 func (e *EntryPoint) GetTimeout() time.Duration {

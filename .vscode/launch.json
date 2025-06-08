@@ -17,7 +17,7 @@
         "TIMEOUT": "5h"
       },
       "args": [
-        "--config=config.toml",
+        "--config=config.yaml",
       ]
     }
   ]

@@ -73,9 +73,75 @@ Steps to install Junction:
 
 ## 🛠 **Configuration**
 
-### Config File
+### Configuration
 
-Junction supports configuration files in **TOML** or **YAML** formats for flexible entrypoint management.
+#### Fields
+
+At the top level, define an array named `entrypoints`. Each entry describes a routing configuration and includes the following fields:
+
+- **`port`**:
+  Local port to listen on.
+
+- **`routing`**:
+  Defines how the target hostname is resolved. Supported modes:
+
+  - `sni`: Uses SNI for hostname detection. Requires target port. Default: `443`.
+  - `http-header`: Uses HTTP `Host` header. Requires target port. Default: `80`.
+  - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port`. No defaults.
+
+- **`proxy`**:
+  Defines one or more upstream proxies. Supports:
+
+  - A comma-separated string
+  - An array of proxy URIs
+
+  Supported proxy types:
+
+  - **SOCKS (RFC-compliant)**:
+
+    ```
+    socks5://(user:pass)@hostname:port
+    ```
+
+    - Username and password are optional.
+  - **SSH (custom URI format)**:
+
+    ```
+    ssh://user(:pass)@hostname:port(/path/to/private/key)
+    ```
+
+    - Password and private key path are optional.
+    - Use either password or key-based authentication.
+
+  Default: `direct` (no proxy)
+
+  e.g: These two are identical
+  - "socks5://user:pass@10.0.0.1:1080,socks5://10.0.0.2:1080,ssh://user@10.0.0.3:22/tmp/key"
+  - ["socks5://user:pass@10.0.0.1:1080","socks5://10.0.0.2:1080","ssh://user@10.0.0.3:22/tmp/key"]
+
+  ```mermaid
+  graph LR
+     Client --> Proxy1["socks5://user:pass@10.0.0.1:1080"]
+     Proxy1 --> Proxy2["socks5://10.0.0.2:1080"]
+     Proxy2 --> Proxy3["ssh://user@10.0.0.3:22"]
+     Proxy3 --> Target["example.com:80"]
+  ```
+
+- **`to`**:
+  Destination address or port, depending on the selected `routing` mode.
+
+- **`timeout`**:
+  Maximum allowed duration for a connection.
+
+  - Default: `24h`
+  - Default is overridable via `TIMEOUT` environment variable
+  - Format: Go duration syntax (e.g., `5h3m15s`)
+
+**Warnings**:
+
+- The `proxy` list is interpreted in order; misordering may break the chain.
+- Only one authentication method should be used per SSH proxy entry.
+- `tcp-raw` requires explicit `ip:port`; no inference is made.
 
 #### **Example: TOML Configuration**
 
@@ -84,13 +150,13 @@ Junction supports configuration files in **TOML** or **YAML** formats for flexib
 port = 8443 # Listen port
 to = "443"  # Reroutes connections to this port (defaults to 443)
 routing = "sni" # Routing method
-proxy = "127.0.0.1:7890" # socks5 proxy address
+proxy = "socks5://127.0.0.1:7890" # socks5 proxy address
 
 [[entrypoints]]
 port = 8080
 to = "80" # Defaults to 80
 routing = "http-header" 
-proxy = "127.0.0.1:7890"
+proxy = "socks5://127.0.0.1:7890"
 
 [[entrypoints]]
 port = 8090
@@ -112,12 +178,12 @@ entrypoints:
 - routing: "sni" # Routing method
   port: 8443 # Listen port
   to: "443" # Reroutes connections to this port (defaults to 443)
-  proxy: 127.0.0.1:7890  # socks5 proxy address
+  proxy: socks5://127.0.0.1:7890  # socks5 proxy address
 
 - routing: http-header
   port: 8080
   to: "80" # Defaults to 80 
-  proxy: 127.0.0.1:7890
+  proxy: socks5://127.0.0.1:7890
 
 ```
 

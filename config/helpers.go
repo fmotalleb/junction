@@ -2,11 +2,13 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 
+	"github.com/FMotalleb/go-tools/env"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
@@ -35,9 +37,13 @@ func Parse(dst *Config, path string) error {
 	}
 
 	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.ComposeDecodeHookFunc(stringToDurationHookFunc()),
-		Result:     dst,
-		TagName:    "mapstructure",
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			stringToSliceHookFunc(),
+			stringToDurationHookFunc(),
+			stringToURLHookFunc(),
+		),
+		Result:  dst,
+		TagName: "mapstructure",
 	}
 
 	decoder, err := mapstructure.NewDecoder(decoderConfig)
@@ -52,6 +58,20 @@ func Parse(dst *Config, path string) error {
 	return nil
 }
 
+// stringToURLHookFunc converts strings to url.URL.
+func stringToURLHookFunc() mapstructure.DecodeHookFunc {
+	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
+		if from.Kind() != reflect.String || to != reflect.TypeOf(url.URL{}) {
+			return data, nil
+		}
+		parsed, err := url.Parse(data.(string))
+		if err != nil {
+			return nil, fmt.Errorf("invalid URL: %w", err)
+		}
+		return *parsed, nil
+	}
+}
+
 // stringToDurationHookFunc converts strings to url.URL.
 func stringToDurationHookFunc() mapstructure.DecodeHookFunc {
 	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
@@ -63,5 +83,17 @@ func stringToDurationHookFunc() mapstructure.DecodeHookFunc {
 			return nil, fmt.Errorf("invalid URL: %w", err)
 		}
 		return parsed, nil
+	}
+}
+
+// stringToSliceHookFunc converts strings to slices.
+func stringToSliceHookFunc() mapstructure.DecodeHookFunc {
+	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
+		if from.Kind() != reflect.String || to.Kind() != reflect.Slice {
+			return data, nil
+		}
+		sep := env.Or("SLICE_SEPARATOR", ",")
+		slice := strings.Split(data.(string), sep)
+		return slice, nil
 	}
 }
