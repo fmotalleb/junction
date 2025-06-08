@@ -1,8 +1,11 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"time"
+
+	"github.com/FMotalleb/go-tools/env"
 )
 
 type Config struct {
@@ -23,4 +26,11 @@ func (t *EntryPoint) GetListenAddr() string {
 
 func (t *EntryPoint) IsDirect() bool {
 	return t.Proxy == "direct"
+}
+
+func (t *EntryPoint) GetTimeout() time.Duration {
+	return cmp.Or(
+		t.Timeout,
+		env.DurationOr("TIMEOUT", time.Hour*24),
+	)
 }

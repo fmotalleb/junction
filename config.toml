@@ -15,3 +15,4 @@ routing = "tcp-raw"
 port = 8022
 to = "192.168.250.240:8586"
 proxy = "direct"
+timeout = "30s"
