@@ -1,35 +1,47 @@
 package proxy
 
 import (
-	"errors"
-	"strings"
+	"net/url"
 
 	"golang.org/x/net/proxy"
 )
 
+type generator func(*url.URL, proxy.Dialer) (proxy.Dialer, error)
+
+var generators []generator
+
+func registerGenerator(g generator) {
+	generators = append(generators, g)
+}
+
 // NewDialer constructs a chain of SOCKS5 proxies given a comma-separated list.
 // e.g.: "proxy1:1080,proxy2:1080,proxy3:1080".
-func NewDialer(chain string) (proxy.Dialer, error) {
-	chain = strings.TrimSpace(chain)
-	if chain == "" || chain == "direct" {
-		return proxy.Direct, nil
-	}
-
-	parts := strings.Split(chain, ",")
+func NewDialer(chain []url.URL) (proxy.Dialer, error) {
 	var dialer proxy.Dialer = proxy.Direct
-
 	// Build the proxy chain from last to first
-	for i := len(parts) - 1; i >= 0; i-- {
-		addr := strings.TrimSpace(parts[i])
-		if addr == "" {
-			return nil, errors.New("invalid empty proxy address in chain")
-		}
-		socks5Dialer, err := proxy.SOCKS5("tcp", addr, nil, dialer)
+	for _, addr := range chain {
+		d, err := generateDialer(addr, dialer)
 		if err != nil {
 			return nil, err
 		}
-		dialer = socks5Dialer
+		if d != nil {
+			dialer = d
+			continue
+		}
 	}
 
 	return dialer, nil
+}
+
+func generateDialer(addr url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
+	for _, g := range generators {
+		d, err := g(&addr, dialer)
+		if err != nil {
+			return nil, err
+		}
+		if d != nil {
+			return d, nil
+		}
+	}
+	return nil, nil
 }
