@@ -82,20 +82,26 @@ Junction supports configuration files in **TOML** or **YAML** formats for flexib
 ```toml
 [[entrypoints]]
 port = 8443 # Listen port
-to = 443  # Reroutes connections to this port (defaults to 443)
+to = "443"  # Reroutes connections to this port (defaults to 443)
 routing = "sni" # Routing method
 proxy = "127.0.0.1:7890" # socks5 proxy address
 
 [[entrypoints]]
 port = 8080
-to = 80 # Defaults to 80
+to = "80" # Defaults to 80
 routing = "http-header" 
 proxy = "127.0.0.1:7890"
 
 [[entrypoints]]
 port = 8090
-to = 80 # Defaults to 80
+to = "80" # Defaults to 80
 routing = "http-header" 
+proxy = "direct" # Do not handle using proxy just reverse proxy it directly
+
+[[entrypoints]]
+port = 8099
+to = "18.19.20.21:22" # Required for tcp-raw
+routing = "tcp-raw"  # TCP raw is old behavior where the target address must be specified (used for non-tls non-http requests that do not have any indications for server name nor address)
 proxy = "direct" # Do not handle using proxy just reverse proxy it directly
 ```
 
@@ -105,12 +111,12 @@ proxy = "direct" # Do not handle using proxy just reverse proxy it directly
 entrypoints:
 - routing: "sni" # Routing method
   port: 8443 # Listen port
-  to: 443 # Reroutes connections to this port (defaults to 443)
+  to: "443" # Reroutes connections to this port (defaults to 443)
   proxy: 127.0.0.1:7890  # socks5 proxy address
 
 - routing: http-header
   port: 8080
-  to: 80 # Defaults to 80 
+  to: "80" # Defaults to 80 
   proxy: 127.0.0.1:7890
 
 ```
