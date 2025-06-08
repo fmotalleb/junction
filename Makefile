@@ -42,7 +42,7 @@ build: install compile
 
 .PHONY: compile
 compile:
-	goreleaser build --clean --single-target --snapshot
+	goreleaser build --clean --snapshot
 	
 .PHONY: install
 install: ## install goreleaser 

@@ -1,9 +1,6 @@
 entrypoints:
-  - routing: sni
-    port: 8443
-    to: 443
-    proxy: 127.0.0.1:7890
   - routing: http-header
-    port: 8080
-    to: 80
-    proxy: 127.0.0.1:7890
+    port: 8022
+    proxy:
+      - socks5://127.0.0.1:7890
+    # timeout: 5s

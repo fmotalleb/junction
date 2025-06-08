@@ -4,17 +4,20 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"syscall"
 
+	"github.com/FMotalleb/go-tools/log"
+	"github.com/FMotalleb/go-tools/sysctx"
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/router"
-	"github.com/FMotalleb/junction/system"
-	"github.com/FMotalleb/log"
 	"go.uber.org/zap"
 )
 
 func Serve(c config.Config) error {
 	wg := new(sync.WaitGroup)
-	ctx := system.NewSystemContext()
+
+	ctx := context.Background()
+	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)
 	ctx, err := log.WithNewEnvLogger(ctx)
 	if err != nil {
 		return err

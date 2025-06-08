@@ -1,11 +1,29 @@
-[[entrypoints]]
-routing = "sni"
-port = 8443
-to = 443
-proxy = "127.0.0.1:7890"
+# [[entrypoints]]
+# routing = "sni"
+# port = 443
+# to = "443"
+# proxy = ["socks5://127.0.0.1:6980"]
+
+# [[entrypoints]]
+# routing = "http-header"
+# port = 80
+# to = "80"
+# proxy = ["socks5://127.0.0.1:6980"]
+
+# [[entrypoints]]
+# routing = "sni"
+# port = 8080
+# to = "8080"
+# proxy = ["socks5://127.0.0.1:6980"]
+
+# [[entrypoints]]
+# routing = "sni"
+# port = 5060
+# to = "5060"
+# proxy = ["socks5://127.0.0.1:6980"]
 
 [[entrypoints]]
-routing = "http-header"
-port = 8080
-to = 80
-proxy = "127.0.0.1:7890"
+routing = "sni"
+port = 8022
+proxy = "socks5://127.0.0.1:7890,ssh://proxy@10.11.12.13:8586/key"
+timeout = "5s"

@@ -14,9 +14,10 @@
         "ZAPLOG_DEVELOPMENT": "true",
         "ZAPLOG_LEVEL": "debug",
         "ZAPLOG_LEVEL_FORMAT": "color",
+        "TIMEOUT": "5h"
       },
       "args": [
-        "--config=config.toml",
+        "--config=config.yaml",
       ]
     }
   ]
