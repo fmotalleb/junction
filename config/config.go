@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 )
 
 type Config struct {
@@ -9,10 +10,11 @@ type Config struct {
 }
 
 type EntryPoint struct {
-	ListenPort int    `mapstructure:"port"`
-	TargetPort int    `mapstructure:"to"`
-	Proxy      string `mapstructure:"proxy"`
-	Routing    string `mapstructure:"routing"`
+	ListenPort int           `mapstructure:"port"`
+	Target     string        `mapstructure:"to"`
+	Proxy      string        `mapstructure:"proxy"`
+	Routing    string        `mapstructure:"routing"`
+	Timeout    time.Duration `mapstructure:"timeout"`
 }
 
 func (t *EntryPoint) GetListenAddr() string {

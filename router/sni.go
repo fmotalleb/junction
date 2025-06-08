@@ -3,12 +3,11 @@ package router
 import (
 	"context"
 	"net"
-	"strconv"
 
+	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/proxy"
 	"github.com/FMotalleb/junction/utils"
-	"github.com/FMotalleb/log"
 	"go.uber.org/zap"
 )
 
@@ -33,8 +32,8 @@ func sniRouter(ctx context.Context, entry config.EntryPoint) error {
 	defer listener.Close()
 
 	targetPort := "443"
-	if entry.TargetPort != 0 {
-		targetPort = strconv.Itoa(entry.TargetPort)
+	if entry.Target != "" {
+		targetPort = entry.Target
 	}
 	l.Info("SNI proxy booted", zap.String("listen", listenAddr), zap.String("proxy", entry.Proxy), zap.String("targetPort", targetPort))
 

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/proxy"
 	"github.com/FMotalleb/junction/utils"
-	"github.com/FMotalleb/log"
 	"go.uber.org/zap"
 )
 
@@ -30,8 +30,8 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 	l := log.FromContext(ctx).Named("router.http").With(zap.Any("entry", entry))
 
 	targetPort := "80"
-	if entry.TargetPort != 0 {
-		targetPort = strconv.Itoa(entry.TargetPort)
+	if entry.Target != "" {
+		targetPort = entry.Target
 	}
 
 	server := &http.Server{

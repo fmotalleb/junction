@@ -1,11 +1,17 @@
 [[entrypoints]]
 routing = "sni"
 port = 8443
-to = 443
+to = "443"
 proxy = "127.0.0.1:7890"
 
 [[entrypoints]]
 routing = "http-header"
 port = 8080
-to = 80
+to = "80"
 proxy = "127.0.0.1:7890"
+
+[[entrypoints]]
+routing = "tcp-raw"
+port = 8022
+to = "192.168.250.240:8586"
+proxy = "direct"
