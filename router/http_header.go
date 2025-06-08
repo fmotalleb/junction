@@ -63,7 +63,7 @@ type httpProxyHandler struct {
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	targetHost := prepareTargetHost(r.Host, r.Header.Get("Host"), h.targetPort, h.listenPort)
+	targetHost := prepareTargetHost(r.Host, r.Header.Get("Host"), h.targetPort)
 	if targetHost == "" {
 		h.logger.Warn("No host specified in request")
 		http.Error(w, "No host specified", http.StatusBadRequest)
@@ -83,7 +83,7 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func prepareTargetHost(hostHeader, fallback string, targetPort, listenPort string) string {
+func prepareTargetHost(hostHeader, fallback string, targetPort string) string {
 	host := hostHeader
 	if host == "" {
 		host = fallback
