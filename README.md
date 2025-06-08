@@ -1,6 +1,6 @@
 # Junction
 
-**Junction** is a lightweight proxy server designed for efficient HTTP and HTTPS traffic routing. It supports SOCKS5 proxies and dynamically generates SSL certificates to ensure secure communication. Junction is particularly useful in environments where using SOCKS proxies is almost impossible, providing an elegant solution for complex proxy configurations.
+**Junction** is a lightweight reverse proxy optimized for efficient TCP and TLS traffic routing. It inspects protocol-level metadata (such as SNI in TLS) to forward encrypted connections to the appropriate backend, without decrypting the traffic. Junction supports both SOCKS5 and SSH proxy protocols (and chaining them), making it ideal for complex egress scenarios where transparent, performant routing is required.
 
 ---
 
@@ -11,6 +11,12 @@
 
 - 🧦 **SOCKS5 Proxy Support**  
    Routes traffic using SOCKS5 proxies, with built-in support for VLESS proxies via Docker image.  
+
+- 🔀 **SSH Proxy Support**  
+   Routes traffic using SSH connection as proxy.
+
+- 🔗 **Proxy Chain Support**  
+   Chain multiple proxies together to create complex routing paths and improve privacy or bypass restrictions.
 
 - 🐳 **Dockerized Deployment**  
    Includes a ready-to-use Docker setup for seamless deployment in any environment.  
@@ -116,14 +122,14 @@ At the top level, define an array named `entrypoints`. Each entry describes a ro
   Default: `direct` (no proxy)
 
   e.g: These two are identical
-  - "socks5://user:pass@10.0.0.1:1080,socks5://10.0.0.2:1080,ssh://user@10.0.0.3:22/tmp/key"
-  - ["socks5://user:pass@10.0.0.1:1080","socks5://10.0.0.2:1080","ssh://user@10.0.0.3:22/tmp/key"]
+  - `"socks5://user:pass@10.0.0.1:1080,socks5://10.0.0.2:1080,ssh://user@10.0.0.3:22/tmp/key"`
+  - `["socks5://user:pass@10.0.0.1:1080", "socks5://10.0.0.2:1080", "ssh://user@10.0.0.3:22/tmp/key"]`
 
   ```mermaid
   graph LR
-     Client --> Proxy1["socks5://user:pass@10.0.0.1:1080"]
+     Client --> Proxy1["socks5://user:pass\@10.0.0.1:1080"]
      Proxy1 --> Proxy2["socks5://10.0.0.2:1080"]
-     Proxy2 --> Proxy3["ssh://user@10.0.0.3:22"]
+     Proxy2 --> Proxy3["ssh://user\@10.0.0.3:22"]
      Proxy3 --> Target["example.com:80"]
   ```
 
