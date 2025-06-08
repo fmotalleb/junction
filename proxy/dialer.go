@@ -14,8 +14,9 @@ func registerGenerator(g generator) {
 	generators = append(generators, g)
 }
 
-// NewDialer constructs a chain of SOCKS5 proxies given a comma-separated list.
-// e.g.: "proxy1:1080,proxy2:1080,proxy3:1080".
+// NewDialer constructs a chain of proxy dialers from a slice of URLs.
+// Supported schemes include socks5:// and ssh://.
+// The chain is built in order, with each proxy connecting through the previous one.
 func NewDialer(chain []url.URL) (proxy.Dialer, error) {
 	var dialer proxy.Dialer = proxy.Direct
 	// Build the proxy chain from last to first

@@ -86,7 +86,7 @@ At the top level, define an array named `entrypoints`. Each entry describes a ro
   Defines how the target hostname is resolved. Supported modes:
 
   - `sni`: Uses SNI for hostname detection. Requires target port. Default: `443`.
-  - `http-header`: Uses HTTP `Host` header. Requires target port. Default: `80`.
+  - `http-header`: Uses HTTP `Host` header. Requires target port. Default: from `Host`.
   - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port`. No defaults.
 
 - **`proxy`**:
@@ -154,14 +154,14 @@ proxy = "socks5://127.0.0.1:7890" # socks5 proxy address
 
 [[entrypoints]]
 port = 8080
-to = "80" # Defaults to 80
 routing = "http-header" 
+to = "80" # Defaults from `Host`
 proxy = "socks5://127.0.0.1:7890"
 
 [[entrypoints]]
 port = 8090
-to = "80" # Defaults to 80
 routing = "http-header" 
+to = "80"
 proxy = "direct" # Do not handle using proxy just reverse proxy it directly
 
 [[entrypoints]]

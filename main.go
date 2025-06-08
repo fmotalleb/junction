@@ -16,7 +16,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 package main
 
-import "github.com/FMotalleb/junction/cmd"
+import (
+	"github.com/FMotalleb/junction/cmd"
+)
 
 func main() {
 	cmd.Execute()

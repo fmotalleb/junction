@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/FMotalleb/go-tools/log"
@@ -17,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const DefaultHTTPPort = "80"
+const DefaultHTTPPort = ""
 
 func init() {
 	registerHandler(httpHandler)
@@ -92,13 +91,11 @@ func prepareTargetHost(hostHeader, fallback string, targetPort, listenPort strin
 	if host == "" {
 		return ""
 	}
-	split := strings.Split(host, ":")
-	if len(split) > 1 && split[len(split)-1] == listenPort {
-		split[len(split)-1] = targetPort
-	} else if len(split) == 1 {
-		split = append(split, targetPort)
+	if targetPort == "" {
+		return host
 	}
-	return strings.Join(split, ":")
+	hostname, _, _ := net.SplitHostPort(host)
+	return net.JoinHostPort(hostname, targetPort)
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
