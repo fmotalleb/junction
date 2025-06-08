@@ -32,7 +32,7 @@ func Handle(ctx context.Context, e config.EntryPoint) error {
 	return errors.New("no handler found for config")
 }
 
-func DialTarget(ctx context.Context, proxyAddr []url.URL, target string, logger *zap.Logger) (net.Conn, error) {
+func DialTarget(proxyAddr []url.URL, target string, logger *zap.Logger) (net.Conn, error) {
 	dialer, err := proxy.NewDialer(proxyAddr)
 	if err != nil {
 		logger.Error("failed to create SOCKS5 dialer", zap.Error(err))

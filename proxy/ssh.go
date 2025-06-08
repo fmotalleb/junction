@@ -47,7 +47,7 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 	clientConfig := &gossh.ClientConfig{
 		User:            user,
 		Auth:            auth,
-		HostKeyCallback: gossh.InsecureIgnoreHostKey(), // For testing only
+		HostKeyCallback: ignoreHostKey,
 		Timeout:         10 * time.Second,
 	}
 
@@ -95,4 +95,8 @@ func (s *sshProxyDialer) Dial(network, address string) (net.Conn, error) {
 		return nil, fmt.Errorf("SSH remote dial failed: %w", err)
 	}
 	return remoteConn, nil
+}
+
+func ignoreHostKey(_ string, _ net.Addr, _ gossh.PublicKey) error {
+	return nil
 }

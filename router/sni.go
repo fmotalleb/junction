@@ -72,7 +72,7 @@ func handleSNIConnection(parentCtx context.Context, logger *zap.Logger, clientCo
 	connLogger.Debug("SNI detected")
 
 	targetAddr := net.JoinHostPort(serverName, entry.GetTargetOr(DefaultSNIPort))
-	targetConn, err := DialTarget(ctx, entry.Proxy, targetAddr, connLogger)
+	targetConn, err := DialTarget(entry.Proxy, targetAddr, connLogger)
 	if err != nil {
 		return
 	}
