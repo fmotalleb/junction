@@ -28,6 +28,8 @@ dockers:
   - image_templates:
       - "ghcr.io/fmotalleb/junction:{{ .Version }}-slim"
       - "ghcr.io/fmotalleb/junction:latest-slim"
+      - "ghcr.io/fmotalleb/junction:{{ .Version }}"
+      - "ghcr.io/fmotalleb/junction:latest"
     dockerfile: Dockerfile
     goos: linux
     goarch: amd64
