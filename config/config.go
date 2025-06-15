@@ -22,7 +22,7 @@ type EntryPoint struct {
 }
 
 func (e *EntryPoint) GetListenAddr() string {
-	return fmt.Sprintf(":%d", e.ListenPort)
+	return fmt.Sprintf("0.0.0.0:%d", e.ListenPort)
 }
 
 func (e *EntryPoint) IsDirect() bool {
