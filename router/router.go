@@ -50,12 +50,32 @@ func DialTarget(proxyAddr []url.URL, target string, logger *zap.Logger) (net.Con
 func RelayTraffic(src, dst net.Conn, logger *zap.Logger) {
 	errCh := make(chan error, 2)
 
-	go func() { errCh <- utils.Copy(dst, src) }()
-	go func() { errCh <- utils.Copy(src, dst) }()
+	go func() {
+		err := utils.Copy(dst, src)
+		if err != nil {
+			errCh <- errors.Join(
+				errors.New("failed to write to target connection"),
+				err,
+			)
+		} else {
+			errCh <- nil
+		}
+	}()
+	go func() {
+		err := utils.Copy(src, dst)
+		if err != nil {
+			errCh <- errors.Join(
+				errors.New("failed to receive from target"),
+				err,
+			)
+		} else {
+			errCh <- nil
+		}
+	}()
 
 	for i := 0; i < 2; i++ {
 		if err := <-errCh; err != nil {
-			logger.Debug("copy finished", zap.Error(err))
+			logger.Warn("connection collapsed, one or more connection error", zap.Error(err))
 		}
 	}
 }
