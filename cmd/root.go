@@ -24,8 +24,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cfgFile string
-
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Use:   "junction",
@@ -35,7 +33,11 @@ var rootCmd = &cobra.Command{
   • SOCKS5 and SSH proxy + proxy chaining as transfer layer
   • Flexible routing via: SNI (TLS), HTTP
   • Docker-ready deploy with supervisord + sing-box`,
-	RunE: func(_ *cobra.Command, _ []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		cfgFile, err := cmd.Flags().GetString("config")
+		if err != nil {
+			return err
+		}
 		var cfg config.Config
 		if err := config.Parse(&cfg, cfgFile); err != nil {
 			return err
@@ -57,6 +59,5 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "config file (default is /junction/config.yaml)")
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.Flags().StringP("config", "c", "./junction.toml", "config file")
 }

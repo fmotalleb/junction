@@ -81,6 +81,8 @@ Steps to install Junction:
 
 ### Configuration
 
+Remember that the cli has an `example` sub command that will be updated more than this section,
+
 #### Fields
 
 At the top level, define an array named `entrypoints`. Each entry describes a routing configuration and includes the following fields:
@@ -193,7 +195,7 @@ entrypoints:
 
 ```
 
-Place the configuration file in the root directory or specify its path using the `--config` flag.
+Place the configuration file in the process working directory (file name 'junction.toml') or specify its path using the `--config` flag.
 
 ---
 
