@@ -11,11 +11,13 @@ tool (
 require (
 	github.com/FMotalleb/go-tools v0.1.3
 	github.com/mitchellh/mapstructure v1.5.0
+	github.com/pelletier/go-toml v1.9.5
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.39.0
 	golang.org/x/net v0.41.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -195,7 +197,6 @@ require (
 	golang.org/x/vuln v1.1.4 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.6.1 // indirect
 	mvdan.cc/gofumpt v0.7.0 // indirect
 	mvdan.cc/unparam v0.0.0-20240528143540-8a5130ca722f // indirect
