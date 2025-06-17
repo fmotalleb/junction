@@ -29,15 +29,12 @@ var cfgFile string
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Use:   "junction",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
+	Short: "Lightweight general proxy server that transfers network packets over a proxy or a proxy chain",
+	Long: `Junction is a lightweight proxy server for efficient HTTP and HTTPS routing with support for:
+  • SNI passthrough for TLS routing without terminating SSL
+  • SOCKS5 and SSH proxy + proxy chaining as transfer layer
+  • Flexible routing via: SNI (TLS), HTTP
+  • Docker-ready deploy with supervisord + sing-box`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		var cfg config.Config
 		if err := config.Parse(&cfg, cfgFile); err != nil {
