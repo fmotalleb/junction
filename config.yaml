@@ -1,6 +1,0 @@
-entrypoints:
-  - routing: http-header
-    port: 8022
-    proxy:
-      - socks5://127.0.0.1:7890
-    # timeout: 5s

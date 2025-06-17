@@ -42,3 +42,4 @@ vendor/
 *.log
 /junction
 __*
+/config.*
