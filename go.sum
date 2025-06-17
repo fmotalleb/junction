@@ -55,6 +55,10 @@ github.com/Djarvur/go-err113 v0.0.0-20210108212216-aea10b59be24 h1:sHglBQTwgx+rW
 github.com/Djarvur/go-err113 v0.0.0-20210108212216-aea10b59be24/go.mod h1:4UJr5HIiMZrwgkSPdsjy2uOQExX/WEILpIrO9UPGuXs=
 github.com/FMotalleb/go-tools v0.1.3 h1:mgKfK99NOBxep9KvI2vaDXp/o/N3G/1GZJlFazwVt/Q=
 github.com/FMotalleb/go-tools v0.1.3/go.mod h1:jgwBXsugpGJ4WF8hPcCtjoJZEbaIvSHQ38kiRPWCXP8=
+github.com/FMotalleb/go-tools v0.1.4 h1:Mcg5e9ozgIsmw4CIohjfJkNnWeiOXZc4vCLvsKEsrgs=
+github.com/FMotalleb/go-tools v0.1.4/go.mod h1:p6tAhEHh16zI4deabuRNMhhGq/35iWGqm5LvLN8tq9M=
+github.com/FMotalleb/go-tools v0.1.5 h1:8kO5f3XusNOvouWlb/UfmGyBM1cunjtFZn0YJ+96aLY=
+github.com/FMotalleb/go-tools v0.1.5/go.mod h1:p6tAhEHh16zI4deabuRNMhhGq/35iWGqm5LvLN8tq9M=
 github.com/GaijinEntertainment/go-exhaustruct/v3 v3.3.1 h1:Sz1JIXEcSfhz7fUi7xHnhpIE0thVASYjvosApmHuD2k=
 github.com/GaijinEntertainment/go-exhaustruct/v3 v3.3.1/go.mod h1:n/LSCXNuIYqVfBlVXyHfMQkZDdp1/mmxfSjADd3z1Zg=
 github.com/Masterminds/semver/v3 v3.3.0 h1:B8LGeaivUe71a5qox1ICM/JLl0NqZSW5CHyL+hmvYS0=

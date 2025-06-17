@@ -14,12 +14,14 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
+
 package cmd
 
 import (
 	"os"
 
 	"github.com/FMotalleb/junction/config"
+	"github.com/FMotalleb/junction/git"
 	"github.com/FMotalleb/junction/server"
 	"github.com/spf13/cobra"
 )
@@ -33,6 +35,7 @@ var rootCmd = &cobra.Command{
   • SOCKS5 and SSH proxy + proxy chaining as transfer layer
   • Flexible routing via: SNI (TLS), HTTP
   • Docker-ready deploy with supervisord + sing-box`,
+	Version: git.LastTag,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfgFile, err := cmd.Flags().GetString("config")
 		if err != nil {
