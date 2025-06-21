@@ -36,12 +36,12 @@
 
 ## 🚀 **Getting Started**
 
-### Prerequisites
+### Installation
 
 #### Standalone binary installation
 
 You can grab one of builds from [Release](https://github.com/FMotalleb/junction/releases) page
-or use the shell script (please check the scripts before executing them in your own shell)
+or use the shell script (please review [the scripts](https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh) before executing it in your shell, or any script you find online who paste them in the shell without checking)
 This script requires `curl`, `tar`, `jq` (if version is missing), `sha256sum` (optional but recommended) and `bash` itself.
 
 Install latest version (requires `jq`):
@@ -59,6 +59,16 @@ or select a version manually:
 ```bash
 VERSION=0.4.2 bash <<<"$(curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh)"
 ```
+
+#### Using Go cli
+
+Simply using
+
+```bash
+go install github.com/FMotalleb/junction@latest
+```
+
+in this method version variables are missing thus you cannot use `--version (-v)` to acquire version number
 
 #### Docker based
 
