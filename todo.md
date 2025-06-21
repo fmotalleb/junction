@@ -40,4 +40,4 @@
 
 * [x] Support multiple configuration formats
 * [x] Read configuration from `stdin`
-* [ ] Simplified CLI support (e.g., one-liner config)
+* [x] Simplified CLI support (e.g., one-liner config)
