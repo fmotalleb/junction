@@ -26,6 +26,12 @@ ENV VLESS_PROXY= \
 ENTRYPOINT [ "/docker-entrypoint.sh" ]
 CMD [ "supervisord" ]
 
+FROM gcr.io/distroless/base-debian12:nonroot AS distroless
+
+COPY junction /usr/bin/junction
+
+ENTRYPOINT [ "/usr/bin/junction" ]
+CMD [ "--help" ]
 
 
 FROM golang:latest AS builder
