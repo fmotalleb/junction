@@ -83,7 +83,7 @@ Using:
 
 #### Vless support
 
-contains singbox + supervisor
+contains singbox + supervisor (Possibly will be dropped in favor of using singbox externally)
 
 The Docker image `ghcr.io/fmotalleb/junction:latest-vless` differs from typical images by including **Supervisord** and **Sing-box**, enabling seamless connection to VLESS proxies. Inside the container, VLESS is exposed as a mixed SOCKS/HTTP proxy that Junction uses for routing traffic effectively.
 
@@ -100,28 +100,19 @@ contains junction itself based on distroless images by [google](gcr.io/distroles
 
 ---
 
-### Installation
+### Run Docker container
 
-Steps to install Junction:
+```bash
+# Documented example of config file
+docker run --rm -it ghcr.io/fmotalleb/junction:latest example
 
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/FMotalleb/junction.git
-   cd junction
-   ```
-
-2. Configure environment variables using `.env.example`.  
-
-3. Build and run the Docker container:
-
-   ```bash
-   docker-compose up --build
-   ```
-
-4. Access the proxy server on ports:
-   - **80** (HTTP)  
-   - **443** (HTTPS)  
+# Save config file to 
+docker run --rm ghcr.io/fmotalleb/junction:latest example > config.toml
+docker run --rm -it \
+   -v "./config.toml:/config.toml" \
+   --network host \ # or map each port manually
+   ghcr.io/fmotalleb/junction:latest -c /config.toml
+```
 
 ---
 
