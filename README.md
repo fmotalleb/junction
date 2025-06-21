@@ -48,7 +48,22 @@ Before setting up Junction, make sure you have the following installed:
 
 ### ❗️ **Docker Image Details (Must Read)**
 
-The Docker image `ghcr.io/fmotalleb/junction` differs from typical images by including **Supervisord** and **Sing-box**, enabling seamless connection to VLESS proxies. Inside the container, VLESS is exposed as a mixed SOCKS/HTTP proxy that Junction uses for routing traffic effectively.
+#### Vless support
+
+contains singbox + supervisor
+
+The Docker image `ghcr.io/fmotalleb/junction:latest-vless` differs from typical images by including **Supervisord** and **Sing-box**, enabling seamless connection to VLESS proxies. Inside the container, VLESS is exposed as a mixed SOCKS/HTTP proxy that Junction uses for routing traffic effectively.
+
+- `latest-vless`
+- `{{ .Version }}-vless`
+
+#### Basic image
+
+contains junction itself based on distroless images by [google](gcr.io/distroless/base-debian12:nonroot)
+
+- `latest`
+- `latest-distroless`
+- `{{ .Version }}-distroless`
 
 ---
 
