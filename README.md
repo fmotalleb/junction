@@ -122,6 +122,22 @@ docker run --rm -it \
 
 Remember that the cli has an `example` sub command that will be updated more than this section,
 
+#### Run SubCommand
+
+Simplest way to run the server is using `run` sub command
+
+```bash
+junction run --help # show help for this sub command
+# Simple example of run command that listens on port 8443
+#   thru socks5 proxy on port 7890 of localhost
+#   transfers the request to port 443 
+#   of the found hostname using `sni` packets
+junction run --port 8443 \
+             --proxy socks5://127.0.0.1:7890 \
+             --target 443 \
+             --routing sni
+```
+
 #### Fields
 
 At the top level, define an array named `entrypoints`. Each entry describes a routing configuration and includes the following fields:
