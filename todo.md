@@ -1,0 +1,43 @@
+# TODO List
+
+## Entrypoints
+
+* [x] SNI (Server Name Indication) support
+* [x] HTTP support
+* [x] TCP (with predefined targets)
+* [ ] UDP support
+* [ ] DNS (basic UDP-based server):
+  * [ ] Fake DNS response generation
+  * [ ] DNS request forwarding (requires request filtering to be effective)
+  * [ ] DNS over HTTPS (DoH) spoofing
+  * [ ] DoH request forwarding
+
+## Proxy Support
+
+* [x] SOCKS5
+* [x] Proxy chaining
+* [x] SSH tunneling
+* [ ] Replace backend with xray or sing-box
+* [ ] Proxy load balancing
+
+## Core Features
+
+* [ ] Handler pipeline:
+  * [ ] Support filtering to route a single entrypoint via different proxies or targets
+  * [ ] Request transformation/mutation
+* [ ] Metrics collection
+* [ ] Access logging
+* [ ] Monitoring support (for raw protocols)
+* [ ] Hot reload configuration
+
+## Performance Enhancements
+
+* [ ] Proxy reuse via proxy pool
+* [ ] Connection pooling (limit max concurrent connections per entrypoint)
+* [ ] Connection warm-up (optional; can trigger bans from tools like fail2ban)
+
+## Configuration
+
+* [x] Support multiple configuration formats
+* [x] Read configuration from `stdin`
+* [ ] Simplified CLI support (e.g., one-liner config)

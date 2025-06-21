@@ -83,7 +83,7 @@ Using:
 
 #### Vless support
 
-contains singbox + supervisor (Possibly will be dropped in favor of using singbox externally)
+contains singbox + supervisor (Possibly will be dropped in favor of using singbox or xray internally)
 
 The Docker image `ghcr.io/fmotalleb/junction:latest-vless` differs from typical images by including **Supervisord** and **Sing-box**, enabling seamless connection to VLESS proxies. Inside the container, VLESS is exposed as a mixed SOCKS/HTTP proxy that Junction uses for routing traffic effectively.
 
