@@ -1,6 +1,6 @@
 module github.com/FMotalleb/junction
 
-go 1.24.2
+go 1.24.4
 
 tool (
 	github.com/client9/misspell/cmd/misspell
