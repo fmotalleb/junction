@@ -40,11 +40,11 @@
 
 #### Standalone binary installation
 
-You can grab one of builds using [Release](release) from release page
+You can grab one of builds from [Release](https://github.com/FMotalleb/junction/releases) page
 or use the shell script (please check the scripts before executing them in your own shell)
 This script requires `curl`, `tar`, `jq` (if version is missing), `sha256sum` (optional but recommended) and `bash` itself.
 
-Install latest version:
+Install latest version (requires `jq`):
 
 ```bash
 bash <<<"$(curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh)"
@@ -54,7 +54,7 @@ bash <<<"$(curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/he
 curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh | bash
 ```
 
-or select a version:
+or select a version manually:
 
 ```bash
 VERSION=0.4.2 bash <<<"$(curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh)"
