@@ -32,8 +32,7 @@ builds:
       - "-X github.com/FMotalleb/junction/git.date={{.Date}}"
       - "-X github.com/FMotalleb/junction/git.branch={{.Branch}}"
     goos:
-      - windows
-      # - linux
+      - linux
     goarch:
       - amd64
     binary: junction
