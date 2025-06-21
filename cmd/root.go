@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"os"
+	"time"
 
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/git"
@@ -35,7 +36,7 @@ var rootCmd = &cobra.Command{
   • SOCKS5 and SSH proxy + proxy chaining as transfer layer
   • Flexible routing via: SNI (TLS), HTTP
   • Docker-ready deploy with supervisord + sing-box`,
-	Version: git.LastTag,
+	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Now().Sub(git.GetDate()).String() + " ago",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfgFile, err := cmd.Flags().GetString("config")
 		if err != nil {

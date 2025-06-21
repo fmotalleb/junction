@@ -63,5 +63,6 @@ linters:
     - whitespace
 
 issues:
+  fix: true
   exclude:
     - EXC0001

@@ -7,20 +7,35 @@ builds:
   - id: default
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - "-s"
+      - "-w"
+      - "-X github.com/FMotalleb/junction/git.version={{.Version}}"
+      - "-X github.com/FMotalleb/junction/git.commit={{.ShortCommit}}"
+      - "-X github.com/FMotalleb/junction/git.date={{.Date}}"
+      - "-X github.com/FMotalleb/junction/git.branch={{.Branch}}"
     goos:
       - darwin
       - linux
       - windows
-    ldflags: "-s -w"
     goarch:
       - amd64
 
   - id: slim
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - "-s"
+      - "-w"
+      - "-X github.com/FMotalleb/junction/git.version={{.Version}}"
+      - "-X github.com/FMotalleb/junction/git.commit={{.ShortCommit}}"
+      - "-X github.com/FMotalleb/junction/git.date={{.Date}}"
+      - "-X github.com/FMotalleb/junction/git.branch={{.Branch}}"
     goos:
-      - linux
+      - windows
+      # - linux
     goarch:
       - amd64
-    ldflags: "-s -w"
     binary: junction
     skip: "archive"
 

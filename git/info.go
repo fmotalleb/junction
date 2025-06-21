@@ -1,22 +1,30 @@
 package git
 
-//go:generate bash -c "git describe --tags --abbrev=0 > latest-tag.tmp"
-//go:generate bash -c "git rev-parse --abbrev-ref HEAD > branch.tmp"
-//go:generate bash -c "git rev-parse HEAD > commit-hash.tmp"
-//go:generate bash -c "git log -1 --pretty=%B > commit-msg.tmp"
+import "time"
 
-import (
-	_ "embed"
+var (
+	version = "v0.0.0-dev"
+	commit  = "--"
+	date    = "2025-06-21T15:24:40Z"
+	branch  = "dev-branch"
 )
 
-//go:embed latest-tag.tmp
-var LastTag string
+func GetVersion() string {
+	return version
+}
 
-//go:embed branch.tmp
-var Branch string
+func GetCommit() string {
+	return commit
+}
 
-//go:embed commit-hash.tmp
-var CommitHash string
+func GetDate() time.Time {
+	t, err := time.Parse(time.RFC3339, date)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
 
-//go:embed commit-msg.tmp
-var CommitMessage string
+func GetBranch() string {
+	return branch
+}
