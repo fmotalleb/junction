@@ -36,7 +36,7 @@ var rootCmd = &cobra.Command{
   • SOCKS5 and SSH proxy + proxy chaining as transfer layer
   • Flexible routing via: SNI (TLS), HTTP
   • Docker-ready deploy with supervisord + sing-box`,
-	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Now().Sub(git.GetDate()).String() + " ago",
+	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Since(git.GetDate()).String() + " ago",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfgFile, err := cmd.Flags().GetString("config")
 		if err != nil {
