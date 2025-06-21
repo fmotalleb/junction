@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -13,26 +14,31 @@ import (
 	"github.com/spf13/viper"
 )
 
-func detectFormatAndSet(v *viper.Viper, path string) error {
+func getConfigType(path string) string {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
 	switch ext {
 	case "yaml", "yml", "json", "toml", "ini", "hcl":
-		v.SetConfigType(ext)
-		return nil
+		return ext
 	default:
-		return fmt.Errorf("unsupported file extension: %s", ext)
+		return "toml"
 	}
 }
 
-func Parse(dst *Config, path string) error {
+func Parse(dst *Config, format, path string) error {
 	v := viper.New()
 	v.SetConfigFile(path)
 
-	if err := detectFormatAndSet(v, path); err != nil {
-		return err
+	cfgType := format
+	if format == "" {
+		cfgType = getConfigType(path)
 	}
+	v.SetConfigType(cfgType)
 
-	if err := v.ReadInConfig(); err != nil {
+	if path == "" {
+		if err := v.ReadConfig(os.Stdin); err != nil {
+			return fmt.Errorf("error reading `%s` config from stdin: %w", cfgType, err)
+		}
+	} else if err := v.ReadInConfig(); err != nil {
 		return fmt.Errorf("read config: %w", err)
 	}
 

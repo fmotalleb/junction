@@ -233,7 +233,8 @@ entrypoints:
 
 ```
 
-Place the configuration file in the process working directory (file name 'junction.toml') or specify its path using the `--config` flag.
+> You can specify config file path using `--config (-c)` flag (detects config file)
+> Default behavior is to read config from `stdin` using `toml` format
 
 ---
 

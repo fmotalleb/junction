@@ -38,18 +38,22 @@ var rootCmd = &cobra.Command{
   • Docker-ready deploy with supervisord + sing-box`,
 	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Since(git.GetDate()).Round(time.Minute).String() + " ago",
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		cfgFile, err := cmd.Flags().GetString("config")
-		if err != nil {
+		var configFile, format string
+		var err error
+		var cfg config.Config
+		if configFile, err = cmd.Flags().GetString("config"); err != nil {
 			return err
 		}
-		var cfg config.Config
-		if err := config.Parse(&cfg, cfgFile); err != nil {
+		if format, err = cmd.Flags().GetString("format"); err != nil {
+			return err
+		}
+		if err := config.Parse(&cfg, format, configFile); err != nil {
 			return err
 		}
 		if err := server.Serve(cfg); err != nil {
 			return err
 		}
-		select {}
+		return nil
 	},
 }
 
@@ -63,5 +67,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringP("config", "c", "./junction.toml", "config file")
+	rootCmd.Flags().StringP("config", "c", "", "config file (default: reading config from stdin)")
+	rootCmd.Flags().StringP("format", "f", "", "config format (yaml, json, toml, ini, hcl)")
 }
