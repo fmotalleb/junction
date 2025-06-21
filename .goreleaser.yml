@@ -64,7 +64,7 @@ dockers:
     extra_files:
       - docker
     build_flag_templates:
-      - "--target=simple"
+      - "--target=distroless"
     use: buildx
 
 archives:
