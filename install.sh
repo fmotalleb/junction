@@ -27,7 +27,7 @@ esac
 
 function fetch_version() {
   echo -e "${CYAN}Fetching latest release metadata...${NC}" >&2
-  version="$(curl -s "$API" | jq -r '.tag_name')"
+  version="$(curl -fs "$API" | jq -r '.tag_name')"
   echo -e "${GREEN}Latest version: ${version}${NC}" >&2
   echo -n "${version}"
 }
@@ -36,24 +36,19 @@ VERSION="${VERSION:-$(fetch_version)}"
 VERSION="${VERSION#v}"
 TARBALL="junction_${VERSION}_${OS}_${ARCH}.tar.gz"
 CHECKSUM_FILE="junction_${VERSION}_checksums.txt"
+echo -e "${BLUE}Using version: ${VERSION}${NC}\n"
 
 BASE_ASSET_PATH="https://github.com/$REPO/releases/download/v${VERSION}"
 ASSET_URL="${BASE_ASSET_PATH}/${TARBALL}"
 CHECKSUM_URL="${BASE_ASSET_PATH}/${CHECKSUM_FILE}"
-
-# Validate URLs
-if [[ -z "$ASSET_URL" || -z "$CHECKSUM_URL" ]]; then
-  echo -e "${RED}Could not find matching release assets for $OS/$ARCH${NC}" >&2
-  exit 1
-fi
 
 TMPDIR=$(mktemp -d)
 pushd "$TMPDIR" >/dev/null
 echo -e "${BLUE}Using temporary directory: $TMPDIR${NC}"
 
 echo -e "${CYAN}Downloading files...${NC}"
-curl -LO "$ASSET_URL"
-curl -LO "$CHECKSUM_URL"
+curl --fail --show-headers -LO "$ASSET_URL"
+curl --fail --show-headers -LO "$CHECKSUM_URL"
 
 echo -e "${CYAN}Verifying checksum...${NC}"
 EXPECTED_SUM=$(grep "$TARBALL" "$CHECKSUM_FILE" | awk '{print $1}')
@@ -64,7 +59,8 @@ elif command -v shasum &>/dev/null; then
   ACTUAL_SUM=$(shasum -a 256 "$TARBALL" | awk '{print $1}')
 else
   echo -e "${RED}No checksum utility found (sha256sum or shasum)${NC}" >&2
-  exit 1
+  input -p "Press Enter to continue without checksum verification (not recommended)..." || true
+  ACTUAL_SUM="${EXPECTED_SUM}"
 fi
 
 if [[ "$EXPECTED_SUM" != "$ACTUAL_SUM" ]]; then

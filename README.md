@@ -38,11 +38,34 @@
 
 ### Prerequisites
 
-Before setting up Junction, make sure you have the following installed:
+#### Standalone binary installation
+
+You can grab one of builds using [Release](release) from release page
+or use the shell script (please check the scripts before executing them in your own shell)
+This script requires `curl`, `tar`, `jq` (if version is missing), `sha256sum` (optional but recommended) and `bash` itself.
+
+Install latest version:
+
+```bash
+bash <<<"$(curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh)"
+```
+
+```sh
+curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh | bash
+```
+
+or select a version:
+
+```bash
+VERSION=0.4.2 bash <<<"$(curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh)"
+```
+
+#### Docker based
+
+Using:
 
 - [Docker](https://www.docker.com/)  
-- [Docker Compose](https://docs.docker.com/compose/)  
-- [Go](https://golang.org/) (for local development)  
+- [Docker Compose](https://docs.docker.com/compose/)
 
 ---
 
