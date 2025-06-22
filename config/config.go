@@ -25,10 +25,6 @@ func (e *EntryPoint) GetListenAddr() netip.AddrPort {
 	return netip.MustParseAddrPort(e.ListenPort)
 }
 
-func (e *EntryPoint) GetListenNetAddr() string {
-	return "0.0.0.0:" + e.ListenPort
-}
-
 func (e *EntryPoint) IsDirect() bool {
 	return len(e.Proxy) == 0
 }
