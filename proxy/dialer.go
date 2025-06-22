@@ -17,11 +17,11 @@ func registerGenerator(g generator) {
 // NewDialer constructs a chain of proxy dialers from a slice of URLs.
 // Supported schemes include socks5:// and ssh://.
 // The chain is built in order, with each proxy connecting through the previous one.
-func NewDialer(chain []url.URL) (proxy.Dialer, error) {
+func NewDialer(chain []*url.URL) (proxy.Dialer, error) {
 	var dialer proxy.Dialer = proxy.Direct
 	// Build the proxy chain from last to first
 	for _, addr := range chain {
-		d, err := generateDialer(addr, dialer)
+		d, err := generateDialer(*addr, dialer)
 		if err != nil {
 			return nil, err
 		}

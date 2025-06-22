@@ -32,7 +32,7 @@ var runCmd = &cobra.Command{
 			if pu, err = url.Parse(p); err != nil {
 				return err
 			}
-			entry.Proxy = append(entry.Proxy, *pu)
+			entry.Proxy = append(entry.Proxy, pu)
 		}
 		if entry.Routing, err = cmd.Flags().GetString("routing"); err != nil {
 			return err

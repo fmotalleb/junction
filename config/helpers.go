@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FMotalleb/go-tools/decoder"
 	"github.com/FMotalleb/go-tools/env"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
@@ -42,17 +43,7 @@ func Parse(dst *Config, format, path string) error {
 		return fmt.Errorf("read config: %w", err)
 	}
 
-	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			stringToSliceHookFunc(),
-			stringToDurationHookFunc(),
-			stringToURLHookFunc(),
-		),
-		Result:  dst,
-		TagName: "mapstructure",
-	}
-
-	decoder, err := mapstructure.NewDecoder(decoderConfig)
+	decoder, err := decoder.Build(dst)
 	if err != nil {
 		return fmt.Errorf("create decoder: %w", err)
 	}

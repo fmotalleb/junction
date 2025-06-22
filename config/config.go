@@ -16,7 +16,7 @@ type Config struct {
 type EntryPoint struct {
 	ListenPort string        `mapstructure:"port"`
 	Target     string        `mapstructure:"to"`
-	Proxy      []url.URL     `mapstructure:"proxy"`
+	Proxy      []*url.URL    `mapstructure:"proxy"`
 	Routing    string        `mapstructure:"routing"`
 	Timeout    time.Duration `mapstructure:"timeout"`
 }

@@ -57,7 +57,7 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 type httpProxyHandler struct {
 	ctx        context.Context
 	logger     *zap.Logger
-	proxyAddr  []url.URL
+	proxyAddr  []*url.URL
 	targetPort string
 	listenPort string
 }
