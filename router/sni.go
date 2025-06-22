@@ -17,7 +17,7 @@ func init() {
 }
 
 func sniRouter(ctx context.Context, entry config.EntryPoint) error {
-	if entry.Routing != "sni" {
+	if entry.Routing != config.RouterSNI {
 		return nil
 	}
 

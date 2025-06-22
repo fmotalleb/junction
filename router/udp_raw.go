@@ -16,7 +16,7 @@ func init() {
 }
 
 func udpRouter(ctx context.Context, entry config.EntryPoint) error {
-	if entry.Routing != "udp-raw" {
+	if entry.Routing != config.RouterUDPRaw {
 		return nil
 	}
 

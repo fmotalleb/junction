@@ -22,7 +22,7 @@ func init() {
 }
 
 func httpHandler(ctx context.Context, entry config.EntryPoint) error {
-	if entry.Routing != "http-header" {
+	if entry.Routing != config.RouterHTTPHeader {
 		return nil
 	}
 

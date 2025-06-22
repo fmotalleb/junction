@@ -17,7 +17,7 @@ type EntryPoint struct {
 	Listen  netip.AddrPort `mapstructure:"listen" toml:"listen" yaml:"listen" json:"listen"`
 	Target  string         `mapstructure:"to" toml:"to" yaml:"to" json:"to"`
 	Proxy   []*url.URL     `mapstructure:"proxy" toml:"proxy" yaml:"proxy" json:"proxy"`
-	Routing string         `mapstructure:"routing" toml:"routing" yaml:"routing" json:"routing"`
+	Routing Router         `mapstructure:"routing" toml:"routing" yaml:"routing" json:"routing"`
 	Timeout time.Duration  `mapstructure:"timeout" toml:"timeout" yaml:"timeout" json:"timeout"`
 }
 

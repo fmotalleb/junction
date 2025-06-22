@@ -40,7 +40,11 @@ var runCmd = &cobra.Command{
 			}
 			entry.Proxy = append(entry.Proxy, pu)
 		}
-		if entry.Routing, err = cmd.Flags().GetString("routing"); err != nil {
+		var strValue string
+		if strValue, err = cmd.Flags().GetString("routing"); err != nil {
+			return err
+		}
+		if err = entry.Routing.Set(strValue); err != nil {
 			return err
 		}
 		if entry.Target, err = cmd.Flags().GetString("target"); err != nil {

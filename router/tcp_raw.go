@@ -15,7 +15,7 @@ func init() {
 }
 
 func tcpRouter(ctx context.Context, entry config.EntryPoint) error {
-	if entry.Routing != "tcp-raw" {
+	if entry.Routing != config.RouterTCPRaw {
 		return nil
 	}
 
