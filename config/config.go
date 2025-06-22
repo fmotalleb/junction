@@ -2,7 +2,6 @@ package config
 
 import (
 	"cmp"
-	"fmt"
 	"net/netip"
 	"net/url"
 	"time"
@@ -27,7 +26,7 @@ func (e *EntryPoint) GetListenAddr() netip.AddrPort {
 }
 
 func (e *EntryPoint) GetListenNetAddr() string {
-	return fmt.Sprintf("0.0.0.0:%d", e.ListenPort)
+	return "0.0.0.0:" + e.ListenPort
 }
 
 func (e *EntryPoint) IsDirect() bool {
