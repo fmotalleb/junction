@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/FMotalleb/go-tools/log"
@@ -32,13 +31,12 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 	server := &http.Server{
 		ReadHeaderTimeout: time.Second * 30,
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
-		Addr:              entry.GetListenAddr().String(),
+		Addr:              entry.Listen.String(),
 		Handler: &httpProxyHandler{
 			ctx:        ctx,
 			logger:     logger,
 			proxyAddr:  entry.Proxy,
 			targetPort: entry.GetTargetOr(DefaultHTTPPort),
-			listenPort: strconv.Itoa(int(entry.GetListenAddr().Port())),
 		},
 	}
 
@@ -59,7 +57,6 @@ type httpProxyHandler struct {
 	logger     *zap.Logger
 	proxyAddr  []*url.URL
 	targetPort string
-	listenPort string
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

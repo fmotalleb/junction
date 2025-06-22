@@ -24,7 +24,7 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) error {
 		Named("router.udp-raw").
 		With(zap.Any("entry", entry))
 
-	addrPort := entry.GetListenAddr()
+	addrPort := entry.Listen
 	udpAddr := net.UDPAddrFromAddrPort(addrPort)
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {

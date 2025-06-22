@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"net/netip"
 	"net/url"
 	"time"
 
@@ -20,8 +21,13 @@ var runCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		entry := new(config.EntryPoint)
 		var err error
-		if entry.Listen, err = cmd.Flags().GetString("listen"); err != nil {
+		var listen string
+		if listen, err = cmd.Flags().GetString("listen"); err != nil {
 			return err
+		} else {
+			if entry.Listen, err = netip.ParseAddrPort(listen); err != nil {
+				return err
+			}
 		}
 		var proxyList []string
 		if proxyList, err = cmd.Flags().GetStringSlice("proxy"); err != nil {

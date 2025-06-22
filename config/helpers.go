@@ -2,13 +2,12 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
-	"time"
 
+	"github.com/FMotalleb/go-tools/decoder"
 	"github.com/FMotalleb/go-tools/env"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
@@ -42,17 +41,7 @@ func Parse(dst *Config, format, path string) error {
 		return fmt.Errorf("read config: %w", err)
 	}
 
-	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			stringToSliceHookFunc(),
-			stringToDurationHookFunc(),
-			stringToURLHookFunc(),
-		),
-		Result:  dst,
-		TagName: "mapstructure",
-	}
-
-	decoder, err := mapstructure.NewDecoder(decoderConfig)
+	decoder, err := decoder.Build(dst)
 	if err != nil {
 		return fmt.Errorf("create decoder: %w", err)
 	}
@@ -62,34 +51,6 @@ func Parse(dst *Config, format, path string) error {
 	}
 
 	return nil
-}
-
-// stringToURLHookFunc converts strings to url.URL.
-func stringToURLHookFunc() mapstructure.DecodeHookFunc {
-	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
-		if from.Kind() != reflect.String || to != reflect.TypeOf(url.URL{}) {
-			return data, nil
-		}
-		parsed, err := url.Parse(data.(string))
-		if err != nil {
-			return nil, fmt.Errorf("invalid URL: %w", err)
-		}
-		return *parsed, nil
-	}
-}
-
-// stringToDurationHookFunc converts strings to time.Duration.
-func stringToDurationHookFunc() mapstructure.DecodeHookFunc {
-	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
-		if from.Kind() != reflect.String || to != reflect.TypeOf(time.Duration(0)) {
-			return data, nil
-		}
-		parsed, err := time.ParseDuration(data.(string))
-		if err != nil {
-			return nil, fmt.Errorf("invalid Duration: %w", err)
-		}
-		return parsed, nil
-	}
 }
 
 // stringToSliceHookFunc converts strings to slices.

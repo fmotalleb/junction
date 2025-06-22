@@ -23,7 +23,7 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) error {
 		Named("router.tcp-raw").
 		With(zap.Any("entry", entry))
 
-	addrPort := entry.GetListenAddr()
+	addrPort := entry.Listen
 	tcpAddr := net.TCPAddrFromAddrPort(addrPort)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
