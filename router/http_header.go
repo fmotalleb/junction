@@ -32,13 +32,13 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 	server := &http.Server{
 		ReadHeaderTimeout: time.Second * 30,
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
-		Addr:              entry.GetListenAddr(),
+		Addr:              entry.GetListenAddr().String(),
 		Handler: &httpProxyHandler{
 			ctx:        ctx,
 			logger:     logger,
 			proxyAddr:  entry.Proxy,
 			targetPort: entry.GetTargetOr(DefaultHTTPPort),
-			listenPort: strconv.Itoa(entry.ListenPort),
+			listenPort: strconv.Itoa(int(entry.GetListenAddr().Port())),
 		},
 	}
 

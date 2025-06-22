@@ -20,7 +20,7 @@ var runCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		entry := new(config.EntryPoint)
 		var err error
-		if entry.ListenPort, err = cmd.Flags().GetInt("port"); err != nil {
+		if entry.ListenPort, err = cmd.Flags().GetString("port"); err != nil {
 			return err
 		}
 		var proxyList []string
@@ -59,7 +59,7 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	runCmd.Flags().IntP("port", "p", 0, "Port to listen on")
+	runCmd.Flags().StringP("port", "p", "", "Port to listen on")
 	runCmd.Flags().StringSliceP("proxy", "x", nil, "Proxy URLs (multiple or none allowed, e.g., socks5://127.0.0.1:7890)")
 	runCmd.Flags().StringP("routing", "r", "", "Routing method (e.g., sni, http-header, tcp-raw)")
 	runCmd.Flags().StringP("target", "t", "", "Target (based on routing method)")

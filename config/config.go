@@ -3,6 +3,7 @@ package config
 import (
 	"cmp"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"time"
 
@@ -14,14 +15,18 @@ type Config struct {
 }
 
 type EntryPoint struct {
-	ListenPort int           `mapstructure:"port"`
+	ListenPort string        `mapstructure:"port"`
 	Target     string        `mapstructure:"to"`
 	Proxy      []url.URL     `mapstructure:"proxy"`
 	Routing    string        `mapstructure:"routing"`
 	Timeout    time.Duration `mapstructure:"timeout"`
 }
 
-func (e *EntryPoint) GetListenAddr() string {
+func (e *EntryPoint) GetListenAddr() netip.AddrPort {
+	return netip.MustParseAddrPort(e.ListenPort)
+}
+
+func (e *EntryPoint) GetListenNetAddr() string {
 	return fmt.Sprintf("0.0.0.0:%d", e.ListenPort)
 }
 

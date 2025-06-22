@@ -23,10 +23,11 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) error {
 		Named("router.tcp-raw").
 		With(zap.Any("entry", entry))
 
-	listenAddr := entry.GetListenAddr()
-	listener, err := net.Listen("tcp", listenAddr)
+	addrPort := entry.GetListenAddr()
+	tcpAddr := net.TCPAddrFromAddrPort(addrPort)
+	listener, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
-		logger.Error("failed to listen", zap.String("addr", listenAddr), zap.Error(err))
+		logger.Error("failed to listen", zap.String("addr", addrPort.String()), zap.Error(err))
 		return err
 	}
 	defer listener.Close()
