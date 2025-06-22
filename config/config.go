@@ -10,19 +10,19 @@ import (
 )
 
 type Config struct {
-	EntryPoints []EntryPoint `mapstructure:"entrypoints"`
+	EntryPoints []EntryPoint `mapstructure:"entrypoints" toml:"entrypoints" yaml:"entrypoints" json:"entrypoints"`
 }
 
 type EntryPoint struct {
-	ListenPort string        `mapstructure:"port"`
-	Target     string        `mapstructure:"to"`
-	Proxy      []*url.URL    `mapstructure:"proxy"`
-	Routing    string        `mapstructure:"routing"`
-	Timeout    time.Duration `mapstructure:"timeout"`
+	Listen  string        `mapstructure:"listen" toml:"listen" yaml:"listen" json:"listen"`
+	Target  string        `mapstructure:"to" toml:"to" yaml:"to" json:"to"`
+	Proxy   []*url.URL    `mapstructure:"proxy" toml:"proxy" yaml:"proxy" json:"proxy"`
+	Routing string        `mapstructure:"routing" toml:"routing" yaml:"routing" json:"routing"`
+	Timeout time.Duration `mapstructure:"timeout" toml:"timeout" yaml:"timeout" json:"timeout"`
 }
 
 func (e *EntryPoint) GetListenAddr() netip.AddrPort {
-	return netip.MustParseAddrPort(e.ListenPort)
+	return netip.MustParseAddrPort(e.Listen)
 }
 
 func (e *EntryPoint) IsDirect() bool {

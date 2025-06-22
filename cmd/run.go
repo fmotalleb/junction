@@ -16,11 +16,11 @@ import (
 var runCmd = &cobra.Command{
 	Use:     "run",
 	Short:   "Run a simple server instead of reading a full config file",
-	Example: "junction run --port 8443 -x socks5://127.0.0.1:7890 --target 443 --routing sni ",
+	Example: "junction run --listen 8443 -x socks5://127.0.0.1:7890 --target 443 --routing sni ",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		entry := new(config.EntryPoint)
 		var err error
-		if entry.ListenPort, err = cmd.Flags().GetString("port"); err != nil {
+		if entry.Listen, err = cmd.Flags().GetString("listen"); err != nil {
 			return err
 		}
 		var proxyList []string
@@ -59,13 +59,12 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	runCmd.Flags().StringP("port", "p", "", "Port to listen on")
+	runCmd.Flags().StringP("listen", "p", ":8080", "Address to listen on (e.g., :8080,")
 	runCmd.Flags().StringSliceP("proxy", "x", nil, "Proxy URLs (multiple or none allowed, e.g., socks5://127.0.0.1:7890)")
 	runCmd.Flags().StringP("routing", "r", "", "Routing method (e.g., sni, http-header, tcp-raw)")
 	runCmd.Flags().StringP("target", "t", "", "Target (based on routing method)")
 	runCmd.Flags().DurationP("timeout", "T", time.Hour*24, "Timeout for requests")
 
-	requireOrPanic("port")
 	requireOrPanic("target")
 	requireOrPanic("routing")
 }
