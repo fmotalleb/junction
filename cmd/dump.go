@@ -22,15 +22,15 @@ var dumpCmd = &cobra.Command{
 		var err error
 		var cfg config.Config
 		if configFile, err = cmd.Flags().GetString("config"); err != nil {
-			println("Error reading config file flag:", err)
+			fmt.Printf("Error reading config file flag: %v\n", err)
 			return err
 		}
 		if format, err = cmd.Flags().GetString("format"); err != nil {
-			println("Error reading format flag:", err)
+			fmt.Printf("Error reading format flag: %v\n", err)
 			return err
 		}
 		if err = config.Parse(&cfg, "", configFile); err != nil {
-			println("Error parsing config:", err)
+			fmt.Printf("Error parsing config: %v\n", err)
 			return err
 		}
 		if err != nil {

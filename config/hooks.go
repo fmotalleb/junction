@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"net/netip"
 	"reflect"
 	"strings"
 
@@ -10,48 +11,40 @@ import (
 )
 
 func init() {
-	decoder.RegisterHook(EntryPointHookFunc())
+	decoder.RegisterHook(StringToIPSanitizer())
 }
 
-func EntryPointHookFunc() mapstructure.DecodeHookFunc {
-	return func(from reflect.Type, to reflect.Type, val interface{}) (interface{}, error) {
-		// Check if the target type is EntryPoint
-		if to != reflect.TypeOf(EntryPoint{}) {
+func StringToIPSanitizer() mapstructure.DecodeHookFunc {
+	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
+		if f.Kind() != reflect.String {
 			return val, nil
 		}
-
-		// Only handle string input
-		if from.Kind() != reflect.String {
+		if t != reflect.TypeOf(netip.AddrPort{}) {
 			return val, nil
 		}
-
-		if val == nil {
-			return nil, nil
+		if str, ok := val.(string); ok {
+			if str == "" {
+				return netip.AddrPort{}, nil
+			}
+			split := strings.Split(str, ":")
+			final := make([]string, 2)
+			switch len(split) {
+			case 1:
+				final[0] = ""
+				final[1] = split[0]
+			case 2:
+				final[0] = split[0]
+				final[1] = split[1]
+			}
+			if final[0] == "" {
+				final[0] = "0.0.0.0"
+			}
+			addrPort, err := netip.ParseAddrPort(final[0] + ":" + final[1])
+			if err != nil {
+				return nil, err
+			}
+			return addrPort, nil
 		}
-
-		strVal, ok := val.(string)
-		if !ok {
-			return val, errors.New("expected string value for entrypoint")
-		}
-
-		split := strings.Split(strVal, ";")
-		result := make(map[string]any, 0)
-		switch len(split) {
-		case 5:
-			result["timeout"] = split[4]
-			fallthrough
-		case 4:
-			result["proxy"] = split[3]
-			fallthrough
-		case 3:
-			result["to"] = split[2]
-			fallthrough
-		case 2:
-			result["listen"] = split[1]
-			fallthrough
-		case 1:
-			result["routing"] = split[0]
-		}
-		return result, nil
+		return val, errors.New("expected string value for netip.AddrPort")
 	}
 }
