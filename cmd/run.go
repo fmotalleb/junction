@@ -17,7 +17,7 @@ import (
 var runCmd = &cobra.Command{
 	Use:     "run",
 	Short:   "Run a simple server instead of reading a full config file",
-	Example: "junction run --listen 8443 -x socks5://127.0.0.1:7890 --target 443 --routing sni ",
+	Example: "junction run --routing sni --listen 8443 -x socks5://127.0.0.1:7890 --target 443",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		entry := new(config.EntryPoint)
 		var err error
