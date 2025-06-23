@@ -24,10 +24,9 @@ var runCmd = &cobra.Command{
 		var listen string
 		if listen, err = cmd.Flags().GetString("listen"); err != nil {
 			return err
-		} else {
-			if entry.Listen, err = netip.ParseAddrPort(listen); err != nil {
-				return err
-			}
+		}
+		if entry.Listen, err = netip.ParseAddrPort(listen); err != nil {
+			return err
 		}
 		var proxyList []string
 		if proxyList, err = cmd.Flags().GetStringSlice("proxy"); err != nil {

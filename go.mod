@@ -10,7 +10,6 @@ tool (
 
 require (
 	github.com/FMotalleb/go-tools v0.1.10
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml v1.9.5
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
