@@ -21,10 +21,6 @@ type EntryPoint struct {
 	Timeout time.Duration  `mapstructure:"timeout" toml:"timeout" yaml:"timeout" json:"timeout"`
 }
 
-// func (e *EntryPoint) GetListenAddr() netip.AddrPort {
-// 	return netip.MustParseAddrPort(e.Listen)
-// }
-
 func (e *EntryPoint) IsDirect() bool {
 	return len(e.Proxy) == 0
 }

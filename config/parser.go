@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/FMotalleb/go-tools/decoder"
+	"github.com/FMotalleb/junction/decoder"
 	"github.com/spf13/viper"
 )
 
