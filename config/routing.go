@@ -14,7 +14,7 @@ const (
 	RouterUDPRaw     Router = "udp-raw"
 )
 
-func (r *Router) Decode(from, to reflect.Type, val interface{}) error {
+func (r *Router) Decode(from, _ reflect.Type, val interface{}) error {
 	if from.Kind() != reflect.String {
 		return nil // not applicable
 	}
