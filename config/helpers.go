@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 
 	"github.com/FMotalleb/go-tools/decoder"
-	"github.com/FMotalleb/go-tools/env"
-	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
 
@@ -51,16 +48,4 @@ func Parse(dst *Config, format, path string) error {
 	}
 
 	return nil
-}
-
-// stringToSliceHookFunc converts strings to slices.
-func stringToSliceHookFunc() mapstructure.DecodeHookFunc {
-	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
-		if from.Kind() != reflect.String || to.Kind() != reflect.Slice {
-			return data, nil
-		}
-		sep := env.Or("SLICE_SEPARATOR", ",")
-		slice := strings.Split(data.(string), sep)
-		return slice, nil
-	}
 }
