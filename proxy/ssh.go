@@ -1,6 +1,20 @@
 package proxy
 
+// Target format
+// ssh://
+// 127.0.0.1:1080
+// ?user=root&
+// password=password&
+// private_key=(base64 url version)&
+// private_key_path=keypath&
+// private_key_passphrase=phrase&
+// host_key=aG9zdGtleQ&
+// host_key_algorithms=YWxnbw&
+// client_version=version
+
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -13,8 +27,20 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+const (
+	keyFileQuery       = "key_file"
+	keyContentQuery    = "key_content"
+	keyPassphraseQuery = "passphrase"
+)
+
 func init() {
 	registerGenerator(sshDialer)
+}
+
+type sshProxyDialer struct {
+	addr   string
+	config *gossh.ClientConfig
+	dialer proxy.Dialer
 }
 
 func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
@@ -26,11 +52,24 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 	pass, hasPass := url.User.Password()
 
 	var auth []gossh.AuthMethod
+	query := url.Query()
+	keyPass := ""
+	if query.Has(keyPassphraseQuery) {
+		keyPass = query.Get(keyPassphraseQuery)
+	}
 	switch {
 	case hasPass:
 		auth = append(auth, gossh.Password(pass))
-	case url.Path != "":
-		key, err := readKeyFile(url.Path)
+	case query.Has(keyFileQuery):
+		keyPath := query.Get(keyFileQuery)
+		key, err := readKeyFile(keyPath, keyPass)
+		if err != nil {
+			return nil, err
+		}
+		auth = append(auth, gossh.PublicKeys(key))
+	case query.Has(keyContentQuery):
+		keyContent := query.Get(keyContentQuery)
+		key, err := readB64Key(keyContent, keyPass)
 		if err != nil {
 			return nil, err
 		}
@@ -58,18 +97,30 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 	}, nil
 }
 
-func readKeyFile(keyPath string) (gossh.Signer, error) {
+func readKeyFile(keyPath, passphrase string) (gossh.Signer, error) {
 	key, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("read private key: %w", err)
 	}
-	return gossh.ParsePrivateKey(key)
+	return parseKey(key, []byte(passphrase))
 }
 
-type sshProxyDialer struct {
-	addr   string
-	config *gossh.ClientConfig
-	dialer proxy.Dialer
+func readB64Key(keyPath, passphrase string) (gossh.Signer, error) {
+	r := bytes.NewBufferString(keyPath)
+	k := make([]byte, 0)
+	d := base64.NewDecoder(base64.StdEncoding, r)
+	_, err := d.Read(k)
+	if err != nil {
+		return nil, fmt.Errorf("read private key: %w", err)
+	}
+	return parseKey(k, []byte(passphrase))
+}
+
+func parseKey(key, passphrase []byte) (gossh.Signer, error) {
+	if len(passphrase) != 0 {
+		return gossh.ParsePrivateKeyWithPassphrase(key, passphrase)
+	}
+	return gossh.ParsePrivateKey(key)
 }
 
 func (s *sshProxyDialer) Dial(network, address string) (net.Conn, error) {
