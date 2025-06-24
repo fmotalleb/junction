@@ -21,6 +21,7 @@ var dumpCmd = &cobra.Command{
 		var format, configFile string
 		var err error
 		var cfg config.Config
+		var debug bool
 		if configFile, err = cmd.Flags().GetString("config"); err != nil {
 			fmt.Printf("Error reading config file flag: %v\n", err)
 			return err
@@ -29,7 +30,11 @@ var dumpCmd = &cobra.Command{
 			fmt.Printf("Error reading format flag: %v\n", err)
 			return err
 		}
-		if err = config.Parse(&cfg, configFile); err != nil {
+		if debug, err = cmd.Flags().GetBool("debug"); err != nil {
+			fmt.Printf("Error reading debug flag: %v\n", err)
+			return err
+		}
+		if err = config.Parse(&cfg, configFile, debug); err != nil {
 			fmt.Printf("Error parsing config: %v\n", err)
 			return err
 		}
@@ -69,4 +74,5 @@ func init() {
 	rootCmd.AddCommand(dumpCmd)
 	dumpCmd.Flags().StringP("config", "c", "", "config file (default: reading config from stdin)")
 	dumpCmd.Flags().StringP("format", "f", "toml", "Format of output (only toml file has documents)")
+	dumpCmd.Flags().BoolP("debug", "d", false, "enable debug mode")
 }
