@@ -2,6 +2,12 @@ package utils
 
 import "encoding/binary"
 
+const (
+	tlsHandshakeFlag  = 0x16
+	tlsHandshakeBegin = 0x16
+	tlsHelloSize      = 4 + 2 + 32 + 1
+)
+
 func ExtractSNI(data []byte) string {
 	if !isTLSHandshake(data) {
 		return ""
@@ -16,29 +22,20 @@ func ExtractSNI(data []byte) string {
 }
 
 func isTLSHandshake(data []byte) bool {
-	if len(data) < 5 || data[0] != 0x16 {
-		return false
-	}
-	if len(data) < 9 {
+	if len(data) < 9 || data[0] != tlsHandshakeFlag {
 		return false
 	}
 	handshake := data[5:]
-	if len(handshake) < 4 || handshake[0] != 0x01 {
-		return false
-	}
-	return true
+	return handshake[0] != tlsHandshakeBegin
 }
 
 func skipClientHelloHeaders(handshake []byte) (int, bool) {
-	pos := 4 + 2 + 32
-	if pos >= len(handshake) {
-		return 0, false
-	}
-	if pos+1 > len(handshake) {
+	pos := tlsHelloSize
+	if pos > len(handshake) {
 		return 0, false
 	}
 	sidLen := int(handshake[pos])
-	pos += 1 + sidLen
+	pos += sidLen
 	if pos+2 > len(handshake) {
 		return 0, false
 	}
