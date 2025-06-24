@@ -132,7 +132,7 @@ junction run --help # show help for this sub command
 #   thru socks5 proxy on port 7890 of localhost
 #   transfers the request to port 443 
 #   of the found hostname using `sni` packets
-junction run --port 8443 \
+junction run --listen 8443 \
              --proxy socks5://127.0.0.1:7890 \
              --target 443 \
              --routing sni
@@ -140,10 +140,23 @@ junction run --port 8443 \
 
 #### Fields
 
+You can include multiple config files (even from a remote http source):
+Please note that this list is not loosely typed so you have to declare an array of strings
+
+- Support Glob pattern matching
+- Support `HTTP` and `HTTPS` with basic authentication
+
+```toml
+include = [
+  "./*.toml",
+  "http://kamand-pwa.dornicademo.ir/config.toml",
+]
+```
+
 At the top level, define an array named `entrypoints`. Each entry describes a routing configuration and includes the following fields:
 
-- **`port`**:
-  Local port to listen on.
+- **`listen`**:
+  IP:Port address to listen on.
 
 - **`routing`**:
   Defines how the target hostname is resolved. Supported modes:
@@ -210,25 +223,25 @@ At the top level, define an array named `entrypoints`. Each entry describes a ro
 
 ```toml
 [[entrypoints]]
-port = 8443 # Listen port
+listen = "0.0.0.0:8443" # Listen IP:Port address
 to = "443"  # Reroutes connections to this port (defaults to 443)
 routing = "sni" # Routing method
 proxy = "socks5://127.0.0.1:7890" # socks5 proxy address
 
 [[entrypoints]]
-port = 8080
+listen = ":8080" # Listen on 127.0.0.1:8080
 routing = "http-header" 
 to = "80" # Defaults from `Host`
 proxy = "socks5://127.0.0.1:7890"
 
 [[entrypoints]]
-port = 8090
+listen = 8090 # Listen on 127.0.0.1:8090
 routing = "http-header" 
 to = "80"
 proxy = "direct" # Do not handle using proxy just reverse proxy it directly
 
 [[entrypoints]]
-port = 8099
+listen = 8099
 to = "18.19.20.21:22" # Required for tcp-raw
 routing = "tcp-raw"  # TCP raw is old behavior where the target address must be specified (used for non-tls non-http requests that do not have any indications for server name nor address)
 proxy = "direct" # Do not handle using proxy just reverse proxy it directly
@@ -239,12 +252,12 @@ proxy = "direct" # Do not handle using proxy just reverse proxy it directly
 ```yaml
 entrypoints:
 - routing: "sni" # Routing method
-  port: 8443 # Listen port
+  listen: 8443 # Listen ip addr (default ip is 127.0.0.1 if omitted)
   to: "443" # Reroutes connections to this port (defaults to 443)
   proxy: socks5://127.0.0.1:7890  # socks5 proxy address
 
 - routing: http-header
-  port: 8080
+  listen: 8080
   to: "80" # Defaults to 80 
   proxy: socks5://127.0.0.1:7890
 

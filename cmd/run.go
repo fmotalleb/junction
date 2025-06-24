@@ -22,6 +22,7 @@ var runCmd = &cobra.Command{
 		entry := new(config.EntryPoint)
 		var err error
 		var listen string
+		debug := isDebug(cmd)
 		if listen, err = cmd.Flags().GetString("listen"); err != nil {
 			return err
 		}
@@ -58,7 +59,7 @@ var runCmd = &cobra.Command{
 		cfg.EntryPoints = []config.EntryPoint{
 			*entry,
 		}
-		if err := server.Serve(cfg); err != nil {
+		if err := server.Serve(cfg, debug); err != nil {
 			return err
 		}
 		return nil

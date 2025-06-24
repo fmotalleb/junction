@@ -38,19 +38,21 @@ var rootCmd = &cobra.Command{
   • Docker-ready deploy with supervisord + sing-box`,
 	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Since(git.GetDate()).Round(time.Minute).String() + " ago",
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		var configFile, format string
+		var configFile string
 		var err error
 		var cfg config.Config
+		debug := isDebug(cmd)
 		if configFile, err = cmd.Flags().GetString("config"); err != nil {
 			return err
 		}
-		if format, err = cmd.Flags().GetString("format"); err != nil {
+
+		// if format, err = cmd.Flags().GetString("format"); err != nil {
+		// 	return err
+		// }
+		if err := config.Parse(&cfg, configFile, debug); err != nil {
 			return err
 		}
-		if err := config.Parse(&cfg, format, configFile); err != nil {
-			return err
-		}
-		if err := server.Serve(cfg); err != nil {
+		if err := server.Serve(cfg, debug); err != nil {
 			return err
 		}
 		return nil
@@ -69,4 +71,5 @@ func Execute() {
 func init() {
 	rootCmd.Flags().StringP("config", "c", "", "config file (default: reading config from stdin)")
 	rootCmd.Flags().StringP("format", "f", "", "config format (yaml, json, toml, ini, hcl)")
+	rootCmd.PersistentFlags().BoolP("debug", "d", false, "enable debug mode")
 }

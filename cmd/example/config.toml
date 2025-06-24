@@ -1,3 +1,10 @@
+# Include all toml files in current working directory
+include = [
+  "./*.toml",
+  "http://example.conf/example.toml",
+  "https://example.conf/example.toml",
+]
+
 [[entrypoints]]
 routing = "sni" # SNI routing detects its host
 proxy = "socks5://10.11.12.22:8999" # Proxy address
@@ -12,7 +19,7 @@ proxy = [ # Proxy chain using array
   "socks5://10.11.12.22:8998" # Then using that connection connects to this
 ]
 to = "80" # Explicit http target port declaration (default 80)
-listen = "0.0.0.0:8080"
+listen = ":8080" # If no IP is specified, server will listen on 127.0.0.1:8080(port)
 
 [[entrypoints]]
 routing = "http-header" # SNI routing detects its host
@@ -20,18 +27,18 @@ proxy = [
   "ssh://test:password@test2:22", # SSH proxy using username:password
   "ssh://test@test2:22/path/to/private/key" # SSH proxy using username:private/public key authentication
 ]
-listen = "0.0.0.0:8090"
+listen = 8090 # Listen can be an integer, which will be interpreted as port number on localhost IP address (127.0.0.1)
 
 [[entrypoints]]
 routing = "tcp-raw"
 proxy = "socks5://10.11.12.22:8999,ssh://test@test2:22" # Proxy chain using string with `,` separator
 to = "192.168.200.56:8469" # tcp-raw routing is unable to detect its target host thus it need target's ip:port
 listen = "0.0.0.0:8444"
-timeout = "50s"
 
 [[entrypoints]]
 routing = "udp-raw"
-# proxy = "socks5://10.11.12.22:8999,ssh://test@test2:22" currently udp does not support proxy protocols
+# currently udp does not support proxy protocols
+# proxy = "socks5://10.11.12.22:8999,ssh://test@test2:22"
 to = "1.1.1.1:53" # udp-raw routing is unable to detect its target host thus it need target's ip:port
 listen = "0.0.0.0:53"
 timeout = "50s"
