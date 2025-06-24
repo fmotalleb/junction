@@ -47,15 +47,15 @@ else
   cat <<EOF >/etc/junction/config.toml
 [[entrypoints]]
 routing = "sni"
-port = $SNI_PORT
+listen = "0.0.0.0:$SNI_PORT"
 to = "443"
-proxy = "127.0.0.1:6980"
+proxy = "socks5://127.0.0.1:6980"
 
 [[entrypoints]]
 routing = "http-header"
-port = $HTTP_PORT
+listen = "0.0.0.0:$HTTP_PORT"
 to = "80"
-proxy = "127.0.0.1:6980"
+proxy = "socks5://127.0.0.1:6980"
 EOF
 fi
 exec "$@"
