@@ -11,7 +11,9 @@ import (
 func Parse(dst *Config, path string) error {
 	ctx := context.TODO()
 	cfg, err := config.ReadAndMergeConfig(ctx, path)
-
+	if err != nil {
+		return fmt.Errorf("failed to read and merge configs: %w", err)
+	}
 	decoder, err := decoder.Build(dst)
 	if err != nil {
 		return fmt.Errorf("create decoder: %w", err)

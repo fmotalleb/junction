@@ -1,3 +1,10 @@
+# Include all toml files in current working directory
+include = [
+  "./*.toml",
+  "http://example.conf/example.toml",
+  "https://example.conf/example.toml",
+]
+
 [[entrypoints]]
 routing = "sni" # SNI routing detects its host
 proxy = "socks5://10.11.12.22:8999" # Proxy address

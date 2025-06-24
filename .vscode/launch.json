@@ -17,6 +17,8 @@
         "TIMEOUT": "5h"
       },
       "args": [
+        "dump",
+        "-d",
         "--config=config.toml",
       ]
     }

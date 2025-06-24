@@ -140,6 +140,19 @@ junction run --listen 8443 \
 
 #### Fields
 
+You can include multiple config files (even from a remote http source):
+Please note that this list is not loosely typed so you have to declare an array of strings
+
+- Support Glob pattern matching
+- Support `HTTP` and `HTTPS` with basic authentication
+
+```toml
+include = [
+  "./*.toml",
+  "http://kamand-pwa.dornicademo.ir/config.toml",
+]
+```
+
 At the top level, define an array named `entrypoints`. Each entry describes a routing configuration and includes the following fields:
 
 - **`listen`**:
