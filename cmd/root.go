@@ -18,7 +18,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -42,21 +41,18 @@ var rootCmd = &cobra.Command{
 		var configFile string
 		var err error
 		var cfg config.Config
-		var debug bool
+		debug := isDebug(cmd)
 		if configFile, err = cmd.Flags().GetString("config"); err != nil {
 			return err
 		}
-		if debug, err = cmd.Flags().GetBool("debug"); err != nil {
-			fmt.Printf("Error reading debug flag: %v\n", err)
-			return err
-		}
+
 		// if format, err = cmd.Flags().GetString("format"); err != nil {
 		// 	return err
 		// }
 		if err := config.Parse(&cfg, configFile, debug); err != nil {
 			return err
 		}
-		if err := server.Serve(cfg); err != nil {
+		if err := server.Serve(cfg, debug); err != nil {
 			return err
 		}
 		return nil
@@ -75,5 +71,5 @@ func Execute() {
 func init() {
 	rootCmd.Flags().StringP("config", "c", "", "config file (default: reading config from stdin)")
 	rootCmd.Flags().StringP("format", "f", "", "config format (yaml, json, toml, ini, hcl)")
-	rootCmd.Flags().BoolP("debug", "d", false, "enable debug mode")
+	rootCmd.PersistentFlags().BoolP("debug", "d", false, "enable debug mode")
 }
