@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -11,10 +12,11 @@ import (
 )
 
 func init() {
-	decoder.RegisterHook(StringToIPSanitizer())
+	decoder.RegisterHook(StringToIPSanitizerHook())
+	decoder.RegisterHook(IntToIPHook())
 }
 
-func StringToIPSanitizer() mapstructure.DecodeHookFunc {
+func StringToIPSanitizerHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
 			return val, nil
@@ -37,7 +39,7 @@ func StringToIPSanitizer() mapstructure.DecodeHookFunc {
 				final[1] = split[1]
 			}
 			if final[0] == "" {
-				final[0] = "0.0.0.0"
+				final[0] = "127.0.0.1"
 			}
 			addrPort, err := netip.ParseAddrPort(final[0] + ":" + final[1])
 			if err != nil {
@@ -46,5 +48,24 @@ func StringToIPSanitizer() mapstructure.DecodeHookFunc {
 			return addrPort, nil
 		}
 		return val, errors.New("expected string value for netip.AddrPort")
+	}
+}
+
+func IntToIPHook() mapstructure.DecodeHookFunc {
+	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
+		switch f.Kind() {
+		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+		default:
+			return val, nil
+		}
+		if t != reflect.TypeOf(netip.AddrPort{}) {
+			return val, nil
+		}
+		strVal := fmt.Sprintf("127.0.0.1:%d", val)
+		addrPort, err := netip.ParseAddrPort(strVal)
+		if err != nil {
+			return nil, err
+		}
+		return addrPort, nil
 	}
 }

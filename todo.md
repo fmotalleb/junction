@@ -5,7 +5,7 @@
 * [x] SNI (Server Name Indication) support
 * [x] HTTP support
 * [x] TCP (with predefined targets)
-* [ ] UDP support
+* [x] UDP support
 * [ ] DNS (basic UDP-based server):
   * [ ] Fake DNS response generation
   * [ ] DNS request forwarding (requires request filtering to be effective)
@@ -41,3 +41,6 @@
 * [x] Support multiple configuration formats
 * [x] Read configuration from `stdin`
 * [x] Simplified CLI support (e.g., one-liner config)
+* [x] Dump config
+* [x] Loose type config parser
+* [ ] Include more than one config file
