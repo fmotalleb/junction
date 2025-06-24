@@ -5,7 +5,7 @@ import "encoding/binary"
 const (
 	tlsHandshakeFlag  = 0x16
 	tlsHandshakeBegin = 0x16
-	tlsHelloSize      = 4 + 2 + 32 + 1
+	tlsHelloSize      = 4 + 2 + 32
 )
 
 func ExtractSNI(data []byte) string {
@@ -35,7 +35,7 @@ func skipClientHelloHeaders(handshake []byte) (int, bool) {
 		return 0, false
 	}
 	sidLen := int(handshake[pos])
-	pos += sidLen
+	pos += 1 + sidLen
 	if pos+2 > len(handshake) {
 		return 0, false
 	}
