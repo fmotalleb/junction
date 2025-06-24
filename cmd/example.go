@@ -36,15 +36,15 @@ var exampleCmd = &cobra.Command{
 
 func formatConfig(format string, data []byte) ([]byte, error) {
 	var result []byte
-	parsed, err := tomlToMap(exampleConfigData)
+	parsed, err := tomlToMap(data)
 	if err != nil {
 		fmt.Println("TOML example has an issue, please report this in issue tracker")
-		fmt.Println(string(exampleConfigData))
+		fmt.Println(string(data))
 		return nil, err
 	}
 	switch format {
 	case "toml":
-		result = exampleConfigData
+		result = data
 	case "json":
 		result, err = json.MarshalIndent(parsed, "", "  ")
 		if err != nil {
