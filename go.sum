@@ -34,6 +34,8 @@ cloud.google.com/go/storage v1.5.0/go.mod h1:tpKbwo567HUNpVclU5sGELwQWBDZ8gh0Zeo
 cloud.google.com/go/storage v1.6.0/go.mod h1:N7U0C8pVQ/+NIKOBQyamJIeKQKkZ+mxpohlUTyfDhBk=
 cloud.google.com/go/storage v1.8.0/go.mod h1:Wv1Oy7z6Yz3DshWRJFhqM/UCfaWIRTdp0RXyy7KQOVs=
 cloud.google.com/go/storage v1.10.0/go.mod h1:FLPqc6j+Ki4BU591ie1oL6qBQGu2Bl/tZ9ullr3+Kg0=
+dario.cat/mergo v1.0.2 h1:85+piFYR1tMbRrLcDwR18y4UKJ3aH1Tbzi24VRW1TK8=
+dario.cat/mergo v1.0.2/go.mod h1:E/hbnu0NxMFBjpMIE34DRGLWqDy0g5FuKDhCb31ngxA=
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 github.com/4meepo/tagalign v1.4.2 h1:0hcLHPGMjDyM1gHG58cS73aQF8J4TdVR96TZViorO9E=
 github.com/4meepo/tagalign v1.4.2/go.mod h1:+p4aMyFM+ra7nb41CnFG6aSDXqRxU/w1VQqScKqDARI=
@@ -53,8 +55,8 @@ github.com/Crocmagnon/fatcontext v0.7.1 h1:SC/VIbRRZQeQWj/TcQBS6JmrXcfA+BU4OGSVU
 github.com/Crocmagnon/fatcontext v0.7.1/go.mod h1:1wMvv3NXEBJucFGfwOJBxSVWcoIO6emV215SMkW9MFU=
 github.com/Djarvur/go-err113 v0.0.0-20210108212216-aea10b59be24 h1:sHglBQTwgx+rWPdisA5ynNEsoARbiCBOyGcJM4/OzsM=
 github.com/Djarvur/go-err113 v0.0.0-20210108212216-aea10b59be24/go.mod h1:4UJr5HIiMZrwgkSPdsjy2uOQExX/WEILpIrO9UPGuXs=
-github.com/FMotalleb/go-tools v0.1.11 h1:sGLBefZ38yDhDva1nR7nOoN0Owt4KW0bToJFKJkXgRg=
-github.com/FMotalleb/go-tools v0.1.11/go.mod h1:sjvFqmu+7Bo2aR9ZJ95ht74F9CGbYOg3aG8gbE4aFV4=
+github.com/FMotalleb/go-tools v0.1.12 h1:a0SE19H885+A5oU07wihg7ihqLPE17vL1x7ltKUEpuU=
+github.com/FMotalleb/go-tools v0.1.12/go.mod h1:0+cTWeIWeCyj29VAdDQAYdL9Aj4Btr52UbEa6TH+4Uo=
 github.com/GaijinEntertainment/go-exhaustruct/v3 v3.3.1 h1:Sz1JIXEcSfhz7fUi7xHnhpIE0thVASYjvosApmHuD2k=
 github.com/GaijinEntertainment/go-exhaustruct/v3 v3.3.1/go.mod h1:n/LSCXNuIYqVfBlVXyHfMQkZDdp1/mmxfSjADd3z1Zg=
 github.com/Masterminds/semver/v3 v3.3.0 h1:B8LGeaivUe71a5qox1ICM/JLl0NqZSW5CHyL+hmvYS0=

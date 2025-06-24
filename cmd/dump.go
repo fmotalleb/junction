@@ -18,7 +18,7 @@ var dumpCmd = &cobra.Command{
 	Use:   "dump",
 	Short: "Reads a config file and dumps it to stdout",
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		var configFile, format string
+		var format, configFile string
 		var err error
 		var cfg config.Config
 		if configFile, err = cmd.Flags().GetString("config"); err != nil {
@@ -29,7 +29,7 @@ var dumpCmd = &cobra.Command{
 			fmt.Printf("Error reading format flag: %v\n", err)
 			return err
 		}
-		if err = config.Parse(&cfg, "", configFile); err != nil {
+		if err = config.Parse(&cfg, configFile); err != nil {
 			fmt.Printf("Error parsing config: %v\n", err)
 			return err
 		}

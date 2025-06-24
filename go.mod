@@ -9,7 +9,7 @@ tool (
 )
 
 require (
-	github.com/FMotalleb/go-tools v0.1.11
+	github.com/FMotalleb/go-tools v0.1.12
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml v1.9.5
 	github.com/spf13/cobra v1.9.1
@@ -23,6 +23,7 @@ require (
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
+	dario.cat/mergo v1.0.2 // indirect
 	github.com/4meepo/tagalign v1.4.2 // indirect
 	github.com/Abirdcfly/dupword v0.1.3 // indirect
 	github.com/Antonboom/errname v1.0.0 // indirect

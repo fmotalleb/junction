@@ -39,8 +39,9 @@
 ## Configuration
 
 * [x] Support multiple configuration formats
-* [x] Read configuration from `stdin`
+* [ ] Read configuration from `stdin`
+  * Dropped in favor of include multiple config files
 * [x] Simplified CLI support (e.g., one-liner config)
 * [x] Dump config
 * [x] Loose type config parser
-* [ ] Include more than one config file
+* [x] Include more than one config file

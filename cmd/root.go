@@ -38,16 +38,16 @@ var rootCmd = &cobra.Command{
   • Docker-ready deploy with supervisord + sing-box`,
 	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Since(git.GetDate()).Round(time.Minute).String() + " ago",
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		var configFile, format string
+		var configFile string
 		var err error
 		var cfg config.Config
 		if configFile, err = cmd.Flags().GetString("config"); err != nil {
 			return err
 		}
-		if format, err = cmd.Flags().GetString("format"); err != nil {
-			return err
-		}
-		if err := config.Parse(&cfg, format, configFile); err != nil {
+		// if format, err = cmd.Flags().GetString("format"); err != nil {
+		// 	return err
+		// }
+		if err := config.Parse(&cfg, configFile); err != nil {
 			return err
 		}
 		if err := server.Serve(cfg); err != nil {

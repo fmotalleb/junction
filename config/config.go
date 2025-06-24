@@ -17,11 +17,11 @@ type Config struct {
 }
 
 type EntryPoint struct {
-	Listen  netip.AddrPort `mapstructure:"listen" toml:"listen" yaml:"listen" json:"listen"`
-	Target  string         `mapstructure:"to" toml:"to" yaml:"to" json:"to"`
-	Proxy   []*url.URL     `mapstructure:"proxy" toml:"proxy" yaml:"proxy" json:"proxy"`
-	Routing Router         `mapstructure:"routing" toml:"routing" yaml:"routing" json:"routing"`
-	Timeout time.Duration  `mapstructure:"timeout" toml:"timeout" yaml:"timeout" json:"timeout"`
+	Listen  netip.AddrPort `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
+	Target  string         `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
+	Proxy   []*url.URL     `mapstructure:"proxy,omitempty" toml:"proxy,omitempty" yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Routing Router         `mapstructure:"routing,omitempty" toml:"routing,omitempty" yaml:"routing,omitempty" json:"routing,omitempty"`
+	Timeout time.Duration  `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 func (e *EntryPoint) IsDirect() bool {
@@ -76,6 +76,8 @@ func (e *EntryPoint) Decode(from, _ reflect.Type, val interface{}) (any, error) 
 		fallthrough
 	case 1:
 		result["routing"] = split[0]
+	default:
+		return val, errors.New("there are more than allowed separator (;) in config string")
 	}
 
 	return result, nil
