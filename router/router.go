@@ -49,33 +49,20 @@ func DialTarget(proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Co
 
 func RelayTraffic(src, dst net.Conn, logger *zap.Logger) {
 	errCh := make(chan error, 2)
+	defer close(errCh)
 	go func() {
 		err := utils.Copy(src, dst)
-		if err != nil {
-			select {
-			case errCh <- errors.Join(
-				errors.New("failed to receive from target"),
-				err,
-			):
-			default:
-			}
-		} else {
-			close(errCh)
-		}
+		errCh <- errors.Join(
+			errors.New("failed to write to target connection"),
+			err,
+		)
 	}()
 	go func() {
 		err := utils.Copy(dst, src)
-		if err != nil {
-			select {
-			case errCh <- errors.Join(
-				errors.New("failed to write to target connection"),
-				err,
-			):
-			default:
-			}
-		} else {
-			close(errCh)
-		}
+		errCh <- errors.Join(
+			errors.New("failed to write to target connection"),
+			err,
+		)
 	}()
 
 	for err := range errCh {
