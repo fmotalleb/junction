@@ -11,25 +11,14 @@ import (
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/router"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-func Serve(c config.Config, debug bool) error {
+func Serve(c config.Config) error {
 	wg := new(sync.WaitGroup)
 
 	ctx := context.Background()
 	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)
 	logBuilders := make([]log.BuilderFunc, 0)
-	if debug {
-		logBuilders = append(
-			logBuilders,
-			func(b *log.Builder) *log.Builder {
-				return b.
-					LevelValue(zapcore.DebugLevel).
-					Development(true)
-			},
-		)
-	}
 	ctx, err := log.WithNewEnvLogger(ctx, logBuilders...)
 	if err != nil {
 		return err

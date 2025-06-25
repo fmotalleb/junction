@@ -9,7 +9,7 @@ tool (
 )
 
 require (
-	github.com/FMotalleb/go-tools v0.1.14
+	github.com/FMotalleb/go-tools v0.1.16
 	github.com/go-viper/mapstructure/v2 v2.3.0
 	github.com/pelletier/go-toml v1.9.5
 	github.com/spf13/cobra v1.9.1

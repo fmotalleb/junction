@@ -79,8 +79,13 @@ func RelayTraffic(src, dst net.Conn, logger *zap.Logger) {
 	}()
 
 	for err := range errCh {
-		if err != nil {
-			logger.Debug("connection collapsed, one or more connection error", zap.Error(err))
+		if err == nil {
+			break
+		}
+		if errors.Is(err, net.ErrClosed) {
+			logger.Debug("connection closed (most of the time its ok)", zap.Error(err))
+		} else {
+			logger.Warn("connection collapsed", zap.Error(err))
 		}
 	}
 }
