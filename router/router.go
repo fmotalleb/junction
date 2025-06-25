@@ -47,6 +47,8 @@ func DialTarget(proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Co
 	return conn, nil
 }
 
+// RelayTraffic concurrently relays data between two network connections in both directions until either connection is closed or an error occurs.
+// Logs connection closure and errors for diagnostic purposes.
 func RelayTraffic(src, dst net.Conn, logger *zap.Logger) {
 	errCh := make(chan error, 2)
 	defer close(errCh)

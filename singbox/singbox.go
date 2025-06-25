@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// Start initializes and runs a Sing-Box instance using the provided configuration.
+// It returns an error if the configuration is invalid or if the Sing-Box instance fails to start.
 func Start(
 	ctx context.Context,
 	config map[string]any,
