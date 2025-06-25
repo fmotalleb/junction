@@ -10,7 +10,7 @@
       "request": "launch",
       "mode": "auto",
       "buildFlags": [
-        "-tags=debug"
+        "-tags=debug,with_utls"
       ],
       "program": "${workspaceFolder}",
       "args": [
@@ -25,7 +25,7 @@
       "mode": "auto",
       "program": "${workspaceFolder}",
       "buildFlags": [
-        "-tags=debug"
+        "-tags=debug,with_utls"
       ],
       "args": [
         "dump",
