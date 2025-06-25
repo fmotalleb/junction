@@ -14,6 +14,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// Serve starts server components based on the provided configuration, including optional Singbox integration, and waits for all entry points to complete.
+// Returns an error if initialization fails or if all listeners have stopped.
 func Serve(c config.Config) error {
 	wg := new(sync.WaitGroup)
 
@@ -38,6 +40,8 @@ func Serve(c config.Config) error {
 	return errors.New("every listener died")
 }
 
+// runSingbox starts the Singbox service with the provided configuration and context.
+// Returns an error if Singbox fails to start.
 func runSingbox(ctx context.Context, cfg map[string]any) error {
 	err := singbox.Start(ctx, cfg)
 	if err != nil {
@@ -50,6 +54,8 @@ func runSingbox(ctx context.Context, cfg map[string]any) error {
 	return nil
 }
 
+// handleEntry starts handling the specified entry point within the given context and marks the wait group as done when finished.
+// Logs a warning if the entry point handler fails to start.
 func handleEntry(ctx context.Context, e config.EntryPoint, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if err := router.Handle(ctx, e); err != nil {
