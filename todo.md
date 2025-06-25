@@ -17,7 +17,9 @@
 * [x] SOCKS5
 * [x] Proxy chaining
 * [x] SSH tunneling
-* [ ] Replace backend with xray or sing-box
+* [x] Add sing-box engine support to core application
+  * [x] Integrate sing-box into codebase and config
+  * [ ] Generate sing-box config from proxy url
 * [ ] Proxy load balancing
 
 ## Core Features
