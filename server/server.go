@@ -10,6 +10,7 @@ import (
 	"github.com/FMotalleb/go-tools/sysctx"
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/router"
+	"github.com/FMotalleb/junction/singbox"
 	"go.uber.org/zap"
 )
 
@@ -23,12 +24,30 @@ func Serve(c config.Config) error {
 	if err != nil {
 		return err
 	}
+	if len(c.Core.SingboxCfg) != 0 {
+		err := runSingbox(ctx, c.Core.SingboxCfg)
+		if err != nil {
+			return err
+		}
+	}
 	for _, e := range c.EntryPoints {
 		wg.Add(1)
 		go handleEntry(ctx, e, wg)
 	}
 	wg.Wait()
 	return errors.New("every listener died")
+}
+
+func runSingbox(ctx context.Context, cfg map[string]any) error {
+	err := singbox.Start(ctx, cfg)
+	if err != nil {
+		log.Of(ctx).Error("singbox error", zap.Error(err))
+		return errors.Join(
+			errors.New("failed to start singbox"),
+			err,
+		)
+	}
+	return nil
 }
 
 func handleEntry(ctx context.Context, e config.EntryPoint, wg *sync.WaitGroup) {

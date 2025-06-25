@@ -13,9 +13,12 @@ import (
 )
 
 type Config struct {
+	Core        CoreCfg      `mapstructure:"core" toml:"core" yaml:"core" json:"core"`
 	EntryPoints []EntryPoint `mapstructure:"entrypoints" toml:"entrypoints" yaml:"entrypoints" json:"entrypoints"`
 }
-
+type CoreCfg struct {
+	SingboxCfg map[string]any `mapstructure:"singbox,omitempty" toml:"singbox,omitempty" yaml:"singbox,omitempty" json:"singbox,omitempty"`
+}
 type EntryPoint struct {
 	Listen  netip.AddrPort `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
 	Target  string         `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
