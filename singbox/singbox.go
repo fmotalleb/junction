@@ -42,12 +42,19 @@ func Start(
 		)
 	}
 	log.Debug("singbox config parsed", zap.Any("config", opt))
-	box, err = sb.New(*opt)
-	if err != nil {
+
+	if box, err = sb.New(*opt); err != nil {
 		return errors.Join(
 			errors.New("failed to create singbox instance"),
 			err,
 		)
 	}
-	return box.Start()
+	if err = box.Start(); err != nil {
+		return errors.Join(
+			errors.New("failed to start singbox instance"),
+			err,
+		)
+	}
+
+	return nil
 }

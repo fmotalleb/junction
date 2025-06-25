@@ -44,3 +44,4 @@ vendor/
 __*
 /config.*
 *.tmp
+*.secret*
