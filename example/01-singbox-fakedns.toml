@@ -1,0 +1,20 @@
+
+# fake dns that respond to every request by telling them this host is the answer
+[core.singbox.dns]
+independent_cache = true
+
+[core.singbox.dns.fakeip]
+enabled = true
+# workaround since singbox always applies a +3 to minimum ip of this range (Don't know why)
+inet4_range = "126.255.255.255/32"
+
+[[core.singbox.dns.rules]]
+query_type = [
+  "A",
+]
+server = "dns-fake"
+
+
+[[core.singbox.dns.servers]]
+address = "fakeip"
+tag = "dns-fake"

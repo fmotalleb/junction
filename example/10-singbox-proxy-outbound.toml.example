@@ -1,0 +1,25 @@
+# Outbound config of singbox
+[[core.singbox.outbounds]]
+tag = "proxy"
+domain_strategy = ""
+flow = ""
+packet_encoding = "xudp"
+server = ""
+server_port = 443
+type = "vless"
+uuid = ""
+
+[core.singbox.outbounds.tls]
+enabled = true
+server_name = ""
+
+[core.singbox.outbounds.tls.utls]
+enabled = true
+fingerprint = "firefox"
+
+[core.singbox.outbounds.transport]
+path = "/"
+type = "ws"
+
+[core.singbox.outbounds.transport.headers]
+Host = ""
