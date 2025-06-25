@@ -7,10 +7,12 @@ independent_cache = true
 enabled = true
 # workaround since singbox always applies a +3 to minimum ip of this range (Don't know why)
 inet4_range = "126.255.255.255/32"
+inet_range = "fc00::/18"
 
 [[core.singbox.dns.rules]]
 query_type = [
   "A",
+  "AAAA",
 ]
 server = "dns-fake"
 
