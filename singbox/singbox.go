@@ -54,7 +54,7 @@ func Start(
 		if !ok {
 			continue
 		}
-		if !vless.TLS.Enabled {
+		if vless.TLS != nil && !vless.TLS.Enabled {
 			vless.TLS = nil
 		}
 	}
