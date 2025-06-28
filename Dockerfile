@@ -6,6 +6,7 @@ COPY junction /usr/bin/junction
 
 ENV HTTP_PORT=80 \
   SNI_PORT=443 \
+  VLESS_PROXY= \
   VLESS_PACKET_ENCODING= \
   VLESS_ADDRESS= \
   VLESS_PORT= \
@@ -20,8 +21,8 @@ ENV HTTP_PORT=80 \
   VLESS_HOSTNAME_HEADER=
 
 
-ENTRYPOINT [ "/usr/bin/junction" ]
-CMD [ "--config=/etc/junction/config.toml" ]
+ENTRYPOINT [ "/docker-entrypoint.sh" ]
+CMD [ "junction --config=/etc/junction/config.toml" ]
 
 FROM gcr.io/distroless/base-debian12:nonroot AS distroless
 
@@ -49,6 +50,7 @@ COPY --from=builder /app/junction /usr/bin/junction
 
 ENV HTTP_PORT=80 \
   SNI_PORT=443 \
+  VLESS_PROXY= \
   VLESS_PACKET_ENCODING= \
   VLESS_ADDRESS= \
   VLESS_PORT= \
@@ -63,5 +65,5 @@ ENV HTTP_PORT=80 \
   VLESS_HOSTNAME_HEADER=
 
 
-ENTRYPOINT [ "/usr/bin/junction" ]
-CMD [ "--config=/etc/junction/config.toml" ]
+ENTRYPOINT [ "/docker-entrypoint.sh" ]
+CMD [ "junction --config=/etc/junction/config.toml" ]

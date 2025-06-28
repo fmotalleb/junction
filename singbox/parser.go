@@ -33,7 +33,7 @@ func (c *configBuilder) set(key string, value any) {
 	c.frames = append(c.frames, field(key, value))
 }
 
-func (c *configBuilder) publish() (map[string]any, error) {
+func (c *configBuilder) build() (map[string]any, error) {
 	out := make(map[string]any, 0)
 	for _, f := range c.frames {
 		if err := mergo.Merge(&out, f); err != nil {
@@ -43,7 +43,7 @@ func (c *configBuilder) publish() (map[string]any, error) {
 	return out, nil
 }
 
-// TryParseOutboundURL parses the given link and populates the TrojanVLESSBean fields.
+// TryParseOutboundURL parses the given link and outputs the outbound part of the singbox config.
 func TryParseOutboundURL(url *url.URL) (map[string]any, error) {
 	cb := new(configBuilder)
 
@@ -75,7 +75,7 @@ func TryParseOutboundURL(url *url.URL) (map[string]any, error) {
 		cb.set("transport.service_name", query.Get("serviceName"))
 	}
 	cb.set("flow", query.Get("flow"))
-	out, err := cb.publish()
+	out, err := cb.build()
 	if err != nil {
 		return nil, err
 	}
