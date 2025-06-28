@@ -4,13 +4,10 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/FMotalleb/junction/config"
-	"github.com/pelletier/go-toml"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // dumpCmd represents the dump command.
@@ -40,23 +37,9 @@ var dumpCmd = &cobra.Command{
 			return err
 		}
 		var result []byte
-		switch format {
-		case "toml":
-			result, err = toml.Marshal(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to encode TOML: %w", err)
-			}
-		case "json":
-			result, err = json.MarshalIndent(cfg, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to encode JSON: %w", err)
-			}
-		case "yaml":
-			result, err = yaml.Marshal(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to encode YAML: %w", err)
-			}
-
+		result, err = marshalData(cfg, format)
+		if err != nil {
+			return fmt.Errorf("failed to encode %s: %w", format, err)
 		}
 		if result == nil {
 			return fmt.Errorf("given format `%s` is not implemented yet, use one of toml,yaml,json", format)

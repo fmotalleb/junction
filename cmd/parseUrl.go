@@ -4,19 +4,16 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 
 	"github.com/FMotalleb/junction/singbox"
-	"github.com/pelletier/go-toml"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
-// parseUrlCmd represents the parseUrl command.
-var parseUrlCmd = &cobra.Command{
+// parseURLCmd represents the parseUrl command.
+var parseURLCmd = &cobra.Command{
 	Use:   "parse-url",
 	Short: "Parse a url into singbox outbound",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -55,18 +52,6 @@ var parseUrlCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(parseUrlCmd)
-	parseUrlCmd.Flags().StringP("format", "f", "toml", "Format of output")
-}
-
-func marshalData(data any, format string) ([]byte, error) {
-	switch format {
-	case "toml":
-		return toml.Marshal(data)
-	case "json":
-		return json.Marshal(data)
-	case "yaml":
-		return yaml.Marshal(data)
-	}
-	return []byte{}, errors.New("unknown format")
+	rootCmd.AddCommand(parseURLCmd)
+	parseURLCmd.Flags().StringP("format", "f", "toml", "Format of output")
 }
