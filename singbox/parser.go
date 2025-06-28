@@ -1,93 +1,116 @@
 package singbox
 
 import (
-	"encoding/json"
 	"net/url"
 	"strings"
 
-	"github.com/sagernet/sing-box/option"
+	"dario.cat/mergo"
 	"github.com/spf13/cast"
 )
 
-// Utility function to get query parameter value with a default.
-func getQueryValue(query url.Values, key, defaultValue string) string {
-	if val := query.Get(key); val != "" {
-		return val
+func field(key string, value any) any {
+	o := make(map[string]any)
+	p := &o
+	chain := strings.Split(key, ".")
+	cs := len(chain)
+	for i, key := range chain {
+		if i == cs-1 {
+			(*p)[key] = value
+		} else {
+			c := make(map[string]any)
+			(*p)[key] = c
+			p = &c
+		}
 	}
-	return defaultValue
+	return o
+}
+
+type configBuilder struct {
+	frames []any
+}
+
+func (c *configBuilder) set(key string, value any) {
+	c.frames = append(c.frames, field(key, value))
+}
+
+func (c *configBuilder) publish() (map[string]any, error) {
+	out := make(map[string]any, 0)
+	for _, f := range c.frames {
+		if err := mergo.Merge(&out, f); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // TryParseOutboundURL parses the given link and populates the TrojanVLESSBean fields.
 func TryParseOutboundURL(url *url.URL) (map[string]any, error) {
-	t := new(option.VLESSOutboundOptions)
+	cb := new(configBuilder)
 
 	query := url.Query()
 
-	t.Server = url.Hostname()
+	cb.set("type", url.Scheme)
+	cb.set("tag", "proxy")
+	cb.set("packet_encoding", query.Get("packetEncoding"))
+	cb.set("server", url.Hostname())
 	port := url.Port()
 	if port == "" {
 		port = "443"
 	}
-	t.ServerPort = cast.ToUint16(port)
+	cb.set("server_port", cast.ToUint16(port))
 
-	t.UUID = url.User.Username()
-
-	t.Transport = &option.V2RayTransportOptions{}
-	// Security
-	t.Transport.Type = getQueryValue(query, "type", "tcp")
-	loadTLSParams(query, t)
-
-	// Type
-	switch t.Transport.Type {
-	case "ws", "http", "httpupgrade":
-		t.Transport.HTTPOptions = option.V2RayHTTPOptions{
-			Path: getQueryValue(query, "path", ""),
-			Host: strings.Split(query.Get("host"), ","),
-		}
-
-	case "grpc":
-		t.Transport.GRPCOptions = option.V2RayGRPCOptions{
-			ServiceName: query.Get("serviceName"),
-		}
+	if url.User != nil {
+		cb.set("uuid", url.User.Username())
 	}
-	t.Flow = query.Get("flow")
-	j, err := json.Marshal(t)
+	loadTLSParams(cb, query)
+
+	cb.set("transport.type", query.Get("type"))
+	switch query.Get("type") {
+	case "tcp", "ws", "http", "httpupgrade":
+		cb.set("transport.path", query.Get("path"))
+		cb.set("transport.headers.Host", query.Get("host"))
+	}
+	sn := query.Get("serviceName")
+	if sn != "" {
+		cb.set("transport.service_name", query.Get("serviceName"))
+	}
+	cb.set("flow", query.Get("flow"))
+	out, err := cb.publish()
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]any)
-	err = json.Unmarshal(j, &out)
-	if err != nil {
-		return nil, err
-	}
-	out["tag"] = "proxy"
-	out["type"] = "vless"
-	return out, nil
+	return map[string]any{
+		"core": map[string]any{
+			"singbox": map[string]any{
+				"outbounds": []map[string]any{
+					out,
+				},
+			},
+		},
+	}, nil
 }
 
-func loadTLSParams(query url.Values, t *option.VLESSOutboundOptions) {
+func loadTLSParams(cb *configBuilder, query url.Values) {
 	if query.Get("security") != "tls" {
 		return
 	}
-	t.TLS = &option.OutboundTLSOptions{}
-	t.TLS.Enabled = true
+	cb.set("tls.enabled", true)
+
 	insec := query.Get("allowInsecure")
+
 	if insec == "" {
 		insec = "0"
 	}
-	t.TLS.Insecure = cast.ToBool(insec)
-	t.TLS.ServerName = query.Get("sni")
-	if t.TLS.ServerName == "" {
-		t.TLS.ServerName = t.Server
-	}
+	cb.set("tls.insecure", cast.ToBool(insec))
+	cb.set("tls.insecure", query.Get("sni"))
+
 	if query.Get("fp") != "" {
-		t.TLS.UTLS = &option.OutboundUTLSOptions{}
-		t.TLS.UTLS.Fingerprint = query.Get("fp")
+		cb.set("tls.utls.enabled", true)
+		cb.set("tls.utls.fingerprint", query.Get("fp"))
 	}
 	if query.Get("pbk") != "" {
-		t.TLS.Reality = &option.OutboundRealityOptions{}
-		t.TLS.Reality.PublicKey = query.Get("pbk")
-		t.TLS.Reality.ShortID = query.Get("sid")
-		t.TLS.Reality.Enabled = true
+		cb.set("tls.reality.enabled", true)
+		cb.set("tls.reality.public_key", query.Get("pbk"))
+		cb.set("tls.reality.short_id", query.Get("sid"))
 	}
 }
