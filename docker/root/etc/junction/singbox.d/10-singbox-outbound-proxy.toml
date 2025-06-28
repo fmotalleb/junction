@@ -2,12 +2,12 @@
 [[core.singbox.outbounds]]
 domain_strategy = ""
 flow = ""
-packet_encoding = "$PACKET_ENCODING"
-server = "$ADDRESS"
-server_port = "$PORT"
+packet_encoding = "$VLESS_PACKET_ENCODING"
+server = "$VLESS_ADDRESS"
+server_port = "$VLESS_PORT"
 tag = "proxy"
 type = "vless"
-uuid = "$UUID"
+uuid = "$VLESS_UUID"
 
 [core.singbox.outbounds.transport]
 path = "${VLESS_TRANSPORT_PATH:-/}"
