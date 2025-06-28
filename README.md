@@ -83,9 +83,12 @@ Using:
 
 #### Vless support
 
-contains singbox + supervisor (Possibly will be dropped in favor of using singbox or xray internally)
+every build of this application contains singbox internally, but only start singbox if `core.singbox` is non-empty value.
 
-The Docker image `ghcr.io/fmotalleb/junction:latest-vless` differs from typical images by including **Supervisord** and **Sing-box**, enabling seamless connection to VLESS proxies. Inside the container, VLESS is exposed as a mixed SOCKS/HTTP proxy that Junction uses for routing traffic effectively.
+The Docker image `ghcr.io/fmotalleb/junction:latest-vless` contains a simple bash script entrypoint and basic configuration for sing-box service.
+This script is able to parse `VLESS_PROXY` to outbound config or receive each field of VLESS proxy as env parameters (see .env.example).
+
+- Remember: this image requires those env vars to be set.
 
 - `latest-vless`
 - `{{ .Version }}-vless`
