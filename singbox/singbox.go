@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -52,7 +51,6 @@ func Start(
 
 	for _, i := range opt.Options.Outbounds {
 		vless, ok := (i.Options.(*option.VLESSOutboundOptions))
-		fmt.Println(vless, ok)
 		if !ok {
 			continue
 		}
