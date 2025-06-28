@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"sync"
 
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/proxy"
@@ -50,29 +51,41 @@ func DialTarget(proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Co
 // RelayTraffic concurrently relays data between two network connections in both directions until either connection is closed or an error occurs.
 // Logs connection closure and errors for diagnostic purposes.
 func RelayTraffic(src, dst net.Conn, logger *zap.Logger) {
+	var once sync.Once
 	errCh := make(chan error, 2)
-	defer close(errCh)
-	go func() {
-		err := utils.Copy(src, dst)
-		errCh <- errors.Join(
-			errors.New("failed to write to target connection"),
-			err,
-		)
-	}()
+
+	closeBoth := func() {
+		_ = src.Close()
+		_ = dst.Close()
+	}
+
+	// Copy from src to dst
 	go func() {
 		err := utils.Copy(dst, src)
-		errCh <- errors.Join(
-			errors.New("failed to write to target connection"),
-			err,
-		)
+		if err != nil {
+			errCh <- errors.Join(errors.New("failed to write to dst"), err)
+		} else {
+			errCh <- nil
+		}
 	}()
 
-	for err := range errCh {
-		if err == nil {
-			break
+	// Copy from dst to src
+	go func() {
+		err := utils.Copy(src, dst)
+		if err != nil {
+			errCh <- errors.Join(errors.New("failed to write to src"), err)
+		} else {
+			errCh <- nil
 		}
+	}()
+
+	// Wait for the first error or closure
+	err := <-errCh
+	once.Do(closeBoth)
+
+	if err != nil {
 		if errors.Is(err, net.ErrClosed) {
-			logger.Debug("connection closed (most of the time its ok)", zap.Error(err))
+			logger.Debug("connection closed (normal)", zap.Error(err))
 		} else {
 			logger.Warn("connection collapsed", zap.Error(err))
 		}
