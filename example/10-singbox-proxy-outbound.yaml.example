@@ -1,0 +1,22 @@
+core:
+  singbox:
+    outbounds:
+      - tag: proxy
+        domain_strategy: ""
+        flow: ""
+        packet_encoding: xudp
+        server: "" # Address
+        server_port: 443
+        type: vless
+        uuid: ""
+        tls:
+          enabled: true
+          server_name: "" # SNI
+          utls:
+            enabled: true
+            fingerprint: firefox
+        transport:
+          path: /
+          type: ws
+          headers:
+            Host: "" # Hostname in header
