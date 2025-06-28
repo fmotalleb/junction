@@ -4,25 +4,22 @@ services:
       context: .
       dockerfile: Dockerfile
       target: standalone
-    volumes:
-      - "./docker/root/docker-entrypoint.sh:/docker-entrypoint.sh"
-      - ./config.toml:/etc/junction/config.toml
-    # ports:
-      # - 8586:8022
-      # - 80:8080
-      # - 443:8443
+    ports:
+      - 7892:6980
+      - 80:80
+      - 443:443
     env_file:
       - .env
     networks:
       custom_net:
         ipv4_address: 10.10.34.36
-  dns:
-    image: fmotalleb/cord-locator:v2.0.11
-    ports:
-      - 53:53/udp
-    configs:
-      - source: cord-locator
-        target: /app/config.yaml
+  # dns:
+  #   image: fmotalleb/cord-locator:v2.0.11
+  #   ports:
+  #     - 53:53/udp
+  #   configs:
+  #     - source: cord-locator
+  #       target: /app/config.yaml
 
 networks:
   custom_net:

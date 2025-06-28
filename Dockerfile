@@ -38,7 +38,7 @@ COPY go.sum /app/
 WORKDIR /app
 RUN go mod download
 COPY ./ /app
-RUN CGO_ENABLED=0 go build -o junction
+RUN CGO_ENABLED=0 go build -o junction -tags with_utls
 RUN chmod +x junction
 
 
