@@ -7,13 +7,13 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/FMotalleb/go-tools/decoder"
+	"github.com/FMotalleb/go-tools/decoder/hooks"
 	"github.com/go-viper/mapstructure/v2"
 )
 
 func init() {
-	decoder.RegisterHook(StringToIPSanitizerHook())
-	decoder.RegisterHook(IntToIPHook())
+	hooks.RegisterHook(StringToIPSanitizerHook())
+	hooks.RegisterHook(IntToIPHook())
 }
 
 func StringToIPSanitizerHook() mapstructure.DecodeHookFunc {

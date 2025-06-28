@@ -4,10 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"regexp"
+	"strings"
 
+	"github.com/FMotalleb/go-tools/env"
 	"github.com/FMotalleb/go-tools/log"
 	sb "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/include"
+	"github.com/sagernet/sing-box/option"
 	"go.uber.org/zap"
 )
 
@@ -27,6 +32,7 @@ func Start(
 			err,
 		)
 	}
+	cfg = normalizeConfig(cfg)
 	sbCtx := sb.Context(
 		ctx,
 		include.InboundRegistry(),
@@ -42,6 +48,17 @@ func Start(
 			errors.New("failed to parse singbox config"),
 			err,
 		)
+	}
+
+	for _, i := range opt.Options.Outbounds {
+		vless, ok := (i.Options.(*option.VLESSOutboundOptions))
+		fmt.Println(vless, ok)
+		if !ok {
+			continue
+		}
+		if !vless.TLS.Enabled {
+			vless.TLS = nil
+		}
 	}
 	log.Debug("singbox config parsed", zap.Any("config", opt))
 
@@ -62,4 +79,18 @@ func Start(
 	<-ctx.Done()
 	log.Info("shutting down singbox")
 	return box.Close()
+}
+
+func normalizeConfig(in []byte) []byte {
+	r := regexp.
+		MustCompile(`"(\d+|true|false)"`)
+	mapped := env.Subst(string(in))
+	return []byte(r.
+		ReplaceAllStringFunc(
+			mapped,
+			func(match string) string {
+				return strings.ReplaceAll(match, "\"", "")
+			},
+		),
+	)
 }

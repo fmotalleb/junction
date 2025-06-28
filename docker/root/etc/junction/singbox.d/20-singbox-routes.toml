@@ -1,0 +1,5 @@
+[[core.singbox.route.rules]]
+action = "sniff"
+inbound = [
+  "mixed-in",
+]

@@ -1,30 +1,27 @@
 FROM library/debian:bookworm-slim AS slim
 
-RUN --mount=type=cache,target=/var/lib/apt/lists/ \
-  --mount=type=cache,target=/var/cache/apt/archives/ \
-  apt-get update \
-  && apt-get full-upgrade -y \
-  && apt-get install -y supervisor gettext
-
-ARG SINGBOX_VERSION=1.11.9
-ARG SINGBOX_ARCH=amd64
-ARG SINGBOX_BIN_NAME=sing-box_${SINGBOX_VERSION}_linux_${SINGBOX_ARCH}.deb
-ARG SINGBOX_URL=https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${SINGBOX_BIN_NAME}
-ADD ${SINGBOX_URL} /singbox/
-
-RUN dpkg -i /singbox/${SINGBOX_BIN_NAME} \
-  && rm -rf /singbox \
-  && mkdir /etc/singbox/
-
 COPY /docker/root/ /
 COPY junction /usr/bin/junction
 
-ENV VLESS_PROXY= \
-  HTTP_PORT=80 \
-  SNI_PORT=443
 
-ENTRYPOINT [ "/docker-entrypoint.sh" ]
-CMD [ "supervisord" ]
+ENV HTTP_PORT=80 \
+  SNI_PORT=443 \
+  VLESS_PACKET_ENCODING= \
+  VLESS_ADDRESS= \
+  VLESS_PORT= \
+  VLESS_UUID= \
+  VLESS_TLS_ENABLED= \
+  VLESS_TLS_INSECURE= \
+  VLESS_SNI= \
+  VLESS_UTLS_ENABLED= \
+  VLESS_UTLS_FINGERPRINT= \
+  VLESS_TRANSPORT_PATH= \
+  VLESS_TRANSPORT_TYPE= \
+  VLESS_HOSTNAME_HEADER=
+
+
+ENTRYPOINT [ "/usr/bin/junction" ]
+CMD [ "--config=/etc/junction/config.toml" ]
 
 FROM gcr.io/distroless/base-debian12:nonroot AS distroless
 
@@ -47,28 +44,24 @@ RUN chmod +x junction
 
 FROM library/debian:bookworm-slim AS standalone
 
-RUN --mount=type=cache,target=/var/lib/apt/lists/ \
-  --mount=type=cache,target=/var/cache/apt/archives/ \
-  apt-get update \
-  && apt-get full-upgrade -y \
-  && apt-get install -y supervisor gettext
-
-ARG SINGBOX_VERSION=1.11.9
-ARG SINGBOX_ARCH=amd64
-ARG SINGBOX_BIN_NAME=sing-box_${SINGBOX_VERSION}_linux_${SINGBOX_ARCH}.deb
-ARG SINGBOX_URL=https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${SINGBOX_BIN_NAME}
-ADD ${SINGBOX_URL} /singbox/
-
-RUN dpkg -i /singbox/${SINGBOX_BIN_NAME} \
-  && rm -rf /singbox \
-  && mkdir /etc/singbox/
-
 COPY /docker/root/ /
 COPY --from=builder /app/junction /usr/bin/junction
 
-ENV VLESS_PROXY= \
-  HTTP_PORT=80 \
-  SNI_PORT=443
+ENV HTTP_PORT=80 \
+  SNI_PORT=443 \
+  VLESS_PACKET_ENCODING= \
+  VLESS_ADDRESS= \
+  VLESS_PORT= \
+  VLESS_UUID= \
+  VLESS_TLS_ENABLED= \
+  VLESS_TLS_INSECURE= \
+  VLESS_SNI= \
+  VLESS_UTLS_ENABLED= \
+  VLESS_UTLS_FINGERPRINT= \
+  VLESS_TRANSPORT_PATH= \
+  VLESS_TRANSPORT_TYPE= \
+  VLESS_HOSTNAME_HEADER=
 
-ENTRYPOINT [ "/docker-entrypoint.sh" ]
-CMD [ "supervisord" ]
+
+ENTRYPOINT [ "/usr/bin/junction" ]
+CMD [ "--config=/etc/junction/config.toml" ]

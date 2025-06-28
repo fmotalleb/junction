@@ -1,0 +1,5 @@
+[[core.singbox.inbounds]]
+listen = "0.0.0.0"
+listen_port = 2053
+tag = "dns-in"
+type = "direct"

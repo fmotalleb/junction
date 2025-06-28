@@ -13,6 +13,7 @@
         "-tags=debug,with_utls"
       ],
       "program": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
       "args": [
         "-d",
         "--config=config.toml",
@@ -24,6 +25,7 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
       "buildFlags": [
         "-tags=debug,with_utls"
       ],
