@@ -58,5 +58,8 @@ func Start(
 		)
 	}
 
-	return nil
+	// Wait for context cancellation to shutdown gracefully
+	<-ctx.Done()
+	log.Info("shutting down singbox")
+	return box.Close()
 }
