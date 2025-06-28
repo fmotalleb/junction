@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/git"
 	"github.com/FMotalleb/junction/server"
@@ -37,6 +38,12 @@ var rootCmd = &cobra.Command{
   • Flexible routing via: SNI (TLS), HTTP
   • Docker-ready deploy with supervisord + sing-box`,
 	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Since(git.GetDate()).Round(time.Minute).String() + " ago",
+	PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+		debug := isDebug(cmd)
+		if debug {
+			log.SetDebugDefaults()
+		}
+	},
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		var configFile string
 		var err error
@@ -52,7 +59,7 @@ var rootCmd = &cobra.Command{
 		if err := config.Parse(&cfg, configFile, debug); err != nil {
 			return err
 		}
-		if err := server.Serve(cfg, debug); err != nil {
+		if err := server.Serve(cfg); err != nil {
 			return err
 		}
 		return nil

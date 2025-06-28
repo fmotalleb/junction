@@ -1,0 +1,16 @@
+[core.singbox]
+
+[core.singbox.log]
+# Preferred value is at least warn to reduce verbosity
+level = "info"
+
+# Simple default outbound to direct
+[[core.singbox.outbounds]]
+tag = "direct"
+type = "direct"
+
+[core.singbox.route]
+final = "proxy"
+find_process = true
+rule_set = [
+]

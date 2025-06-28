@@ -1,0 +1,28 @@
+
+[[core.singbox.outbounds]]
+domain_strategy = ""
+flow = ""
+packet_encoding = "$VLESS_PACKET_ENCODING"
+server = "$VLESS_ADDRESS"
+server_port = "$VLESS_PORT"
+tag = "proxy"
+type = "vless"
+uuid = "$VLESS_UUID"
+
+[core.singbox.outbounds.transport]
+path = "${VLESS_TRANSPORT_PATH:-/}"
+type = "${VLESS_TRANSPORT_TYPE:-ws}"
+
+
+[core.singbox.outbounds.transport.headers]
+Host = "${VLESS_HOSTNAME_HEADER:-localhost}"
+
+
+[core.singbox.outbounds.tls]
+enabled = "${VLESS_TLS_ENABLED:-false}"
+insecure = "${VLESS_TLS_INSECURE:-true}"
+server_name = "${VLESS_SNI:-localhost}"
+
+[core.singbox.outbounds.tls.utls]
+enabled = "${VLESS_UTLS_ENABLED:-false}"
+fingerprint = "${VLESS_UTLS_FINGERPRINT:-firefox}"

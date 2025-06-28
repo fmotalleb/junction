@@ -1,0 +1,6 @@
+[[core.singbox.inbounds]]
+domain_strategy = ""
+listen = "127.0.0.1"
+listen_port = 6980
+tag = "mixed-in"
+type = "mixed"

@@ -9,7 +9,11 @@
       "type": "go",
       "request": "launch",
       "mode": "auto",
+      "buildFlags": [
+        "-tags=debug,with_utls"
+      ],
       "program": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
       "args": [
         "-d",
         "--config=config.toml",
@@ -21,15 +25,12 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}",
-      "env": {
-        "ZAPLOG_DEVELOPMENT": "true",
-        "ZAPLOG_LEVEL": "debug",
-        "ZAPLOG_LEVEL_FORMAT": "color",
-        "TIMEOUT": "5h"
-      },
+      "envFile": "${workspaceFolder}/.env",
+      "buildFlags": [
+        "-tags=debug,with_utls"
+      ],
       "args": [
         "dump",
-        "-d",
         "--config=config.toml",
       ]
     }

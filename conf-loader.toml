@@ -1,0 +1,6 @@
+
+include = [
+  "./*.toml",
+  "./example/*.toml",
+  "./example/10-singbox-outbound-01.yaml",
+]
