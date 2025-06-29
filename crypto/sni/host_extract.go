@@ -1,4 +1,4 @@
-package utils
+package sni
 
 import "encoding/binary"
 
@@ -8,14 +8,14 @@ const (
 	tlsHelloSize      = 4 + 2 + 32
 )
 
-func ExtractSNI(data []byte) string {
+func ExtractHost(data []byte) []byte {
 	if !isTLSHandshake(data) {
-		return ""
+		return nil
 	}
 	handshake := data[5:]
 	pos, ok := skipClientHelloHeaders(handshake)
 	if !ok {
-		return ""
+		return nil
 	}
 	sni := extractSNIFromExtensions(handshake, pos)
 	return sni
@@ -25,8 +25,7 @@ func isTLSHandshake(data []byte) bool {
 	if len(data) < 9 || data[0] != tlsHandshakeFlag {
 		return false
 	}
-	handshake := data[5:]
-	return handshake[0] != tlsHandshakeBegin
+	return data[5] != tlsHandshakeBegin
 }
 
 func skipClientHelloHeaders(handshake []byte) (int, bool) {
@@ -52,18 +51,18 @@ func skipClientHelloHeaders(handshake []byte) (int, bool) {
 	return pos, true
 }
 
-func extractSNIFromExtensions(handshake []byte, pos int) string {
+func extractSNIFromExtensions(handshake []byte, pos int) []byte {
 	if pos+2 > len(handshake) {
-		return ""
+		return nil
 	}
 	extLen := int(binary.BigEndian.Uint16(handshake[pos:]))
 	pos += 2
 	if pos > len(handshake) {
-		return ""
+		return nil
 	}
 	end := pos + extLen
 	if end > len(handshake) {
-		return ""
+		return nil
 	}
 	for pos+4 <= end {
 		extType := binary.BigEndian.Uint16(handshake[pos:])
@@ -78,20 +77,21 @@ func extractSNIFromExtensions(handshake []byte, pos int) string {
 		}
 		pos += int(extDataLen)
 	}
-	return ""
+	return nil
 }
 
-func parseSNIExtension(sniData []byte) string {
+// parseSNIExtension returns the only real world case, a single name in sni packet.
+func parseSNIExtension(sniData []byte) []byte {
 	if len(sniData) < 5 {
-		return ""
+		return nil
 	}
 	nameType := sniData[2]
 	if nameType != 0 {
-		return ""
+		return nil
 	}
-	nameLen := int(binary.BigEndian.Uint16(sniData[3:5]))
-	if 5+nameLen > len(sniData) {
-		return ""
+	nameLen := int(binary.BigEndian.Uint16(sniData[3:5])) + 5
+	if nameLen > len(sniData) {
+		return nil
 	}
-	return string(sniData[5 : 5+nameLen])
+	return sniData[5:nameLen]
 }

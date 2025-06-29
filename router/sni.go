@@ -6,7 +6,7 @@ import (
 
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/utils"
+	"github.com/FMotalleb/junction/crypto/sni"
 	"go.uber.org/zap"
 )
 
@@ -69,10 +69,10 @@ func handleSNIConnection(parentCtx context.Context, logger *zap.Logger, clientCo
 		return
 	}
 
-	connLogger := logger.With(zap.String("SNI", serverName))
+	connLogger := logger.With(zap.ByteString("SNI", serverName))
 	connLogger.Debug("SNI detected")
 
-	targetAddr := net.JoinHostPort(serverName, entry.GetTargetOr(DefaultSNIPort))
+	targetAddr := net.JoinHostPort(string(serverName), entry.GetTargetOr(DefaultSNIPort))
 	targetConn, err := DialTarget(entry.Proxy, targetAddr, connLogger)
 	if err != nil {
 		return
@@ -87,18 +87,18 @@ func handleSNIConnection(parentCtx context.Context, logger *zap.Logger, clientCo
 	RelayTraffic(clientConn, targetConn, connLogger)
 }
 
-func ReadAndExtractSNI(conn net.Conn, logger *zap.Logger) (string, []byte, int, error) {
+func ReadAndExtractSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
 	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
 		logger.Error("failed to read from client", zap.Error(err))
-		return "", nil, 0, err
+		return nil, nil, 0, err
 	}
-
-	serverName := utils.ExtractSNI(buffer[:n])
-	if serverName == "" {
+	// Since we only care about hostname we use this function instead of parsing whole hello packet
+	serverName := sni.ExtractHost(buffer[:n])
+	if serverName == nil {
 		logger.Error("failed to extract SNI from connection")
-		return "", nil, 0, nil
+		return nil, nil, 0, nil
 	}
 
 	return serverName, buffer, n, nil
