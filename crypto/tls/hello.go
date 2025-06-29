@@ -23,11 +23,9 @@ type ClientHello struct {
 }
 
 func (out *ClientHello) Unmarshal(buf []byte) error {
-	if len(buf) < tlsRecordHeaderLen+tlsHandshakeHeaderLen {
-		return errors.New("data too short")
-	}
-	if buf[0] != tlsRecordTypeHandshake {
-		return errors.New("not a handshake")
+	err := checkHeaders(buf)
+	if err != nil {
+		return err
 	}
 
 	recordLen := int(binary.BigEndian.Uint16(buf[3:5]))
@@ -50,25 +48,19 @@ func (out *ClientHello) Unmarshal(buf []byte) error {
 	copy(out.Random[:], hello[pos:pos+32])
 	pos += 32
 
-	if pos >= len(hello) {
-		return errors.New("invalid session id")
+	sessionIDLen, err := getSessionIDLen(hello, pos)
+	if err != nil {
+		return err
 	}
-	sessionIDLen := int(hello[pos])
 	pos++
-	if pos+sessionIDLen > len(hello) {
-		return errors.New("invalid session id length")
-	}
 	out.SessionID = hello[pos : pos+sessionIDLen]
 	pos += sessionIDLen
 
-	if pos+2 > len(hello) {
-		return errors.New("invalid cipher suites")
+	cipherLen, err := getCipherLen(hello, pos)
+	if err != nil {
+		return err
 	}
-	cipherLen := int(binary.BigEndian.Uint16(hello[pos:]))
 	pos += 2
-	if pos+cipherLen > len(hello) {
-		return errors.New("cipher suites too long")
-	}
 	cipherCount := cipherLen / 2
 	out.CipherSuites = out.CipherSuites[:0]
 	for i := 0; i < cipherCount; i++ {
@@ -77,14 +69,11 @@ func (out *ClientHello) Unmarshal(buf []byte) error {
 	}
 	pos += cipherLen
 
-	if pos >= len(hello) {
-		return errors.New("no compression methods")
+	compMethodsLen, err := getCompMethodsLen(hello, pos)
+	if err != nil {
+		return err
 	}
-	compMethodsLen := int(hello[pos])
 	pos++
-	if pos+compMethodsLen > len(hello) {
-		return errors.New("compression methods out of bounds")
-	}
 	out.CompressionMethods = hello[pos : pos+compMethodsLen]
 	pos += compMethodsLen
 
@@ -102,6 +91,45 @@ func (out *ClientHello) Unmarshal(buf []byte) error {
 
 	extEnd := pos + extLen
 	out.SNICount = 0
+	out.parseExtensions(hello, pos, extEnd)
+	return nil
+}
+
+func checkHeaders(buf []byte) error {
+	if err := checkRecordHeader(buf); err != nil {
+		return err
+	}
+	if err := checkHandshakeHeader(buf); err != nil {
+		return err
+	}
+	return nil
+}
+
+// parseSNIExtension parses the SNI extension data and populates SNIHostNames and SNICount.
+func (out *ClientHello) parseSNIExtension(data []byte) {
+	if len(data) < 2 {
+		return
+	}
+	sniLen := int(binary.BigEndian.Uint16(data))
+	sniEnd := 2 + sniLen
+	sniPos := 2
+	for sniPos+3 <= sniEnd && out.SNICount < len(out.SNIHostNames) && sniEnd <= len(data) {
+		nameType := data[sniPos]
+		nameLen := int(binary.BigEndian.Uint16(data[sniPos+1:]))
+		sniPos += 3
+		if sniPos+nameLen > sniEnd {
+			break
+		}
+		if nameType == 0 {
+			out.SNIHostNames[out.SNICount] = data[sniPos : sniPos+nameLen]
+			out.SNICount++
+		}
+		sniPos += nameLen
+	}
+}
+
+// parseExtensions parses the extensions in the ClientHello message.
+func (out *ClientHello) parseExtensions(hello []byte, pos, extEnd int) {
 	for pos+4 <= extEnd {
 		extType := binary.BigEndian.Uint16(hello[pos:])
 		extDataLen := int(binary.BigEndian.Uint16(hello[pos+2:]))
@@ -112,24 +140,60 @@ func (out *ClientHello) Unmarshal(buf []byte) error {
 		}
 
 		if extType == 0x00 && extDataLen >= 2 {
-			sniLen := int(binary.BigEndian.Uint16(hello[pos:]))
-			sniEnd := pos + 2 + sniLen
-			sniPos := pos + 2
-			for sniPos+3 <= sniEnd && out.SNICount < len(out.SNIHostNames) {
-				nameType := hello[sniPos]
-				nameLen := int(binary.BigEndian.Uint16(hello[sniPos+1:]))
-				sniPos += 3
-				if sniPos+nameLen > sniEnd {
-					break
-				}
-				if nameType == 0 {
-					out.SNIHostNames[out.SNICount] = hello[sniPos : sniPos+nameLen]
-					out.SNICount++
-				}
-				sniPos += nameLen
-			}
+			out.parseSNIExtension(hello[pos : pos+extDataLen])
 		}
 		pos += extDataLen
 	}
+}
+
+// Helper functions to reduce cyclomatic complexity
+
+func checkRecordHeader(buf []byte) error {
+	if len(buf) < tlsRecordHeaderLen+tlsHandshakeHeaderLen {
+		return errors.New("data too short")
+	}
+	if buf[0] != tlsRecordTypeHandshake {
+		return errors.New("not a handshake")
+	}
 	return nil
+}
+
+func checkHandshakeHeader(buf []byte) error {
+	if len(buf) < tlsRecordHeaderLen+tlsHandshakeHeaderLen {
+		return errors.New("data too short for handshake")
+	}
+	return nil
+}
+
+func getSessionIDLen(hello []byte, pos int) (int, error) {
+	if pos >= len(hello) {
+		return 0, errors.New("invalid session id")
+	}
+	sessionIDLen := int(hello[pos])
+	if pos+1+sessionIDLen > len(hello) {
+		return 0, errors.New("invalid session id length")
+	}
+	return sessionIDLen, nil
+}
+
+func getCipherLen(hello []byte, pos int) (int, error) {
+	if pos+2 > len(hello) {
+		return 0, errors.New("invalid cipher suites")
+	}
+	cipherLen := int(binary.BigEndian.Uint16(hello[pos:]))
+	if pos+2+cipherLen > len(hello) {
+		return 0, errors.New("cipher suites too long")
+	}
+	return cipherLen, nil
+}
+
+func getCompMethodsLen(hello []byte, pos int) (int, error) {
+	if pos >= len(hello) {
+		return 0, errors.New("no compression methods")
+	}
+	compMethodsLen := int(hello[pos])
+	if pos+1+compMethodsLen > len(hello) {
+		return 0, errors.New("compression methods out of bounds")
+	}
+	return compMethodsLen, nil
 }
