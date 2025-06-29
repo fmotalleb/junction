@@ -45,11 +45,12 @@ func TestExtractHost(t *testing.T) {
 	}
 }
 
-func TestParseClientHello(t *testing.T) {
+func TestUnmarshalClientHello(t *testing.T) {
 	for domain, data := range testData {
-		info, err := sni.ParseClientHello(data)
+		info := new(sni.ClientHelloInfo)
+		err := info.Unmarshal(data)
 		assert.NoError(t, err, "failed to parse")
-		assert.Equal(t, domain, info.SNIHostNames[0])
+		assert.Equal(t, domain, string(info.SNIHostNames[0]))
 	}
 }
 
@@ -65,16 +66,17 @@ func BenchmarkExtractHost(b *testing.B) {
 	}
 }
 
-func BenchmarkParseClientHello(b *testing.B) {
+func BenchmarkUnmarshalClientHello(b *testing.B) {
+	info := new(sni.ClientHelloInfo)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for domain, data := range testData {
-			info, err := sni.ParseClientHello(data)
+			err := info.Unmarshal(data)
 			if err != nil {
 				assert.NoError(b, err, "failed to parse hello")
 			}
-			if info.SNIHostNames[0] != domain {
-				assert.Equal(b, domain, info.SNIHostNames[0])
+			if len(info.SNIHostNames[0]) != len(domain) {
+				assert.Equal(b, domain, string(info.SNIHostNames[0]))
 			}
 		}
 	}

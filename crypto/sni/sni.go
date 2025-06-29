@@ -1,7 +1,6 @@
 package sni
 
 import (
-	"crypto/tls"
 	"encoding/binary"
 	"errors"
 )
@@ -13,121 +12,96 @@ const (
 	tlsHandshakeHeaderLen       = 4
 )
 
-// ClientHelloInfo holds extracted data from a TLS ClientHello.
 type ClientHelloInfo struct {
 	Version            uint16
 	Random             [32]byte
 	SessionID          []byte
 	CipherSuites       []uint16
 	CompressionMethods []byte
-	SNIHostNames       []string
+	SNIHostNames       [4][]byte // limit to 4 names to avoid dynamic append
+	SNICount           int
 }
 
-func (c *ClientHelloInfo) GetVersion() string {
-	return tls.VersionName(c.Version)
-}
-
-func (c *ClientHelloInfo) GetCiphers() []string {
-	ciphers := make([]string, len(c.CipherSuites))
-	for i, c := range c.CipherSuites {
-		ciphers[i] = tls.CipherSuiteName(c)
+func (out *ClientHelloInfo) Unmarshal(buf []byte) error {
+	if len(buf) < tlsRecordHeaderLen+tlsHandshakeHeaderLen {
+		return errors.New("data too short")
 	}
-	return ciphers
-}
-
-// ParseClientHello parses a TLS ClientHello and returns its information.
-func ParseClientHello(data []byte) (*ClientHelloInfo, error) {
-	if len(data) < tlsRecordHeaderLen+tlsHandshakeHeaderLen {
-		return nil, errors.New("data too short for TLS record header")
-	}
-	if data[0] != tlsRecordTypeHandshake {
-		return nil, errors.New("not a handshake record")
+	if buf[0] != tlsRecordTypeHandshake {
+		return errors.New("not a handshake")
 	}
 
-	// TLS record length
-	recordLength := int(binary.BigEndian.Uint16(data[3:5]))
-	if len(data)-tlsRecordHeaderLen < recordLength {
-		return nil, errors.New("incomplete record data")
+	recordLen := int(binary.BigEndian.Uint16(buf[3:5]))
+	if len(buf)-tlsRecordHeaderLen < recordLen {
+		return errors.New("truncated record")
 	}
-
-	handshake := data[tlsRecordHeaderLen:]
+	handshake := buf[tlsRecordHeaderLen:]
 	if handshake[0] != tlsHandshakeTypeClientHello {
-		return nil, errors.New("not a client hello")
+		return errors.New("not a client hello")
 	}
-	handshakeLen := int(handshake[1])<<16 | int(handshake[2])<<8 | int(handshake[3])
-	if len(handshake)-4 < handshakeLen {
-		return nil, errors.New("incomplete handshake data")
-	}
-	hello := handshake[4:]
 
+	hello := handshake[tlsHandshakeHeaderLen:]
 	pos := 0
 	if len(hello) < 2+32 {
-		return nil, errors.New("client hello too short")
+		return errors.New("client hello too short")
 	}
-	version := binary.BigEndian.Uint16(hello[pos:])
+	out.Version = binary.BigEndian.Uint16(hello[pos:])
 	pos += 2
 
-	var random [32]byte
-	copy(random[:], hello[pos:])
+	copy(out.Random[:], hello[pos:pos+32])
 	pos += 32
 
 	if pos >= len(hello) {
-		return nil, errors.New("invalid session id length position")
+		return errors.New("invalid session id")
 	}
 	sessionIDLen := int(hello[pos])
 	pos++
 	if pos+sessionIDLen > len(hello) {
-		return nil, errors.New("invalid session id length")
+		return errors.New("invalid session id length")
 	}
-	sessionID := hello[pos : pos+sessionIDLen]
+	out.SessionID = hello[pos : pos+sessionIDLen]
 	pos += sessionIDLen
 
 	if pos+2 > len(hello) {
-		return nil, errors.New("cipher suites length out of bounds")
+		return errors.New("invalid cipher suites")
 	}
 	cipherLen := int(binary.BigEndian.Uint16(hello[pos:]))
 	pos += 2
 	if pos+cipherLen > len(hello) {
-		return nil, errors.New("cipher suites out of bounds")
+		return errors.New("cipher suites too long")
 	}
 	cipherCount := cipherLen / 2
-	ciphers := make([]uint16, cipherCount)
+	out.CipherSuites = out.CipherSuites[:0]
 	for i := 0; i < cipherCount; i++ {
-		ciphers[i] = binary.BigEndian.Uint16(hello[pos+(i*2):])
+		cs := binary.BigEndian.Uint16(hello[pos+(i*2):])
+		out.CipherSuites = append(out.CipherSuites, cs)
 	}
 	pos += cipherLen
 
 	if pos >= len(hello) {
-		return nil, errors.New("compression methods length missing")
+		return errors.New("no compression methods")
 	}
 	compMethodsLen := int(hello[pos])
 	pos++
 	if pos+compMethodsLen > len(hello) {
-		return nil, errors.New("compression methods out of bounds")
+		return errors.New("compression methods out of bounds")
 	}
-	compMethods := hello[pos : pos+compMethodsLen]
+	out.CompressionMethods = hello[pos : pos+compMethodsLen]
 	pos += compMethodsLen
 
 	if pos+2 > len(hello) {
-		// No extensions present
-		return &ClientHelloInfo{
-			Version:            version,
-			Random:             random,
-			SessionID:          sessionID,
-			CipherSuites:       ciphers,
-			CompressionMethods: compMethods,
-			SNIHostNames:       nil,
-		}, nil
+		// No extensions
+		out.SNICount = 0
+		return nil
 	}
 
 	extLen := int(binary.BigEndian.Uint16(hello[pos:]))
 	pos += 2
 	if pos+extLen > len(hello) {
-		return nil, errors.New("extensions out of bounds")
+		return errors.New("extensions truncated")
 	}
 
-	sniNames := []string{}
 	extEnd := pos + extLen
+	out.SNICount = 0
 	for pos+4 <= extEnd {
 		extType := binary.BigEndian.Uint16(hello[pos:])
 		extDataLen := int(binary.BigEndian.Uint16(hello[pos+2:]))
@@ -139,32 +113,23 @@ func ParseClientHello(data []byte) (*ClientHelloInfo, error) {
 
 		if extType == 0x00 && extDataLen >= 2 {
 			sniLen := int(binary.BigEndian.Uint16(hello[pos:]))
-			if sniLen+2 <= extDataLen {
-				sniEnd := pos + 2 + sniLen
-				sniPos := pos + 2
-				for sniPos+3 <= sniEnd {
-					nameType := hello[sniPos]
-					nameLen := int(binary.BigEndian.Uint16(hello[sniPos+1:]))
-					sniPos += 3
-					if sniPos+nameLen > sniEnd {
-						break
-					}
-					if nameType == 0 {
-						sniNames = append(sniNames, string(hello[sniPos:sniPos+nameLen]))
-					}
-					sniPos += nameLen
+			sniEnd := pos + 2 + sniLen
+			sniPos := pos + 2
+			for sniPos+3 <= sniEnd && out.SNICount < len(out.SNIHostNames) {
+				nameType := hello[sniPos]
+				nameLen := int(binary.BigEndian.Uint16(hello[sniPos+1:]))
+				sniPos += 3
+				if sniPos+nameLen > sniEnd {
+					break
 				}
+				if nameType == 0 {
+					out.SNIHostNames[out.SNICount] = hello[sniPos : sniPos+nameLen]
+					out.SNICount++
+				}
+				sniPos += nameLen
 			}
 		}
 		pos += extDataLen
 	}
-
-	return &ClientHelloInfo{
-		Version:            version,
-		Random:             random,
-		SessionID:          sessionID,
-		CipherSuites:       ciphers,
-		CompressionMethods: compMethods,
-		SNIHostNames:       sniNames,
-	}, nil
+	return nil
 }

@@ -19,16 +19,15 @@ go test -bench=. -benchtime 5s -benchmem
 
 ## Benchmark Output
 
-| Benchmark Name              | Iterations | ns/op | Bytes/op | Allocs/op | Returns          |
-| --------------------------- | ---------- | ----- | -------- | --------- | ---------------- |
-| BenchmarkExtractHost-4 (str)| 28,172,822 | 206.3 | 48       | 3         | string           |
-| BenchmarkExtractHost-4      | 47,327,336 | 131.1 | 0        | 0         | []byte           |
-| BenchmarkParseClientHello-4 | 6,153,693  | 979.1 | 720      | 12        | *ClientHelloInfo |
+| Benchmark Name                  | Iterations | ns/op | Bytes/op | Allocs/op |
+| ------------------------------- | ---------- | ----- | -------- | --------- |
+| BenchmarkExtractHost-4          | 47,327,336 | 131.1 | 0        | 0         |
+| BenchmarkUnmarshalClientHello-4 | 11,734,141 | 504.5 | 0        | 0         |
 
 ---
 
 ## Summary
 
-* **ExtractHost** is ~8.75x faster than **ParseClientHello**.
-* **ExtractHost** has **ZERO** allocations.
+* **ExtractHost** is ~4x faster than **ParseClientHello**.
 * Avoid using **ParseClientHello** if possible.
+* Use ParseClientHello only when full handshake parsing is **required**.
