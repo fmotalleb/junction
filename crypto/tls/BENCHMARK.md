@@ -1,12 +1,12 @@
 # Benchmark Results for SNI Package
 
-**Command run:**
+## Bench Command
 
 ```bash
 go test -bench=. -benchtime 100000000x -benchmem
 ````
 
-**Test data**
+## Test data
 
 * `testdata/sni` contains byte data generated using `nc` and `curl`:
 
