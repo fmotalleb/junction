@@ -11,7 +11,7 @@ import (
 	"github.com/FMotalleb/go-tools/sysctx"
 	"github.com/FMotalleb/junction/config"
 	"github.com/FMotalleb/junction/router"
-	"github.com/FMotalleb/junction/singbox"
+	"github.com/FMotalleb/junction/services/singbox"
 	"go.uber.org/zap"
 )
 

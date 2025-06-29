@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/FMotalleb/junction/singbox"
+	"github.com/FMotalleb/junction/services/singbox"
 	"github.com/spf13/cobra"
 )
 

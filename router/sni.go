@@ -6,7 +6,7 @@ import (
 
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/utils"
+	"github.com/FMotalleb/junction/utils/sni"
 	"go.uber.org/zap"
 )
 
@@ -94,8 +94,12 @@ func ReadAndExtractSNI(conn net.Conn, logger *zap.Logger) (string, []byte, int, 
 		logger.Error("failed to read from client", zap.Error(err))
 		return "", nil, 0, err
 	}
-
-	serverName := utils.ExtractSNI(buffer[:n])
+	sniHello, err := sni.ParseClientHello(buffer[:n])
+	if err != nil {
+		logger.Error("failed to parse sni hello", zap.Error(err))
+		return "", nil, 0, err
+	}
+	serverName := sniHello.SNIHostNames[0]
 	if serverName == "" {
 		logger.Error("failed to extract SNI from connection")
 		return "", nil, 0, nil
