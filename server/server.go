@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/go-tools/sysctx"
@@ -27,10 +28,7 @@ func Serve(c config.Config) error {
 		return err
 	}
 	if len(c.Core.SingboxCfg) != 0 {
-		err := runSingbox(ctx, c.Core.SingboxCfg)
-		if err != nil {
-			return err
-		}
+		go runSingbox(ctx, c.Core.SingboxCfg)
 	}
 	for _, e := range c.EntryPoints {
 		wg.Add(1)
@@ -42,16 +40,21 @@ func Serve(c config.Config) error {
 
 // runSingbox starts the Singbox service with the provided configuration and context.
 // Returns an error if Singbox fails to start.
-func runSingbox(ctx context.Context, cfg map[string]any) error {
-	err := singbox.Start(ctx, cfg)
-	if err != nil {
-		log.Of(ctx).Error("singbox error", zap.Error(err))
-		return errors.Join(
-			errors.New("failed to start singbox"),
-			err,
-		)
+func runSingbox(ctx context.Context, cfg map[string]any) {
+	l := log.Of(ctx)
+	maxTry := 50
+	tryCount := 0
+	for tryCount < maxTry {
+		err := singbox.Start(ctx, cfg)
+		if err != nil {
+			tryCount++
+			go func() {
+				<-time.After(time.Second)
+				tryCount = 0
+			}()
+			l.Error("singbox error", zap.Error(err))
+		}
 	}
-	return nil
 }
 
 // handleEntry starts handling the specified entry point within the given context and marks the wait group as done when finished.
