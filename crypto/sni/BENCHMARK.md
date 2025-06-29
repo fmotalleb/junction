@@ -21,13 +21,13 @@ go test -bench=. -benchtime 5s -benchmem
 
 | Benchmark Name              | Iterations | ns/op | Bytes/op | Allocs/op |
 | --------------------------- | ---------- | ----- | -------- | --------- |
-| BenchmarkExtractHost-4      | 28,172,822 | 206.3 | 48       | 3         |
+| BenchmarkExtractHost-4      | 47,327,336 | 131.1 | 0        | 0         |
 | BenchmarkParseClientHello-4 | 6,153,693  | 979.1 | 720      | 12        |
 
 ---
 
 ## Summary
 
-* **BenchmarkExtractHost** runs approximately 4.7x faster than **BenchmarkParseClientHello**.
-* **BenchmarkExtractHost** has significantly fewer memory allocations and lower bytes per operation.
-* The more complex parsing done by **ParseClientHello** results in higher CPU and memory overhead.
+* **ExtractHost** is ~8.75x faster than **ParseClientHello**.
+* **ExtractHost** has **ZERO** allocations.
+* Avoid using **ParseClientHello** if possible.

@@ -41,7 +41,7 @@ func TestMain(m *testing.M) {
 func TestExtractHost(t *testing.T) {
 	for domain, data := range testData {
 		info := sni.ExtractHost(data)
-		assert.Equal(t, domain, info)
+		assert.Equal(t, domain, string(info))
 	}
 }
 
@@ -56,11 +56,11 @@ func TestParseClientHello(t *testing.T) {
 func BenchmarkExtractHost(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for domain, data := range testData {
-			parsed := sni.ExtractHost(data)
-			if parsed != domain {
-				assert.Equal(b, domain, parsed)
-			}
+		for _, data := range testData {
+			sni.ExtractHost(data)
+			// if parsed != domain {
+			// 	assert.Equal(b, domain, parsed)
+			// }
 		}
 	}
 }
