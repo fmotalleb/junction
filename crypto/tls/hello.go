@@ -1,4 +1,4 @@
-package sni
+package tls
 
 import (
 	"encoding/binary"
@@ -12,7 +12,7 @@ const (
 	tlsHandshakeHeaderLen       = 4
 )
 
-type ClientHelloInfo struct {
+type ClientHello struct {
 	Version            uint16
 	Random             [32]byte
 	SessionID          []byte
@@ -22,7 +22,7 @@ type ClientHelloInfo struct {
 	SNICount           int
 }
 
-func (out *ClientHelloInfo) Unmarshal(buf []byte) error {
+func (out *ClientHello) Unmarshal(buf []byte) error {
 	if len(buf) < tlsRecordHeaderLen+tlsHandshakeHeaderLen {
 		return errors.New("data too short")
 	}

@@ -1,4 +1,4 @@
-package sni_test
+package tls_test
 
 import (
 	"embed"
@@ -6,14 +6,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/FMotalleb/junction/crypto/sni"
+	"github.com/FMotalleb/junction/crypto/tls"
 	"github.com/alecthomas/assert/v2"
 )
 
-//go:embed testdata/*
+//go:embed testdata/sni/*
 var testFiles embed.FS
 
-const datadir = "testdata"
+const (
+	datadir     = "testdata/sni"
+	benchmarkOn = "google.com"
+)
 
 var testData = make(map[string][]byte)
 
@@ -38,46 +41,39 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestExtractHost(t *testing.T) {
+func TestExtractSNI(t *testing.T) {
 	for domain, data := range testData {
-		info := sni.ExtractHost(data)
+		info := tls.ExtractSNI(data)
 		assert.Equal(t, domain, string(info))
 	}
 }
 
 func TestUnmarshalClientHello(t *testing.T) {
 	for domain, data := range testData {
-		info := new(sni.ClientHelloInfo)
+		info := new(tls.ClientHello)
 		err := info.Unmarshal(data)
 		assert.NoError(t, err, "failed to parse")
 		assert.Equal(t, domain, string(info.SNIHostNames[0]))
 	}
 }
 
-func BenchmarkExtractHost(b *testing.B) {
+func BenchmarkExtractSNI(b *testing.B) {
+	data := testData[benchmarkOn]
+	b.SetBytes(int64(len(data)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for _, data := range testData {
-			sni.ExtractHost(data)
-			// if parsed != domain {
-			// 	assert.Equal(b, domain, parsed)
-			// }
-		}
+		tls.ExtractSNI(data)
 	}
 }
 
 func BenchmarkUnmarshalClientHello(b *testing.B) {
-	info := new(sni.ClientHelloInfo)
+	data := testData[benchmarkOn]
+	b.SetBytes(int64(len(data)))
+	info := new(tls.ClientHello)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for domain, data := range testData {
-			err := info.Unmarshal(data)
-			if err != nil {
-				assert.NoError(b, err, "failed to parse hello")
-			}
-			if len(info.SNIHostNames[0]) != len(domain) {
-				assert.Equal(b, domain, string(info.SNIHostNames[0]))
-			}
+		if info.Unmarshal(data) != nil {
+			b.Fail()
 		}
 	}
 }
