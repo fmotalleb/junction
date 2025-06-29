@@ -25,8 +25,7 @@ func isTLSHandshake(data []byte) bool {
 	if len(data) < 9 || data[0] != tlsHandshakeFlag {
 		return false
 	}
-	handshake := data[5:]
-	return handshake[0] != tlsHandshakeBegin
+	return data[5] != tlsHandshakeBegin
 }
 
 func skipClientHelloHeaders(handshake []byte) (int, bool) {
@@ -81,7 +80,7 @@ func extractSNIFromExtensions(handshake []byte, pos int) []byte {
 	return nil
 }
 
-// parseSNIExtension returns the only real world case a single name in sni packet.
+// parseSNIExtension returns the only real world case, a single name in sni packet.
 func parseSNIExtension(sniData []byte) []byte {
 	if len(sniData) < 5 {
 		return nil
