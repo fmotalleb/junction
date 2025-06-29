@@ -8,14 +8,14 @@ const (
 	tlsHelloSize      = 4 + 2 + 32
 )
 
-func ExtractHost(data []byte) string {
+func ExtractHost(data []byte) []byte {
 	if !isTLSHandshake(data) {
-		return ""
+		return nil
 	}
 	handshake := data[5:]
 	pos, ok := skipClientHelloHeaders(handshake)
 	if !ok {
-		return ""
+		return nil
 	}
 	sni := extractSNIFromExtensions(handshake, pos)
 	return sni
@@ -52,18 +52,18 @@ func skipClientHelloHeaders(handshake []byte) (int, bool) {
 	return pos, true
 }
 
-func extractSNIFromExtensions(handshake []byte, pos int) string {
+func extractSNIFromExtensions(handshake []byte, pos int) []byte {
 	if pos+2 > len(handshake) {
-		return ""
+		return nil
 	}
 	extLen := int(binary.BigEndian.Uint16(handshake[pos:]))
 	pos += 2
 	if pos > len(handshake) {
-		return ""
+		return nil
 	}
 	end := pos + extLen
 	if end > len(handshake) {
-		return ""
+		return nil
 	}
 	for pos+4 <= end {
 		extType := binary.BigEndian.Uint16(handshake[pos:])
@@ -78,20 +78,20 @@ func extractSNIFromExtensions(handshake []byte, pos int) string {
 		}
 		pos += int(extDataLen)
 	}
-	return ""
+	return nil
 }
 
-func parseSNIExtension(sniData []byte) string {
+func parseSNIExtension(sniData []byte) []byte {
 	if len(sniData) < 5 {
-		return ""
+		return nil
 	}
 	nameType := sniData[2]
 	if nameType != 0 {
-		return ""
+		return nil
 	}
 	nameLen := int(binary.BigEndian.Uint16(sniData[3:5]))
 	if 5+nameLen > len(sniData) {
-		return ""
+		return nil
 	}
-	return string(sniData[5 : 5+nameLen])
+	return sniData[5 : 5+nameLen]
 }
