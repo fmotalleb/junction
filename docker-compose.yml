@@ -1,6 +1,6 @@
 services:
   junction:
-    image: ghcr.io/fmotalleb/junction:0.6.1-vless
+    image: ghcr.io/fmotalleb/junction:0.6.3-vless
     ports:
       - 7892:6980
       - 80:80
