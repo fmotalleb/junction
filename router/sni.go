@@ -6,7 +6,7 @@ import (
 
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/crypto/sni"
+	"github.com/FMotalleb/junction/crypto/tls"
 	"go.uber.org/zap"
 )
 
@@ -95,7 +95,7 @@ func ReadAndExtractSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, 
 		return nil, nil, 0, err
 	}
 	// Since we only care about hostname we use this function instead of parsing whole hello packet
-	serverName := sni.ExtractHost(buffer[:n])
+	serverName := tls.ExtractSNI(buffer[:n])
 	if serverName == nil {
 		logger.Error("failed to extract SNI from connection")
 		return nil, nil, 0, nil

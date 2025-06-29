@@ -1,14 +1,16 @@
-package sni
+package tls
 
 import "encoding/binary"
 
 const (
 	tlsHandshakeFlag  = 0x16
 	tlsHandshakeBegin = 0x16
-	tlsHelloSize      = 4 + 2 + 32
+
+	// HandshakeType(8 bit) + Length(24 bit) + Version(16 bit) + Random (256 bit).
+	tlsHelloSize = 1 + 3 + 2 + 32
 )
 
-func ExtractHost(data []byte) []byte {
+func ExtractSNI(data []byte) []byte {
 	if !isTLSHandshake(data) {
 		return nil
 	}
