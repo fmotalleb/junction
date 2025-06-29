@@ -81,6 +81,7 @@ func extractSNIFromExtensions(handshake []byte, pos int) []byte {
 	return nil
 }
 
+// parseSNIExtension returns the only real world case a single name in sni packet.
 func parseSNIExtension(sniData []byte) []byte {
 	if len(sniData) < 5 {
 		return nil
@@ -89,9 +90,9 @@ func parseSNIExtension(sniData []byte) []byte {
 	if nameType != 0 {
 		return nil
 	}
-	nameLen := int(binary.BigEndian.Uint16(sniData[3:5]))
-	if 5+nameLen > len(sniData) {
+	nameLen := int(binary.BigEndian.Uint16(sniData[3:5])) + 5
+	if nameLen > len(sniData) {
 		return nil
 	}
-	return sniData[5 : 5+nameLen]
+	return sniData[5:nameLen]
 }
