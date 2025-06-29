@@ -102,7 +102,7 @@ func loadTLSParams(cb *configBuilder, query url.Values) {
 		insec = "0"
 	}
 	cb.set("tls.insecure", cast.ToBool(insec))
-	cb.set("tls.insecure", query.Get("sni"))
+	cb.set("tls.server_name", query.Get("sni"))
 
 	if query.Get("fp") != "" {
 		cb.set("tls.utls.enabled", true)
