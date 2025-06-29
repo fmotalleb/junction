@@ -19,10 +19,11 @@ go test -bench=. -benchtime 5s -benchmem
 
 ## Benchmark Output
 
-| Benchmark Name              | Iterations | ns/op | Bytes/op | Allocs/op |
-| --------------------------- | ---------- | ----- | -------- | --------- |
-| BenchmarkExtractHost-4      | 47,327,336 | 131.1 | 0        | 0         |
-| BenchmarkParseClientHello-4 | 6,153,693  | 979.1 | 720      | 12        |
+| Benchmark Name              | Iterations | ns/op | Bytes/op | Allocs/op | Returns          |
+| --------------------------- | ---------- | ----- | -------- | --------- | ---------------- |
+| BenchmarkExtractHost-4 (str)| 28,172,822 | 206.3 | 48       | 3         | string           |
+| BenchmarkExtractHost-4      | 47,327,336 | 131.1 | 0        | 0         | []byte           |
+| BenchmarkParseClientHello-4 | 6,153,693  | 979.1 | 720      | 12        | *ClientHelloInfo |
 
 ---
 
