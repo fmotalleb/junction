@@ -6,7 +6,7 @@ import (
 
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/utils/sni"
+	"github.com/FMotalleb/junction/crypto/sni"
 	"go.uber.org/zap"
 )
 
