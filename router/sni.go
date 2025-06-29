@@ -94,12 +94,8 @@ func ReadAndExtractSNI(conn net.Conn, logger *zap.Logger) (string, []byte, int, 
 		logger.Error("failed to read from client", zap.Error(err))
 		return "", nil, 0, err
 	}
-	sniHello, err := sni.ParseClientHello(buffer[:n])
-	if err != nil {
-		logger.Error("failed to parse sni hello", zap.Error(err))
-		return "", nil, 0, err
-	}
-	serverName := sniHello.SNIHostNames[0]
+	// Since we only care about hostname we use this function instead of parsing whole hello packet
+	serverName := sni.ExtractHost(buffer[:n])
 	if serverName == "" {
 		logger.Error("failed to extract SNI from connection")
 		return "", nil, 0, nil
