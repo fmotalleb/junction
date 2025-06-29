@@ -22,7 +22,7 @@ ENV HTTP_PORT=80 \
 
 
 ENTRYPOINT [ "/docker-entrypoint.sh" ]
-CMD [ "junction --config=/etc/junction/config.toml" ]
+CMD [ "junction", "--config=/etc/junction/config.toml" ]
 
 FROM gcr.io/distroless/base-debian12:nonroot AS distroless
 
@@ -66,4 +66,4 @@ ENV HTTP_PORT=80 \
 
 
 ENTRYPOINT [ "/docker-entrypoint.sh" ]
-CMD [ "junction --config=/etc/junction/config.toml" ]
+CMD [ "junction", "--config=/etc/junction/config.toml" ]
