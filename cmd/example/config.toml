@@ -7,38 +7,38 @@ include = [
 
 [[entrypoints]]
 routing = "sni" # SNI routing detects its host
+listen = "0.0.0.0:8443" # listen address
 proxy = "socks5://10.11.12.22:8999" # Proxy address
 to = "443" # Explicit sni target port declaration (default 443)
-listen = "0.0.0.0:8443" # listen address
 timeout = "50s" # Timeout for connection that are made in this entrypoint (default to `TIMEOUT` env var or 24Hours)
 
 [[entrypoints]]
 routing = "http-header" # SNI routing detects its host
+listen = ":8080" # If no IP is specified, server will listen on 127.0.0.1:8080(port)
 proxy = [ # Proxy chain using array
   "socks5://10.11.12.22:8999", # Connects to this
   "socks5://10.11.12.22:8998" # Then using that connection connects to this
 ]
 to = "80" # Explicit http target port declaration (default 80)
-listen = ":8080" # If no IP is specified, server will listen on 127.0.0.1:8080(port)
 
 [[entrypoints]]
 routing = "http-header" # SNI routing detects its host
+listen = 8090 # Listen can be an integer, which will be interpreted as port number on localhost IP address (127.0.0.1)
 proxy = [
   "ssh://test:password@test2:22", # SSH proxy using username:password
   "ssh://test@test2:22/path/to/private/key" # SSH proxy using username:private/public key authentication
 ]
-listen = 8090 # Listen can be an integer, which will be interpreted as port number on localhost IP address (127.0.0.1)
 
 [[entrypoints]]
 routing = "tcp-raw"
+listen = "0.0.0.0:8444"
 proxy = "socks5://10.11.12.22:8999,ssh://test@test2:22" # Proxy chain using string with `,` separator
 to = "192.168.200.56:8469" # tcp-raw routing is unable to detect its target host thus it need target's ip:port
-listen = "0.0.0.0:8444"
 
 [[entrypoints]]
 routing = "udp-raw"
+listen = "0.0.0.0:53"
 # currently udp does not support proxy protocols
 # proxy = "socks5://10.11.12.22:8999,ssh://test@test2:22"
 to = "1.1.1.1:53" # udp-raw routing is unable to detect its target host thus it need target's ip:port
-listen = "0.0.0.0:53"
 timeout = "50s"
