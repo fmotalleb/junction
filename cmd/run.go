@@ -68,7 +68,7 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	runCmd.Flags().StringP("listen", "p", ":8080", "Address to listen on (e.g., :8080,")
+	runCmd.Flags().StringP("listen", "l", "127.0.0.1:8080", "Address to listen on (e.g., 0.0.0.0:8080,")
 	runCmd.Flags().StringSliceP("proxy", "x", nil, "Proxy URLs (multiple or none allowed, e.g., socks5://127.0.0.1:7890)")
 	runCmd.Flags().StringP("routing", "r", "", "Routing method (e.g., sni, http-header, tcp-raw)")
 	runCmd.Flags().StringP("target", "t", "", "Target (based on routing method)")
