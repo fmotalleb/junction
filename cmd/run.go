@@ -39,11 +39,11 @@ var runCmd = &cobra.Command{
 			}
 			entry.Proxy = append(entry.Proxy, pu)
 		}
-		var strValue string
-		if strValue, err = cmd.Flags().GetString("routing"); err != nil {
+		var routingValue string
+		if routingValue, err = cmd.Flags().GetString("routing"); err != nil {
 			return err
 		}
-		if err = entry.Routing.Set(strValue); err != nil {
+		if err = entry.Routing.Set(routingValue); err != nil {
 			return err
 		}
 		if entry.Target, err = cmd.Flags().GetString("target"); err != nil {
@@ -58,7 +58,10 @@ var runCmd = &cobra.Command{
 		cfg.EntryPoints = []config.EntryPoint{
 			*entry,
 		}
-		if err := server.Serve(cfg); err != nil {
+		if dump {
+			return dumpConf(&cfg)
+		}
+		if err = server.Serve(cfg); err != nil {
 			return err
 		}
 		return nil
