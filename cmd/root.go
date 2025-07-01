@@ -19,11 +19,10 @@ package cmd
 
 import (
 	"os"
-	"time"
 
+	"github.com/FMotalleb/go-tools/git"
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/git"
 	"github.com/FMotalleb/junction/server"
 	"github.com/spf13/cobra"
 )
@@ -43,7 +42,7 @@ var rootCmd = &cobra.Command{
   • Flexible routing via: SNI (TLS), HTTP
   • Docker-ready deployment
 	• Internal support for singbox`,
-	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Since(git.GetDate()).Round(time.Minute).String() + " ago",
+	Version: git.String(),
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		if debug {
 			log.SetDebugDefaults()
