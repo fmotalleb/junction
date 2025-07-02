@@ -34,6 +34,9 @@ var exampleCmd = &cobra.Command{
 	},
 }
 
+// formatConfig converts TOML configuration data to the specified format (TOML, JSON, or YAML).
+// If the format is unrecognized, the original TOML data is returned.
+// Returns the formatted configuration data or an error if parsing or encoding fails.
 func formatConfig(format string, data []byte) ([]byte, error) {
 	var result []byte
 	parsed, err := tomlToMap(data)

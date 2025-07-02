@@ -78,6 +78,7 @@ func Execute() {
 	}
 }
 
+// init initializes command-line flags for the root command, including configuration file path, format, debug mode, and dry-run options.
 func init() {
 	rootCmd.Flags().StringP("config", "c", "", "config file (default: reading config from stdin)")
 	rootCmd.Flags().StringP("format", "f", "", "config format (yaml, json, toml, ini, hcl)")

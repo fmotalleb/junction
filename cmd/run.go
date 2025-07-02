@@ -68,6 +68,7 @@ var runCmd = &cobra.Command{
 	},
 }
 
+// init registers the 'run' command and its flags with the root command, marking required flags as necessary.
 func init() {
 	rootCmd.AddCommand(runCmd)
 
