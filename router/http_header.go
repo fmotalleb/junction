@@ -21,6 +21,9 @@ func init() {
 	registerHandler(httpHandler)
 }
 
+// httpHandler starts an HTTP proxy server for entry points configured with RouterHTTPHeader routing.
+// It initializes the server with a proxy handler that forwards requests through a SOCKS5 proxy chain as specified by the entry configuration.
+// Returns an error if the server fails to start.
 func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 	if entry.Routing != config.RouterHTTPHeader {
 		return nil
@@ -37,6 +40,7 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 			logger:     logger,
 			proxyAddr:  entry.Proxy,
 			targetPort: entry.GetTargetOr(DefaultHTTPPort),
+			entry:      entry,
 		},
 	}
 
@@ -57,6 +61,7 @@ type httpProxyHandler struct {
 	logger     *zap.Logger
 	proxyAddr  []*url.URL
 	targetPort string
+	entry      config.EntryPoint
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +71,11 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No host specified", http.StatusBadRequest)
 		return
 	}
-
+	if !h.entry.Allowed(targetHost) {
+		h.logger.Warn("detected hostname is not allowed", zap.String("hostname", targetHost))
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
 	h.logger.Info("HTTP request received",
 		zap.String("method", r.Method),
 		zap.String("targetHost", targetHost),
