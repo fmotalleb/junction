@@ -23,7 +23,7 @@ type CoreCfg struct {
 type EntryPoint struct {
 	Routing   Router             `mapstructure:"routing,omitempty" toml:"routing,omitempty" yaml:"routing,omitempty" json:"routing,omitempty"`
 	Listen    netip.AddrPort     `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
-	BlackList []*matcher.Matcher `mapstructure:"block_list,omitempty" toml:"block_list,omitempty" yaml:"block_list,omitempty" json:"block_list,omitempty"`
+	BlockList []*matcher.Matcher `mapstructure:"block_list,omitempty" toml:"block_list,omitempty" yaml:"block_list,omitempty" json:"block_list,omitempty"`
 	AllowList []*matcher.Matcher `mapstructure:"allow_list,omitempty" toml:"allow_list,omitempty" yaml:"allow_list,omitempty" json:"allow_list,omitempty"`
 	Proxy     []*url.URL         `mapstructure:"proxy,omitempty" toml:"proxy,omitempty" yaml:"proxy,omitempty" json:"proxy,omitempty"`
 	Target    string             `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
@@ -47,8 +47,8 @@ func (e *EntryPoint) GetTargetOr(def ...string) string {
 }
 
 func (e *EntryPoint) Allowed(name string) bool {
-	if len(e.BlackList) != 0 {
-		for _, b := range e.BlackList {
+	if len(e.BlockList) != 0 {
+		for _, b := range e.BlockList {
 			if b.Match(name) {
 				return false
 			}
