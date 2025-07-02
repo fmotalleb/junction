@@ -1,44 +1,66 @@
-# Include all toml files in current working directory
+# Include additional configuration files from various sources
 include = [
-  "./*.toml",
-  "http://example.conf/example.toml",
-  "https://example.conf/example.toml",
+  "./*.toml",                           # All TOML files in current directory
+  "http://example.conf/example.toml",   # Remote HTTP configuration
+  "https://example.conf/example.toml",  # Remote HTTPS configuration
 ]
 
+# SNI-based routing example
 [[entrypoints]]
-routing = "sni" # SNI routing detects its host
-listen = "0.0.0.0:8443" # listen address
-proxy = "socks5://10.11.12.22:8999" # Proxy address
-to = "443" # Explicit sni target port declaration (default 443)
-timeout = "50s" # Timeout for connection that are made in this entrypoint (default to `TIMEOUT` env var or 24Hours)
+routing = "sni"                         # Uses SNI to detect target hostname
+listen = "0.0.0.0:8443"                # Bind to all interfaces on port 8443
+proxy = "socks5://10.11.12.22:8999"    # Single SOCKS5 proxy
+to = "443"                              # Target port for SNI connections (default: 443)
+timeout = "50s"                         # Connection timeout (default: TIMEOUT env or 24h)
 
+# HTTP header-based routing with proxy chain array
 [[entrypoints]]
-routing = "http-header" # SNI routing detects its host
-listen = ":8080" # If no IP is specified, server will listen on 127.0.0.1:8080(port)
-proxy = [ # Proxy chain using array
-  "socks5://10.11.12.22:8999", # Connects to this
-  "socks5://10.11.12.22:8998" # Then using that connection connects to this
+routing = "http-header"                 # Uses HTTP Host header for routing
+listen = ":8080"                        # Bind to 127.0.0.1:8080 (localhost when IP omitted)
+proxy = [                               # Proxy chain as array
+  "socks5://10.11.12.22:8999",        # First hop
+  "socks5://10.11.12.22:8998"         # Second hop (connects through first)
 ]
-to = "80" # Explicit http target port declaration (default 80)
+to = "80"                              # Target port for HTTP connections (default: 80)
 
+# HTTP routing with SSH proxy chain
 [[entrypoints]]
-routing = "http-header" # SNI routing detects its host
-listen = 8090 # Listen can be an integer, which will be interpreted as port number on localhost IP address (127.0.0.1)
+routing = "http-header"
+listen = 8090                          # Integer format: binds to 127.0.0.1:8090
 proxy = [
-  "ssh://test:password@test2:22", # SSH proxy using username:password
-  "ssh://test@test2:22/path/to/private/key" # SSH proxy using username:private/public key authentication
+  "ssh://test:password@test2:22",                    # SSH with password auth
+  "ssh://test@test2:22/path/to/private/key"         # SSH with key-based auth
 ]
 
+# Raw TCP forwarding
 [[entrypoints]]
 routing = "tcp-raw"
 listen = "0.0.0.0:8444"
-proxy = "socks5://10.11.12.22:8999,ssh://test@test2:22" # Proxy chain using string with `,` separator
-to = "192.168.200.56:8469" # tcp-raw routing is unable to detect its target host thus it need target's ip:port
+proxy = "socks5://10.11.12.22:8999,ssh://test@test2:22"  # Proxy chain as comma-separated string
+to = "192.168.200.56:8469"            # Must specify complete IP:port for tcp-raw
 
+# Raw UDP forwarding
 [[entrypoints]]
 routing = "udp-raw"
 listen = "0.0.0.0:53"
-# currently udp does not support proxy protocols
+# Note: UDP routing doesn't support proxy protocols currently
 # proxy = "socks5://10.11.12.22:8999,ssh://test@test2:22"
-to = "1.1.1.1:53" # udp-raw routing is unable to detect its target host thus it need target's ip:port
+to = "1.1.1.1:53"                     # Must specify complete IP:port for udp-raw
+timeout = "50s"
+
+# SNI routing with access control
+[[entrypoints]]
+routing = "sni"
+listen = "0.0.0.0:443"
+                                      # Block/Allow list only work when using sni or http-header
+block_list = [                        # Blocklist (processed before allowlist)
+  "api.example.com"
+]
+allow_list = [                        # Allowlist (if specified, only these are allowed)
+  "*.example.com"                     # Wildcard pattern supported
+]
+# Result: All example.com subdomains allowed except api.example.com
+# Note: example.com itself is blocked (not in allowlist)
+proxy = "socks5://10.11.12.22:8999"
+to = "443"
 timeout = "50s"

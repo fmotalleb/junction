@@ -163,72 +163,71 @@ junction run --listen 8443 \
     [singbox](https://github.com/SagerNet/sing-box/) is a successor to xray
     Its config is complex you can see an example of how to provide a simple config in [example](https://github.com/FMotalleb/junction/blob/main/example) directory
 
-- **Entrypoints**
-  At the top level, define an array named `entrypoints`. Each entry describes a routing configuration and includes the following fields:
+- **Entrypoints**:
+  Top-level array defining routing configurations. Each entry includes:
 
-  - **`listen`**:
-    IP:Port address to listen on.
+  - **`listen`** (required):
+    Bind address for incoming connections. Accepts:
+    - Full address: `"IP:port"` (e.g., `"0.0.0.0:8443"`)
+    - Port only: `":port"` (binds to `127.0.0.1:port`)
+    - Integer: `port` (binds to `127.0.0.1:port`)
 
-  - **`routing`**:
-    Defines how the target hostname is resolved. Supported modes:
+  - **`routing`** (required):
+    Target hostname resolution method:
+    - `sni`: Uses SNI for hostname detection. Default port: `443`
+    - `http-header`: Uses HTTP `Host` header. Default port: `80`
+    - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port` in `to` field
+    - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field. **Note**: Proxy not supported
 
-    - `sni`: Uses SNI for hostname detection. Requires target port. Default: `443`.
-    - `http-header`: Uses HTTP `Host` header. Requires target port. Default: from `Host`.
-    - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port`. No defaults.
+  - **`proxy`** (optional):
+    Upstream proxy configuration. Accepts:
+    - String: Comma-separated proxy chain
+    - Array: Ordered list of proxy URIs
 
-  - **`proxy`**:
-    Defines one or more upstream proxies. Supports:
-
-    - A comma-separated string
-    - An array of proxy URIs
-
-    Supported proxy types:
-
-    - **SOCKS (RFC-compliant)**:
-
-      ```
-      socks5://(user:pass)@hostname:port
-      ```
-
-      - Username and password are optional.
-    - **SSH (custom URI format)**:
-
-      ```
-      ssh://user(:pass)@hostname:port(/path/to/private/key)
-      ```
-
-      - Password and private key path are optional.
-      - Use either password or key-based authentication.
+    Supported proxy protocols:
+    - **SOCKS5**: `socks5://[user:pass@]hostname:port`
+    - **SSH**: `ssh://user[:pass]@hostname:port[/path/to/private/key]`
+      - Use either password OR key authentication, not both
 
     Default: `direct` (no proxy)
 
-    e.g: These two are identical
+    Example proxy chains (equivalent):
     - `"socks5://user:pass@10.0.0.1:1080,socks5://10.0.0.2:1080,ssh://user@10.0.0.3:22/tmp/key"`
     - `["socks5://user:pass@10.0.0.1:1080", "socks5://10.0.0.2:1080", "ssh://user@10.0.0.3:22/tmp/key"]`
 
     ```mermaid
     graph LR
-       Client --> Proxy1["socks5://user:pass\@10.0.0.1:1080"]
-       Proxy1 --> Proxy2["socks5://10.0.0.2:1080"]
-       Proxy2 --> Proxy3["ssh://user\@10.0.0.3:22"]
-       Proxy3 --> Target["example.com:80"]
+      Client --> Proxy1["socks5://user:pass@10.0.0.1:1080"]
+      Proxy1 --> Proxy2["socks5://10.0.0.2:1080"]
+      Proxy2 --> Proxy3["ssh://user@10.0.0.3:22"]
+      Proxy3 --> Target["example.com:80"]
     ```
 
-  - **`to`**:
-    Destination address or port, depending on the selected `routing` mode.
+  - **`to`** (required):
+    Target destination:
+    - For `sni`/`http-header`: Port number (string)
+    - For `tcp-raw`/`udp-raw`: Complete `"ip:port"` address
 
-  - **`timeout`**:
-    Maximum allowed duration for a connection.
+  - **`timeout`** (optional):
+    Connection timeout duration:
+    - Default: `24h` (or `TIMEOUT` environment variable)
+    - Format: Go duration syntax (e.g., `"50s"`, `"5h3m15s"`)
 
-    - Default: `24h`
-    - Default is overridable via `TIMEOUT` environment variable
-    - Format: Go duration syntax (e.g., `5h3m15s`)
+  - **`block_list`** (optional) [only when using sni,http-header]:
+    List of hostnames/patterns to block. Supports wildcards (e.g., `"*.example.com"`)
 
-  **Warnings**:
+  - **`allow_list`** (optional) [only when using sni,http-header]:
+    List of hostnames/patterns to allow. If specified, only listed hosts are allowed.
+    - Supports wildcards (e.g., `"*.example.com"`)
+    - Block rules are applied before allow rules
 
-  - The `proxy` list is interpreted in order; misordering may break the chain.
-  - Only one authentication method should be used per SSH proxy entry.
-  - `tcp-raw` requires explicit `ip:port`; no inference is made.
+**Important Notes**:
+
+- Proxy chains execute in order; incorrect ordering breaks the chain
+- `tcp-raw` and `udp-raw` require explicit `ip:port` targets
+- `udp-raw` routing doesn't support proxy protocols
+- When using `allow_list`, unlisted hosts are implicitly blocked
+- Wildcard patterns (e.g., `*.example.com`) match subdomains only, not the base domain
 
 #### **Example: TOML Configuration**
 
