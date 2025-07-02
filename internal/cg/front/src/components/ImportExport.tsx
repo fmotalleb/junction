@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Download, Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { NetworkConfig } from '../types/config';
 import { exportConfig, importConfig, downloadFile } from '../utils/config';
+import { usePortal } from '../hooks/usePortal';
 
 interface ImportExportProps {
   config: NetworkConfig;
@@ -55,7 +56,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({ config, onImport }) 
     setImportError(null);
     setImportSuccess(false);
   };
-
+  const renderModal = usePortal('modal-root');
   return (
     <>
       <div className="flex items-center gap-3">
@@ -66,7 +67,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({ config, onImport }) 
           <Download className="w-4 h-4" />
           Export Config
         </button>
-        
+
         <button
           onClick={() => setIsImportModalOpen(true)}
           className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700 rounded-lg transition-all duration-300 shadow-lg hover:shadow-blue-500/25"
@@ -77,7 +78,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({ config, onImport }) 
       </div>
 
       {/* Import Modal */}
-      {isImportModalOpen && (
+      {isImportModalOpen && renderModal(
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-gray-800/90 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700/50 max-w-2xl w-full max-h-[90vh] overflow-auto">
             <div className="p-6 border-b border-gray-700/50">
@@ -134,9 +135,8 @@ export const ImportExport: React.FC<ImportExportProps> = ({ config, onImport }) 
                   }}
                   placeholder="Paste your configuration JSON here..."
                   rows={10}
-                  className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent font-mono text-sm text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${
-                    importError ? 'border-red-500/50' : 'border-gray-600'
-                  }`}
+                  className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent font-mono text-sm text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${importError ? 'border-red-500/50' : 'border-gray-600'
+                    }`}
                 />
               </div>
 
