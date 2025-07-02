@@ -70,6 +70,8 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if !h.entry.Allowed(targetHost) {
 		h.logger.Warn("detected hostname is not allowed", zap.String("hostname", targetHost))
+		w.WriteHeader(http.StatusForbidden)
+		return
 	}
 	h.logger.Info("HTTP request received",
 		zap.String("method", r.Method),
