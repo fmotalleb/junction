@@ -19,6 +19,8 @@ curl -v --resolve $"$server:8443:127.0.0.1" $"https://$server:8443/" --max-time 
 
 ## System Information
 
+### 1
+
 * **OS:** linux
 * **Architecture:** amd64
 * **CPU:** Intel(R) Core(TM) i5-6500 CPU @ 3.20GHz
@@ -26,12 +28,28 @@ curl -v --resolve $"$server:8443:127.0.0.1" $"https://$server:8443/" --max-time 
 
 ---
 
-## Benchmark Output
+#### Benchmark Output
 
 | Function                      | Time/op   | Throughput       | Allocations | Bytes/op |
 |-------------------------------|-----------|------------------|-------------|----------|
 | ExtractSNI                    | 19.12 ns  | 82.10 GB/s       | 0           | 0 B      |
 | UnmarshalClientHello          | 145.3 ns  | 10.81 GB/s       | 0           | 0 B      |
+
+### 2
+
+* **OS:** windows
+* **Architecture:** amd64
+* **CPU:** 11th Gen Intel(R) Core(TM) i5-11400F @ 2.60GHz
+* **Package:** github.com/FMotalleb/junction/crypto/sni
+
+---
+
+#### Benchmark Output
+
+| Function                      | Time/op   | Throughput       | Allocations | Bytes/op |
+|-------------------------------|-----------|------------------|-------------|----------|
+| ExtractSNI                    | 13.78 ns  | 113.9 GB/s       | 0           | 0 B      |
+| UnmarshalClientHello          | 106.3 ns  | 14.7  GB/s       | 0           | 0 B      |
 
 ---
 

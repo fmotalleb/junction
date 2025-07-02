@@ -2,8 +2,8 @@ package tls_test
 
 import (
 	"embed"
+	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/FMotalleb/junction/crypto/tls"
@@ -20,20 +20,24 @@ const (
 
 var testData = make(map[string][]byte)
 
+func wrapErr(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, err)
+}
+
 func TestMain(m *testing.M) {
 	var err error
 	files, err := testFiles.ReadDir(datadir)
 	if err != nil {
-		panic(err)
+		panic(wrapErr("failed to read embed fs", err))
 	}
 
 	for _, f := range files {
 		if !f.IsDir() {
 			name := f.Name()
-			path := filepath.Join(datadir, name)
+			path := datadir + "/" + name
 			testData[name], err = testFiles.ReadFile(path)
 			if err != nil {
-				panic(err)
+				panic(wrapErr("failed to populate test data", err))
 			}
 		}
 	}
