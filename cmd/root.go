@@ -19,13 +19,17 @@ package cmd
 
 import (
 	"os"
-	"time"
 
+	"github.com/FMotalleb/go-tools/git"
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/git"
 	"github.com/FMotalleb/junction/server"
 	"github.com/spf13/cobra"
+)
+
+var (
+	dump  = false
+	debug = false
 )
 
 // rootCmd represents the base command when called without any subcommands.
@@ -36,10 +40,10 @@ var rootCmd = &cobra.Command{
   • SNI passthrough for TLS routing without terminating SSL
   • SOCKS5 and SSH proxy + proxy chaining as transfer layer
   • Flexible routing via: SNI (TLS), HTTP
-  • Docker-ready deploy with supervisord + sing-box`,
-	Version: git.GetVersion() + " (" + git.GetBranch() + "/" + git.GetCommit() + ") " + time.Since(git.GetDate()).Round(time.Minute).String() + " ago",
-	PersistentPreRun: func(cmd *cobra.Command, _ []string) {
-		debug := isDebug(cmd)
+  • Docker-ready deployment
+	• Internal support for singbox`,
+	Version: git.String(),
+	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		if debug {
 			log.SetDebugDefaults()
 		}
@@ -48,16 +52,15 @@ var rootCmd = &cobra.Command{
 		var configFile string
 		var err error
 		var cfg config.Config
-		debug := isDebug(cmd)
 		if configFile, err = cmd.Flags().GetString("config"); err != nil {
 			return err
 		}
 
-		// if format, err = cmd.Flags().GetString("format"); err != nil {
-		// 	return err
-		// }
-		if err := config.Parse(&cfg, configFile, debug); err != nil {
+		if err = config.Parse(&cfg, configFile, debug); err != nil {
 			return err
+		}
+		if dump {
+			return dumpConf(&cfg)
 		}
 		if err := server.Serve(cfg); err != nil {
 			return err
@@ -78,5 +81,6 @@ func Execute() {
 func init() {
 	rootCmd.Flags().StringP("config", "c", "", "config file (default: reading config from stdin)")
 	rootCmd.Flags().StringP("format", "f", "", "config format (yaml, json, toml, ini, hcl)")
-	rootCmd.PersistentFlags().BoolP("debug", "d", false, "enable debug mode")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug mode")
+	rootCmd.PersistentFlags().BoolVar(&dump, "dry-run", false, "just output the config, do not start service")
 }

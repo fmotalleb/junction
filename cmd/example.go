@@ -43,6 +43,8 @@ func formatConfig(format string, data []byte) ([]byte, error) {
 		return nil, err
 	}
 	switch format {
+	default:
+		fallthrough
 	case "toml":
 		result = data
 	case "json":

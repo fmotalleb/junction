@@ -39,11 +39,11 @@ var runCmd = &cobra.Command{
 			}
 			entry.Proxy = append(entry.Proxy, pu)
 		}
-		var strValue string
-		if strValue, err = cmd.Flags().GetString("routing"); err != nil {
+		var routingValue string
+		if routingValue, err = cmd.Flags().GetString("routing"); err != nil {
 			return err
 		}
-		if err = entry.Routing.Set(strValue); err != nil {
+		if err = entry.Routing.Set(routingValue); err != nil {
 			return err
 		}
 		if entry.Target, err = cmd.Flags().GetString("target"); err != nil {
@@ -58,7 +58,10 @@ var runCmd = &cobra.Command{
 		cfg.EntryPoints = []config.EntryPoint{
 			*entry,
 		}
-		if err := server.Serve(cfg); err != nil {
+		if dump {
+			return dumpConf(&cfg)
+		}
+		if err = server.Serve(cfg); err != nil {
 			return err
 		}
 		return nil
@@ -68,7 +71,7 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	runCmd.Flags().StringP("listen", "p", ":8080", "Address to listen on (e.g., :8080,")
+	runCmd.Flags().StringP("listen", "l", "127.0.0.1:8080", "Address to listen on (e.g., 0.0.0.0:8080,")
 	runCmd.Flags().StringSliceP("proxy", "x", nil, "Proxy URLs (multiple or none allowed, e.g., socks5://127.0.0.1:7890)")
 	runCmd.Flags().StringP("routing", "r", "", "Routing method (e.g., sni, http-header, tcp-raw)")
 	runCmd.Flags().StringP("target", "t", "", "Target (based on routing method)")
