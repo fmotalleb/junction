@@ -21,6 +21,9 @@ func init() {
 	registerHandler(httpHandler)
 }
 
+// httpHandler starts an HTTP proxy server for entry points configured with RouterHTTPHeader routing.
+// It initializes the server with a proxy handler that forwards requests through a SOCKS5 proxy chain as specified by the entry configuration.
+// Returns an error if the server fails to start.
 func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 	if entry.Routing != config.RouterHTTPHeader {
 		return nil
