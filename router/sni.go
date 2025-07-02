@@ -55,6 +55,8 @@ func sniRouter(ctx context.Context, entry config.EntryPoint) error {
 	}
 }
 
+// handleSNIConnection manages a single incoming client connection by extracting the SNI from the TLS handshake, validating it, and proxying traffic to the appropriate target if allowed.
+// The function enforces a timeout, ensures proper cleanup of resources, and logs relevant connection events.
 func handleSNIConnection(parentCtx context.Context, logger *zap.Logger, clientConn net.Conn, entry config.EntryPoint) {
 	ctx, cancel := context.WithTimeout(parentCtx, entry.GetTimeout())
 	defer func() {
