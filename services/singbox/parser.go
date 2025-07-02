@@ -7,7 +7,11 @@ import (
 	"github.com/spf13/cast"
 )
 
-// TryParseOutboundURL parses the given link and outputs the outbound part of the singbox config.
+// TryParseOutboundURL constructs a Singbox outbound configuration map from the provided URL and its query parameters.
+// 
+// The function extracts relevant fields such as type, server, port, UUID, transport settings, and TLS parameters from the URL and its query string. The resulting map is structured under the key path "core.singbox.outbounds" and is suitable for use in Singbox configuration files.
+// 
+// Returns the constructed configuration map and a nil error.
 func TryParseOutboundURL(url *url.URL) (map[string]any, error) {
 	cb := builder.NewNested()
 
@@ -52,6 +56,8 @@ func TryParseOutboundURL(url *url.URL) (map[string]any, error) {
 	}, nil
 }
 
+// loadTLSParams adds TLS-related configuration fields to the builder based on URL query parameters.
+// It enables and configures TLS settings if the "security" parameter is set to "tls", including options for insecure connections, server name indication, uTLS fingerprint, and Reality public key and short ID.
 func loadTLSParams(cb *builder.Nested, query url.Values) {
 	if query.Get("security") != "tls" {
 		return
