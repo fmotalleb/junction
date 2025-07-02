@@ -47,8 +47,8 @@ pushd "$TMPDIR" >/dev/null
 echo -e "${BLUE}Using temporary directory: $TMPDIR${NC}"
 
 echo -e "${CYAN}Downloading files...${NC}"
-curl --fail --show-headers -LO "$ASSET_URL"
-curl --fail --show-headers -LO "$CHECKSUM_URL"
+curl --fail -LO "$ASSET_URL"
+curl --fail -LO "$CHECKSUM_URL"
 
 echo -e "${CYAN}Verifying checksum...${NC}"
 EXPECTED_SUM=$(grep "$TARBALL" "$CHECKSUM_FILE" | awk '{print $1}')

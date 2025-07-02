@@ -18,7 +18,6 @@ var dumpCmd = &cobra.Command{
 		var format, configFile string
 		var err error
 		var cfg config.Config
-		debug := isDebug(cmd)
 		if configFile, err = cmd.Flags().GetString("config"); err != nil {
 			fmt.Printf("Error reading config file flag: %v\n", err)
 			return err
@@ -36,16 +35,8 @@ var dumpCmd = &cobra.Command{
 			fmt.Println(string(exampleConfigData))
 			return err
 		}
-		var result []byte
-		result, err = marshalData(cfg, format)
-		if err != nil {
-			return fmt.Errorf("failed to encode %s: %w", format, err)
-		}
-		if result == nil {
-			return fmt.Errorf("given format `%s` is not implemented yet, use one of toml,yaml,json", format)
-		}
-		fmt.Println(string(result))
-		return nil
+
+		return dumpConf(&cfg, format)
 	},
 }
 

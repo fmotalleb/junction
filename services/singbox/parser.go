@@ -2,83 +2,49 @@ package singbox
 
 import (
 	"net/url"
-	"strings"
 
-	"dario.cat/mergo"
+	"github.com/FMotalleb/go-tools/builder"
 	"github.com/spf13/cast"
 )
 
-func field(key string, value any) any {
-	o := make(map[string]any)
-	p := &o
-	chain := strings.Split(key, ".")
-	cs := len(chain)
-	for i, key := range chain {
-		if i == cs-1 {
-			(*p)[key] = value
-		} else {
-			c := make(map[string]any)
-			(*p)[key] = c
-			p = &c
-		}
-	}
-	return o
-}
-
-type configBuilder struct {
-	frames []any
-}
-
-func (c *configBuilder) set(key string, value any) {
-	c.frames = append(c.frames, field(key, value))
-}
-
-func (c *configBuilder) build() (map[string]any, error) {
-	out := make(map[string]any, 0)
-	for _, f := range c.frames {
-		if err := mergo.Merge(&out, f); err != nil {
-			return nil, err
-		}
-	}
-	return out, nil
-}
-
-// TryParseOutboundURL parses the given link and outputs the outbound part of the singbox config.
+// TryParseOutboundURL constructs a Singbox outbound configuration map from the provided URL and its query parameters.
+//
+// The function extracts relevant fields such as type, server, port, UUID, transport settings, and TLS parameters from the URL and its query string. The resulting map is structured under the key path "core.singbox.outbounds" and is suitable for use in Singbox configuration files.
+//
+// Returns the constructed configuration map and a nil error.
 func TryParseOutboundURL(url *url.URL) (map[string]any, error) {
-	cb := new(configBuilder)
+	cb := builder.NewNested()
 
 	query := url.Query()
 
-	cb.set("type", url.Scheme)
-	cb.set("tag", "proxy")
-	cb.set("packet_encoding", query.Get("packetEncoding"))
-	cb.set("server", url.Hostname())
+	cb.Set("type", url.Scheme).
+		Set("tag", "proxy").
+		Set("packet_encoding", query.Get("packetEncoding")).
+		Set("server", url.Hostname())
 	port := url.Port()
 	if port == "" {
 		port = "443"
 	}
-	cb.set("server_port", cast.ToUint16(port))
+	cb.Set("server_port", cast.ToUint16(port))
 
 	if url.User != nil {
-		cb.set("uuid", url.User.Username())
+		cb.Set("uuid", url.User.Username())
 	}
 	loadTLSParams(cb, query)
 
-	cb.set("transport.type", query.Get("type"))
+	cb.Set("transport.type", query.Get("type"))
 	switch query.Get("type") {
 	case "tcp", "ws", "http", "httpupgrade":
-		cb.set("transport.path", query.Get("path"))
-		cb.set("transport.headers.Host", query.Get("host"))
+		cb.Set("transport.path", query.Get("path"))
+		cb.Set("transport.headers.Host", query.Get("host"))
 	}
 	sn := query.Get("serviceName")
 	if sn != "" {
-		cb.set("transport.service_name", query.Get("serviceName"))
+		cb.Set("transport.service_name", query.Get("serviceName"))
 	}
-	cb.set("flow", query.Get("flow"))
-	out, err := cb.build()
-	if err != nil {
-		return nil, err
-	}
+	cb.Set("flow", query.Get("flow"))
+	out := cb.Data
+
 	return map[string]any{
 		"core": map[string]any{
 			"singbox": map[string]any{
@@ -90,27 +56,29 @@ func TryParseOutboundURL(url *url.URL) (map[string]any, error) {
 	}, nil
 }
 
-func loadTLSParams(cb *configBuilder, query url.Values) {
+// loadTLSParams adds TLS-related configuration fields to the builder based on URL query parameters.
+// It enables and configures TLS settings if the "security" parameter is set to "tls", including options for insecure connections, server name indication, uTLS fingerprint, and Reality public key and short ID.
+func loadTLSParams(cb *builder.Nested, query url.Values) {
 	if query.Get("security") != "tls" {
 		return
 	}
-	cb.set("tls.enabled", true)
+	cb.Set("tls.enabled", true)
 
 	insec := query.Get("allowInsecure")
 
 	if insec == "" {
 		insec = "0"
 	}
-	cb.set("tls.insecure", cast.ToBool(insec))
-	cb.set("tls.server_name", query.Get("sni"))
+	cb.Set("tls.insecure", cast.ToBool(insec)).
+		Set("tls.server_name", query.Get("sni"))
 
 	if query.Get("fp") != "" {
-		cb.set("tls.utls.enabled", true)
-		cb.set("tls.utls.fingerprint", query.Get("fp"))
+		cb.Set("tls.utls.enabled", true).
+			Set("tls.utls.fingerprint", query.Get("fp"))
 	}
 	if query.Get("pbk") != "" {
-		cb.set("tls.reality.enabled", true)
-		cb.set("tls.reality.public_key", query.Get("pbk"))
-		cb.set("tls.reality.short_id", query.Get("sid"))
+		cb.Set("tls.reality.enabled", true).
+			Set("tls.reality.public_key", query.Get("pbk")).
+			Set("tls.reality.short_id", query.Get("sid"))
 	}
 }

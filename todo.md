@@ -6,7 +6,7 @@
 * [x] HTTP support
 * [x] TCP (with predefined targets)
 * [x] UDP support
-* [ ] DNS (basic UDP-based server):
+* [ ] DNS (basic UDP-based server): (currently use singbox)
   * [ ] Fake DNS response generation
   * [ ] DNS request forwarding (requires request filtering to be effective)
   * [ ] DNS over HTTPS (DoH) spoofing
@@ -19,7 +19,7 @@
 * [x] SSH tunneling
 * [x] Add sing-box engine support to core application
   * [x] Integrate sing-box into codebase and config
-  * [ ] Generate sing-box config from proxy url
+  * [x] Generate sing-box config from proxy url
 * [ ] Proxy load balancing
 
 ## Core Features
@@ -37,6 +37,7 @@
 * [ ] Proxy reuse via proxy pool
 * [ ] Connection pooling (limit max concurrent connections per entrypoint)
 * [ ] Connection warm-up (optional; can trigger bans from tools like fail2ban)
+* [x] Zero alloc sni-parser
 
 ## Configuration
 
