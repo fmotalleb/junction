@@ -23,14 +23,5 @@ var generatorCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(generatorCmd)
-	generatorCmd.Flags().StringP("listen", "l", "127.0.0.1:8080", "listen address, use 0.0.0.0 if you want to publish this globally")
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// generatorCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// generatorCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	generatorCmd.Flags().StringP("listen", "l", "127.0.0.1:8080", "listen address, use 0.0.0.0:8080 if you want to publish this globally")
 }
