@@ -36,7 +36,10 @@ jobs:
       with:
         go-version: '1.24'
         check-latest: true
-
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@39edc492dbe16b1465b0cafca41432d857bdb31a # v3.29.1
