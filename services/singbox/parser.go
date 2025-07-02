@@ -8,9 +8,9 @@ import (
 )
 
 // TryParseOutboundURL constructs a Singbox outbound configuration map from the provided URL and its query parameters.
-// 
+//
 // The function extracts relevant fields such as type, server, port, UUID, transport settings, and TLS parameters from the URL and its query string. The resulting map is structured under the key path "core.singbox.outbounds" and is suitable for use in Singbox configuration files.
-// 
+//
 // Returns the constructed configuration map and a nil error.
 func TryParseOutboundURL(url *url.URL) (map[string]any, error) {
 	cb := builder.NewNested()
