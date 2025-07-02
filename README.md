@@ -214,11 +214,13 @@ junction run --listen 8443 \
     - Format: Go duration syntax (e.g., `"50s"`, `"5h3m15s"`)
 
   - **`block_list`** (optional) [only when using sni,http-header]:
-    List of hostnames/patterns to block. Supports wildcards (e.g., `"*.example.com"`)
-
+    List of hostnames/patterns to block.
+    - Supports wildcards (e.g., `"*.example.com"`, `"glob:*.example.com"`)
+    - Supports Regular Expression (contain check) (e.g. `"regexp:badword"`, `"grep:bad.+word"`)
   - **`allow_list`** (optional) [only when using sni,http-header]:
     List of hostnames/patterns to allow. If specified, only listed hosts are allowed.
     - Supports wildcards (e.g., `"*.example.com"`)
+    - Supports Regular Expression (e.g. `"regexp:allowed"`, `"grep:.+google.com^"`)
     - Block rules are applied before allow rules
 
 **Important Notes**:
