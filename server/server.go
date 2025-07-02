@@ -22,8 +22,7 @@ func Serve(c config.Config) error {
 
 	ctx := context.Background()
 	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)
-	logBuilders := make([]log.BuilderFunc, 0)
-	ctx, err := log.WithNewEnvLogger(ctx, logBuilders...)
+	ctx, err := log.WithNewEnvLogger(ctx)
 	if err != nil {
 		return err
 	}
