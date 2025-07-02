@@ -1,7 +1,9 @@
-package cg
+package front
 
 import (
 	"context"
+	"embed"
+	"io/fs"
 	"net"
 	"net/http"
 	"syscall"
@@ -9,9 +11,18 @@ import (
 
 	"github.com/FMotalleb/go-tools/log"
 	"github.com/FMotalleb/go-tools/sysctx"
-	"github.com/FMotalleb/junction/internal/cg/front"
 	"go.uber.org/zap"
 )
+
+//go:generate npm i
+//go:generate npm run build
+
+//go:embed dist/*
+var distFs embed.FS
+
+func getDist() (fs.FS, error) {
+	return fs.Sub(distFs, "dist")
+}
 
 func Serve(listen string) error {
 	ctx := context.Background()
@@ -20,7 +31,7 @@ func Serve(listen string) error {
 	if err != nil {
 		return err
 	}
-	dist, err := front.GetDist()
+	dist, err := getDist()
 	if err != nil {
 		return err
 	}

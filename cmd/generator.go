@@ -4,7 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"github.com/FMotalleb/junction/internal/cg"
+	"github.com/FMotalleb/junction/internal/front"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +17,7 @@ var generatorCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return cg.Serve(l)
+		return front.Serve(l)
 	},
 }
 
