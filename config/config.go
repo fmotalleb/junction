@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/FMotalleb/go-tools/env"
+	"github.com/FMotalleb/go-tools/matcher"
 )
 
 type Config struct {
@@ -20,11 +21,13 @@ type CoreCfg struct {
 	SingboxCfg map[string]any `mapstructure:"singbox,omitempty" toml:"singbox,omitempty" yaml:"singbox,omitempty" json:"singbox,omitempty"`
 }
 type EntryPoint struct {
-	Listen  netip.AddrPort `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
-	Target  string         `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
-	Proxy   []*url.URL     `mapstructure:"proxy,omitempty" toml:"proxy,omitempty" yaml:"proxy,omitempty" json:"proxy,omitempty"`
-	Routing Router         `mapstructure:"routing,omitempty" toml:"routing,omitempty" yaml:"routing,omitempty" json:"routing,omitempty"`
-	Timeout time.Duration  `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Routing   Router             `mapstructure:"routing,omitempty" toml:"routing,omitempty" yaml:"routing,omitempty" json:"routing,omitempty"`
+	Listen    netip.AddrPort     `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
+	BlackList []*matcher.Matcher `mapstructure:"black_list,omitempty" toml:"black_list,omitempty" yaml:"black_list,omitempty" json:"black_list,omitempty"`
+	AllowList []*matcher.Matcher `mapstructure:"allow_list,omitempty" toml:"allow_list,omitempty" yaml:"allow_list,omitempty" json:"allow_list,omitempty"`
+	Proxy     []*url.URL         `mapstructure:"proxy,omitempty" toml:"proxy,omitempty" yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Target    string             `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
+	Timeout   time.Duration      `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 func (e *EntryPoint) IsDirect() bool {
@@ -41,6 +44,26 @@ func (e *EntryPoint) GetTimeout() time.Duration {
 func (e *EntryPoint) GetTargetOr(def ...string) string {
 	items := append([]string{e.Target}, def...)
 	return cmp.Or(items...)
+}
+
+func (e *EntryPoint) Allowed(name string) bool {
+	if len(e.BlackList) != 0 {
+		for _, b := range e.BlackList {
+			if b.Match(name) {
+				return false
+			}
+		}
+	}
+	if len(e.AllowList) != 0 {
+		for _, a := range e.AllowList {
+			if a.Match(name) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return true
 }
 
 func (e *EntryPoint) Decode(from, _ reflect.Type, val interface{}) (any, error) {

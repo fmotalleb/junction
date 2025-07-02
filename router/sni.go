@@ -57,7 +57,10 @@ func sniRouter(ctx context.Context, entry config.EntryPoint) error {
 
 func handleSNIConnection(parentCtx context.Context, logger *zap.Logger, clientConn net.Conn, entry config.EntryPoint) {
 	ctx, cancel := context.WithTimeout(parentCtx, entry.GetTimeout())
-	defer cancel()
+	defer func() {
+		clientConn.Close()
+		cancel()
+	}()
 
 	go func() {
 		<-ctx.Done()
@@ -68,11 +71,15 @@ func handleSNIConnection(parentCtx context.Context, logger *zap.Logger, clientCo
 	if err != nil {
 		return
 	}
-
-	connLogger := logger.With(zap.ByteString("SNI", serverName))
+	sni := string(serverName)
+	connLogger := logger.With(zap.String("SNI", sni))
 	connLogger.Debug("SNI detected")
+	if !entry.Allowed(sni) {
+		connLogger.Warn("detected sni is not allowed")
+		return
+	}
 
-	targetAddr := net.JoinHostPort(string(serverName), entry.GetTargetOr(DefaultSNIPort))
+	targetAddr := net.JoinHostPort(sni, entry.GetTargetOr(DefaultSNIPort))
 	targetConn, err := DialTarget(entry.Proxy, targetAddr, connLogger)
 	if err != nil {
 		return
