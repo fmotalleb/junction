@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
 import { GripVertical } from 'lucide-react';
-import { EntryPoint } from '../types/config';
 
-interface DragDropListProps {
-  items: EntryPoint[];
-  onReorder: (items: EntryPoint[]) => void;
-  renderItem: (item: EntryPoint, index: number) => React.ReactNode;
+interface DragDropListProps<T extends { id: string | number }> {
+  items: T[];
+  onReorder: (items: T[]) => void;
+  renderItem: (item: T, index: number) => React.ReactNode;
 }
 
-export const DragDropList: React.FC<DragDropListProps> = ({ 
-  items, 
-  onReorder, 
-  renderItem 
-}) => {
+export const DragDropList = <T extends { id: string | number }>({
+  items,
+  onReorder,
+  renderItem,
+}: DragDropListProps<T>) => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -33,15 +32,15 @@ export const DragDropList: React.FC<DragDropListProps> = ({
 
   const handleDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
-    
+
     if (draggedIndex === null || draggedIndex === dropIndex) return;
 
     const newItems = [...items];
     const draggedItem = newItems[draggedIndex];
-    
+
     newItems.splice(draggedIndex, 1);
     newItems.splice(dropIndex, 0, draggedItem);
-    
+
     onReorder(newItems);
     setDraggedIndex(null);
     setDragOverIndex(null);
@@ -52,13 +51,11 @@ export const DragDropList: React.FC<DragDropListProps> = ({
       {items.map((item, index) => (
         <div
           key={item.id}
-          className={`relative transition-all duration-300 ${
-            draggedIndex === index ? 'opacity-50 scale-95' : ''
-          } ${
-            dragOverIndex === index && draggedIndex !== index 
-              ? 'transform translate-y-1' 
+          className={`relative transition-all duration-300 ${draggedIndex === index ? 'opacity-50 scale-95' : ''
+            } ${dragOverIndex === index && draggedIndex !== index
+              ? 'transform translate-y-1'
               : ''
-          }`}
+            }`}
           draggable
           onDragStart={(e) => handleDragStart(e, index)}
           onDragOver={(e) => handleDragOver(e, index)}
@@ -68,9 +65,7 @@ export const DragDropList: React.FC<DragDropListProps> = ({
           <div className="absolute left-2 top-1/2 transform -translate-y-1/2 z-10">
             <GripVertical className="w-4 h-4 text-gray-500 cursor-grab active:cursor-grabbing hover:text-pink-400 transition-colors duration-300" />
           </div>
-          <div className="pl-8">
-            {renderItem(item, index)}
-          </div>
+          <div className="pl-8">{renderItem(item, index)}</div>
         </div>
       ))}
     </div>

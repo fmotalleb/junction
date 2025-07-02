@@ -7,9 +7,9 @@ export const generateId = (): string => {
 export const createDefaultEntryPoint = (): EntryPoint => ({
   id: generateId(),
   routing: 'sni',
-  listen: '0.0.0.0:8443',
-  to: '443',
-  timeout: '30s',
+  listen: '',
+  to: '',
+  timeout: '1h',
   block_list: [],
   allow_list: [],
   proxy: []
@@ -17,7 +17,8 @@ export const createDefaultEntryPoint = (): EntryPoint => ({
 
 export const exportConfig = (config: NetworkConfig): string => {
   const exportData = {
-    entrypoints: config.entrypoints.map(({ id, ...rest }) => rest)
+    entrypoints: config.entrypoints
+      .map(({ id, ...rest }) => rest),
   };
   return JSON.stringify(exportData, null, 2);
 };

@@ -28,7 +28,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const validationErrors = validateEntryPoint(formData);
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
@@ -39,6 +39,13 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
   };
 
   const handleFieldChange = (field: keyof EntryPoint, value: any) => {
+    var old = formData
+    if (field === 'routing') {
+      old.listen = "";
+      old.to = "";
+      old.allow_list = undefined;
+      old.block_list = undefined
+    }
     setFormData({ ...formData, [field]: value });
     setTouched({ ...touched, [field]: true });
   };
@@ -48,19 +55,31 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
     return error && touched[field] ? error.message : null;
   };
 
-  const routingTypes: { value: RoutingType; label: string; description: string }[] = [
-    { value: 'sni', label: 'SNI', description: 'Server Name Indication routing' },
-    { value: 'http-header', label: 'HTTP Header', description: 'Route based on HTTP headers' },
-    { value: 'tcp-raw', label: 'TCP Raw', description: 'Raw TCP traffic routing' },
-    { value: 'udp-raw', label: 'UDP Raw', description: 'Raw UDP traffic routing' }
-  ];
+  const routingTypes: {
+    value: RoutingType;
+    label: string;
+    description: string;
+    defaultListener: string;
+    defaultTarget: string;
+    features: string[];
+  }[] = [
+      { value: 'sni', label: 'SNI', description: 'Server Name Indication routing', defaultListener: '127.0.0.1:8443', defaultTarget: '443', features: ['auto-routing', 'proxy'] },
+      { value: 'http-header', label: 'HTTP Header', description: 'Route based on HTTP headers', defaultListener: '127.0.0.1:8080', defaultTarget: '80', features: ['auto-routing', 'proxy'] },
+      { value: 'tcp-raw', label: 'TCP Raw', description: 'Raw TCP traffic routing', defaultListener: '127.0.0.1:8080', defaultTarget: '127.0.0.1:2080', features: ['proxy'] },
+      { value: 'udp-raw', label: 'UDP Raw', description: 'Raw UDP traffic routing', defaultListener: '127.0.0.1:2053', defaultTarget: '1.1.1.1:53', features: [] }
+    ];
 
-  const showSniFields = formData.routing === 'sni';
+  const selected = routingTypes.filter((a) => a.value == formData.routing)[0];
+  const hasAutoRoute = selected.features.includes('auto-routing');
+  const canProxy = selected.features.includes('proxy');
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-800/90 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700/50 max-w-2xl w-full max-h-[90vh] overflow-auto">
-        <div className="p-6 border-b border-gray-700/50">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50
+  transition-opacity duration-300 ease-out
+  opacity-0 animate-fadeIn">
+      <div className="overflow-y-auto scrollbar-thin scrollbar-thumb-transparent scrollbar-track-transparent
+    bg-gray-800/90 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700/50
+    max-w-2xl w-full max-h-[90vh] overflow-auto"><div className="p-6 border-b border-gray-700/50">
           <h2 className="text-xl font-semibold text-white">
             {isEditing ? 'Edit Entry Point' : 'Add Entry Point'}
           </h2>
@@ -76,11 +95,10 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
               {routingTypes.map((type) => (
                 <label
                   key={type.value}
-                  className={`relative flex items-center p-4 border rounded-lg cursor-pointer transition-all duration-300 backdrop-blur-sm ${
-                    formData.routing === type.value
-                      ? 'border-pink-500/50 bg-gradient-to-r from-pink-500/10 to-purple-600/10'
-                      : 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/30'
-                  }`}
+                  className={`relative flex items-center p-4 border rounded-lg cursor-pointer transition-all duration-300 backdrop-blur-sm ${formData.routing === type.value
+                    ? 'border-pink-500/50 bg-gradient-to-r from-pink-500/10 to-purple-600/10'
+                    : 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/30'
+                    }`}
                 >
                   <input
                     type="radio"
@@ -93,6 +111,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
                   <div>
                     <div className="font-medium text-sm text-white">{type.label}</div>
                     <div className="text-xs text-gray-400">{type.description}</div>
+                    <div className="text-xs text-gray-200">features: {type.features.join(", ")}{type.features.length == 0 ? "none" : ""}</div>
                   </div>
                 </label>
               ))}
@@ -109,10 +128,9 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
               value={formData.listen}
               onChange={(e) => handleFieldChange('listen', e.target.value)}
               onBlur={() => setTouched({ ...touched, listen: true })}
-              placeholder="0.0.0.0:8443"
-              className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${
-                getFieldError('listen') ? 'border-red-500/50' : 'border-gray-600'
-              }`}
+              placeholder={selected.defaultListener}
+              className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${getFieldError('listen') ? 'border-red-500/50' : 'border-gray-600'
+                }`}
             />
             {getFieldError('listen') && (
               <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
@@ -132,10 +150,9 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
               value={formData.to}
               onChange={(e) => handleFieldChange('to', e.target.value)}
               onBlur={() => setTouched({ ...touched, to: true })}
-              placeholder="443 or example.com:443"
-              className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${
-                getFieldError('to') ? 'border-red-500/50' : 'border-gray-600'
-              }`}
+              placeholder={selected.defaultTarget}
+              className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${getFieldError('to') ? 'border-red-500/50' : 'border-gray-600'
+                }`}
             />
             {getFieldError('to') && (
               <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
@@ -160,50 +177,45 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
           </div>
 
           {/* Proxy URLs */}
-          <ArrayInput
-            label="Proxy URLs"
-            values={formData.proxy || []}
-            onChange={(values) => handleFieldChange('proxy', values)}
-            placeholder="socks5://10.11.12.22:8999"
-            validation={(value) => {
-              try {
-                const parsed = new URL(value);
-                if (!['socks5:', 'ssh:'].includes(parsed.protocol)) {
-                  return 'Only socks5:// and ssh:// protocols are supported';
+
+          <div className={`animated-container ${canProxy ? 'open' : 'closed'}`}>
+            <ArrayInput
+              label="Proxy URLs"
+              values={formData.proxy || []}
+              onChange={(values) => handleFieldChange('proxy', values)}
+              placeholder="socks5://10.11.12.22:8999"
+              validation={(value) => {
+                try {
+                  const parsed = new URL(value);
+                  if (!['socks5:', 'ssh:'].includes(parsed.protocol)) {
+                    return 'Only socks5:// and ssh:// protocols are supported';
+                  }
+                  return null;
+                } catch {
+                  return 'Invalid URL format';
                 }
-                return null;
-              } catch {
-                return 'Invalid URL format';
-              }
-            }}
-          />
+              }} />
+          </div>
 
           {/* SNI-specific fields */}
-          {showSniFields && (
-            <>
+          <div className={`animated-container ${hasAutoRoute ? 'open' : 'closed'}`}>
+            <div>
               <ArrayInput
                 label="Block List"
                 values={formData.block_list || []}
                 onChange={(values) => handleFieldChange('block_list', values)}
-                placeholder="api.google.com"
-                validation={(value) => {
-                  const domainRegex = /^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-                  return domainRegex.test(value) ? null : 'Invalid domain format';
-                }}
+                placeholder="api.google.com, regexp:^badstart, grep=badend$"
               />
-
+            </div>
+            <div>
               <ArrayInput
                 label="Allow List"
                 values={formData.allow_list || []}
                 onChange={(values) => handleFieldChange('allow_list', values)}
-                placeholder="*.google.com"
-                validation={(value) => {
-                  const domainRegex = /^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-                  return domainRegex.test(value) ? null : 'Invalid domain format';
-                }}
+                placeholder="*.google.com, regexp:^goodstart, grep=goodend$"
               />
-            </>
-          )}
+            </div>
+          </div>
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-700/50">
@@ -218,6 +230,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
             <button
               type="submit"
               disabled={errors.length > 0}
+              onClick={handleSubmit}
               className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:from-pink-600 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-pink-500/25"
             >
               <Save className="w-4 h-4" />
@@ -225,7 +238,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };

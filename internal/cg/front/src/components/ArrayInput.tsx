@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, X } from 'lucide-react';
+import { DragDropList } from './DragDropList';
 
 interface ArrayInputProps {
   label: string;
@@ -14,14 +15,14 @@ export const ArrayInput: React.FC<ArrayInputProps> = ({
   values,
   onChange,
   placeholder = '',
-  validation
+  validation,
 }) => {
   const [newValue, setNewValue] = useState('');
   const [errors, setErrors] = useState<Record<number, string>>({});
 
   const addValue = () => {
     if (!newValue.trim()) return;
-    
+
     const error = validation?.(newValue);
     if (error) {
       setErrors({ ...errors, [-1]: error });
@@ -36,10 +37,15 @@ export const ArrayInput: React.FC<ArrayInputProps> = ({
   const removeValue = (index: number) => {
     const newValues = values.filter((_, i) => i !== index);
     onChange(newValues);
-    
+
     const newErrors = { ...errors };
     delete newErrors[index];
     setErrors(newErrors);
+  };
+
+  const handleReorder = (newValues: { id: string; value: string }[]) => {
+    const reorderedValues = newValues.map((item) => item.value);
+    onChange(reorderedValues);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -52,14 +58,16 @@ export const ArrayInput: React.FC<ArrayInputProps> = ({
   return (
     <div className="space-y-3">
       <label className="block text-sm font-medium text-gray-300">{label}</label>
-      
-      {/* Existing values */}
-      <div className="space-y-2">
-        {values.map((value, index) => (
-          <div key={index} className="flex items-center gap-2">
+
+      {/* Existing values with DragDropList */}
+      <DragDropList<{ id: string; value: string }>
+        items={values.map((value, index) => ({ id: index.toString(), value }))}
+        onReorder={handleReorder}
+        renderItem={(item, index) => (
+          <div className="flex items-center gap-2">
             <input
               type="text"
-              value={value}
+              value={item.value}
               onChange={(e) => {
                 const newValues = [...values];
                 newValues[index] = e.target.value;
@@ -75,8 +83,8 @@ export const ArrayInput: React.FC<ArrayInputProps> = ({
               <X className="w-4 h-4" />
             </button>
           </div>
-        ))}
-      </div>
+        )}
+      />
 
       {/* Add new value */}
       <div className="flex items-center gap-2">
@@ -86,9 +94,8 @@ export const ArrayInput: React.FC<ArrayInputProps> = ({
           onChange={(e) => setNewValue(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder={placeholder}
-          className={`flex-1 px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm transition-all duration-300 ${
-            errors[-1] ? 'border-red-500/50' : 'border-gray-600'
-          }`}
+          className={`flex-1 px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm transition-all duration-300 ${errors[-1] ? 'border-red-500/50' : 'border-gray-600'
+            }`}
         />
         <button
           type="button"
@@ -98,10 +105,8 @@ export const ArrayInput: React.FC<ArrayInputProps> = ({
           <Plus className="w-4 h-4" />
         </button>
       </div>
-      
-      {errors[-1] && (
-        <p className="text-sm text-red-400">{errors[-1]}</p>
-      )}
+
+      {errors[-1] && <p className="text-sm text-red-400">{errors[-1]}</p>}
     </div>
   );
 };

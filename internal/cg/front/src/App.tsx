@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Network, Settings } from 'lucide-react';
 import { NetworkConfig, EntryPoint } from './types/config';
 import { createDefaultEntryPoint } from './utils/config';
@@ -12,7 +12,20 @@ function App() {
   const [config, setConfig] = useState<NetworkConfig>({ entrypoints: [] });
   const [showForm, setShowForm] = useState(false);
   const [editingEntryPoint, setEditingEntryPoint] = useState<EntryPoint | null>(null);
-  const [showJsonPreview, setShowJsonPreview] = useState(false);
+
+  const handleEscape = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      setShowForm(false);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
 
   const handleAddEntryPoint = useCallback(() => {
     setEditingEntryPoint(createDefaultEntryPoint());
@@ -27,7 +40,7 @@ function App() {
   const handleSaveEntryPoint = useCallback((entryPoint: EntryPoint) => {
     setConfig(prevConfig => {
       const existingIndex = prevConfig.entrypoints.findIndex(ep => ep.id === entryPoint.id);
-      
+
       if (existingIndex >= 0) {
         // Update existing
         const newEntrypoints = [...prevConfig.entrypoints];
@@ -38,7 +51,7 @@ function App() {
         return { entrypoints: [...prevConfig.entrypoints, entryPoint] };
       }
     });
-    
+
     setShowForm(false);
     setEditingEntryPoint(null);
   }, []);
@@ -79,21 +92,10 @@ function App() {
                 <p className="text-sm text-gray-400">Manage your network entry points and routing</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <ImportExport config={config} onImport={handleImportConfig} />
-              
-              <button
-                onClick={() => setShowJsonPreview(!showJsonPreview)}
-                className={`inline-flex items-center gap-2 px-4 py-2 border rounded-lg transition-all duration-300 backdrop-blur-sm ${
-                  showJsonPreview 
-                    ? 'bg-gradient-to-r from-pink-500/20 to-purple-600/20 border-pink-500/30 text-pink-300' 
-                    : 'border-gray-600 hover:border-gray-500 text-gray-300 hover:bg-gray-800/50'
-                }`}
-              >
-                <Settings className="w-4 h-4" />
-                {showJsonPreview ? 'Hide' : 'Show'} JSON
-              </button>
+
             </div>
           </div>
         </div>
@@ -101,7 +103,7 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className={`grid gap-8 ${showJsonPreview ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
+        <div className={`grid gap-8 lg:grid-cols-2`}>
           {/* Entry Points Section */}
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -111,7 +113,7 @@ function App() {
                   {config.entrypoints.length} entry point{config.entrypoints.length !== 1 ? 's' : ''} configured
                 </p>
               </div>
-              
+
               <button
                 onClick={handleAddEntryPoint}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:from-pink-600 hover:to-purple-700 rounded-lg transition-all duration-300 shadow-lg hover:shadow-pink-500/25 backdrop-blur-sm"
@@ -150,14 +152,12 @@ function App() {
           </div>
 
           {/* JSON Preview Section */}
-          {showJsonPreview && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold text-white mb-4">Configuration Preview</h2>
-                <JsonPreview config={config} />
-              </div>
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold text-white mb-4">Configuration Preview</h2>
+              <JsonPreview config={config} />
             </div>
-          )}
+          </div>
         </div>
       </main>
 
