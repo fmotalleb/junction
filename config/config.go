@@ -66,7 +66,7 @@ func (e *EntryPoint) Allowed(name string) bool {
 	return true
 }
 
-func (e *EntryPoint) Decode(from, _ reflect.Type, val interface{}) (any, error) {
+func (e *EntryPoint) Decode(from reflect.Type, val interface{}) (any, error) {
 	if from.Kind() != reflect.String {
 		return val, nil
 	}
