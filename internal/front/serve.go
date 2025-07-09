@@ -18,10 +18,10 @@ import (
 //go:generate npm run build
 
 //go:embed dist/*
-var distFs embed.FS
+var distFS embed.FS
 
 func getDist() (fs.FS, error) {
-	return fs.Sub(distFs, "dist")
+	return fs.Sub(distFS, "dist")
 }
 
 func Serve(listen string) error {
