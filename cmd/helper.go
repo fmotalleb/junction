@@ -9,6 +9,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// marshalData serializes the given data into the specified format.
+// Supported formats are "toml" (default), "json", and "yaml".
+// Returns the serialized data as a byte slice or an error if serialization fails.
 func marshalData(data any, format string) ([]byte, error) {
 	switch format {
 	default:
@@ -22,6 +25,8 @@ func marshalData(data any, format string) ([]byte, error) {
 	}
 }
 
+// dumpConf serializes the given configuration into the specified format and prints it to standard output.
+// If no format is provided, TOML is used by default. Returns an error if serialization fails or the format is unsupported.
 func dumpConf(cfg *config.Config, form ...string) error {
 	var err error
 	var result []byte
