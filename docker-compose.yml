@@ -1,6 +1,13 @@
 services:
   junction:
-    image: ghcr.io/fmotalleb/junction:0.6.3-vless
+    image: docker.dornica-co.local/fmotalleb/junction:0.6.4-distroless
+    command:
+      - run
+      - --routing=tcp-raw
+      - --listen=0.0.0.0:443
+      - --target=172.16.17.23:80
+      - --timeout=2s
+      - --debug
     ports:
       - 7892:6980
       - 80:80
@@ -9,9 +16,25 @@ services:
       - ZAPLOG_LEVEL=debug
     env_file:
       - .env
-    networks:
-      custom_net:
-        ipv4_address: 10.10.34.36
+  openvpn:
+    profiles:
+      - "ovpn"
+    image: ghcr.io/fmotalleb/openvpn-client:v0.1.0
+    command: ["-D"]
+    restart: unless-stopped
+    cap_add:
+      - net_admin
+    network_mode: "service:junction"
+    volumes:
+      # text file,
+      #   first line = username
+      #   second line = password
+      #<Username>
+      #<Password>
+      - ./vpn.secret.auth:/vpn/vpn.auth
+      # OpenVpn config file
+      - ./vpn.secret.conf:/vpn/vpn.conf
+
   # dns:
   #   image: fmotalleb/cord-locator:v2.0.11
   #   ports:
@@ -19,36 +42,3 @@ services:
   #   configs:
   #     - source: cord-locator
   #       target: /app/config.yaml
-
-networks:
-  custom_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.10.0.0/16
-
-configs:
-  cord-locator:
-    content: |
-      global:
-        address: ":53"
-        allowTransfer:
-          - "0.0.0.0"
-          - "127.0.0.1"
-          - "::1"
-        defaultProviders: opendns
-
-      providers:
-        - name: opendns
-          ip:
-            - 208.67.222.123:53
-            - 208.67.220.123:53
-      
-      rules:
-        - name: Raw proxy
-          matcher: regex
-          matcherParams:
-            - .
-          raw:
-            A: "{{ .address }} 60	IN	A	10.10.34.36"
-            AAAA: "{{ .address }} 60	IN	AAAA	10.10.34.36"
