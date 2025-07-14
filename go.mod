@@ -13,7 +13,7 @@ require (
 	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/go-viper/mapstructure/v2 v2.3.0
 	github.com/pelletier/go-toml v1.9.5
-	github.com/sagernet/sing-box v1.11.14
+	github.com/sagernet/sing-box v1.11.15
 	github.com/spf13/cast v1.9.2
 	github.com/spf13/cobra v1.9.1
 	go.uber.org/zap v1.27.0
@@ -196,9 +196,9 @@ require (
 	github.com/sagernet/quic-go v0.49.0-beta.1 // indirect
 	github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691 // indirect
 	github.com/sagernet/sing v0.6.11 // indirect
-	github.com/sagernet/sing-dns v0.4.5 // indirect
+	github.com/sagernet/sing-dns v0.4.6 // indirect
 	github.com/sagernet/sing-mux v0.3.2 // indirect
-	github.com/sagernet/sing-quic v0.4.3 // indirect
+	github.com/sagernet/sing-quic v0.4.4 // indirect
 	github.com/sagernet/sing-shadowsocks v0.2.8 // indirect
 	github.com/sagernet/sing-shadowsocks2 v0.2.1 // indirect
 	github.com/sagernet/sing-shadowtls v0.2.0 // indirect
