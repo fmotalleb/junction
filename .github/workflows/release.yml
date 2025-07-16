@@ -30,7 +30,6 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.0.2
         with:
           node-version: 20
-          # cache-dependency-path: **/package-lock.json   # uncomment if you have multiple lockfiles
       - name: Login to GitHub Container Registry
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
