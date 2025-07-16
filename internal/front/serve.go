@@ -43,7 +43,7 @@ func Serve(listen string) error {
 	log := log.Of(ctx)
 	http.Handle("/", http.FileServer(http.FS(dist)))
 
-	log.Info("Server started", zap.String("listen", listen))
+	log.Sugar().Infof("Server started on http://%s", listen)
 
 	server := &http.Server{
 		Addr: listen,

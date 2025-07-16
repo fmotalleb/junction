@@ -54,7 +54,7 @@ export const JsonPreview: React.FC<JsonPreviewProps> = ({ config }) => {
           {/* Status */}
           <div className="flex items-center gap-1">
             <div className="w-2 h-2 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full shadow-lg shadow-emerald-500/50"></div>
-            <span className="text-xs text-gray-400">Valid</span>
+            {/* <span className="text-xs text-gray-400">Valid</span> */}
           </div>
         </div>
       </div>

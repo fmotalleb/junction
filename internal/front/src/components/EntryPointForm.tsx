@@ -73,7 +73,10 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
       { value: 'udp-raw', label: 'UDP Raw', description: 'Raw UDP traffic routing', defaultListener: '127.0.0.1:2053', defaultTarget: '1.1.1.1:53', features: [] }
     ];
 
-  const selected = routingTypes.filter((a) => a.value == formData.routing)[0];
+  const selected = routingTypes.find((a) => a.value === formData.routing);
+  if (!selected) {
+    throw new Error(`Invalid routing type: ${formData.routing}`);
+  }
   const hasAutoRoute = selected.features.includes('auto-routing');
   const canProxy = selected.features.includes('proxy');
 

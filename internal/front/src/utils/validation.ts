@@ -42,18 +42,28 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
 
   return errors;
 };
+const isValidListenAddress = (address: string): boolean => {  
+  const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|localhost|0\.0\.0\.0):(\d{1,5})$/;  
+  const match = address.match(regex);  
+  if (!match) return false;  
 
-const isValidListenAddress = (address: string): boolean => {
-  const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|localhost|0\.0\.0\.0):\d{1,5}$/;
-  return regex.test(address);
-};
+  const port = parseInt(match[2], 10);  
+  return port >= 1 && port <= 65535;  
+};  
 
-const isValidDestination = (destination: string): boolean => {
-  // Port only (e.g., "443") or host:port (e.g., "example.com:443")
-  if (/^\d{1,5}$/.test(destination)) return true;
-  const regex = /^[a-zA-Z0-9.-]+:\d{1,5}$/;
-  return regex.test(destination);
-};
+const isValidDestination = (destination: string): boolean => {  
+  // Port only (e.g., "443") or host:port (e.g., "example.com:443")  
+  if (/^\d{1,5}$/.test(destination)) {  
+    const port = parseInt(destination, 10);  
+    return port >= 1 && port <= 65535;  
+  }  
+  const regex = /^[a-zA-Z0-9.-]+:(\d{1,5})$/;  
+  const match = destination.match(regex);  
+  if (!match) return false;  
+
+  const port = parseInt(match[1], 10);  
+  return port >= 1 && port <= 65535;  
+};  
 
 const isValidTimeout = (timeout: string): boolean => {
   const regex = /^\d+[smh]$/;

@@ -4,7 +4,7 @@ import TOML from "@iarna/toml";
 import { NetworkConfig, EntryPoint } from '../types/config';
 
 export const generateId = (): string => {
-  return Math.random().toString(36).substr(2, 9);
+   return Math.random().toString(36).substring(2, 11); 
 };
 export const createDefaultEntryPoint = (): EntryPoint => ({
   id: generateId(),
