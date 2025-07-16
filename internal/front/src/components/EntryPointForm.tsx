@@ -211,7 +211,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
                 placeholder="api.google.com, regexp:^badstart, grep=badend$"
               />
             </div>
-            <div>
+            <div style={{ marginTop: '1rem' }}>
               <ArrayInput
                 label="Allow List"
                 values={formData.allow_list || []}
