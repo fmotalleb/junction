@@ -8,6 +8,13 @@ import { JsonPreview } from './components/JsonPreview';
 import { ImportExport } from './components/ImportExport';
 import { DragDropList } from './components/DragDropList';
 
+/**
+ * Provides an interactive UI for managing a network configuration with entry points.
+ *
+ * Allows users to add, edit, delete, reorder, import, and export network entry points. Displays a live JSON preview of the current configuration and supports drag-and-drop reordering. The entry point form can be opened for creation or editing and is dismissible via the Escape key.
+ *
+ * @returns The rendered network configuration editor React component.
+ */
 function App() {
   const [config, setConfig] = useState<NetworkConfig>({ entrypoints: [] });
   const [showForm, setShowForm] = useState(false);

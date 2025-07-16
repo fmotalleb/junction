@@ -21,6 +21,12 @@ export const createDefaultEntryPoint = (): EntryPoint => ({
 
 export type ConfigFormat = 'json' | 'yaml' | 'toml';
 
+/**
+ * Returns a plain object representation of an EntryPoint, excluding the `id` property and any properties that are undefined, null, empty strings, or empty arrays.
+ *
+ * @param self - The EntryPoint object to process
+ * @returns An object containing only the non-empty, non-id properties of the EntryPoint
+ */
 function getMap(self: EntryPoint) {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(self)) {
@@ -37,11 +43,24 @@ function getMap(self: EntryPoint) {
   return result;
 }
 
+/**
+ * Converts a `NetworkConfig` object into a plain object with entry points mapped to simplified representations.
+ *
+ * @returns An object containing an array of entry points, each processed to exclude empty or undefined fields except for the `id`.
+ */
 function dumpCfg(cfg: NetworkConfig): any {
   const entrypoints = cfg.entrypoints.map(e => getMap(e));
   return { entrypoints };
 }
 
+/**
+ * Serializes a network configuration into a string in the specified format.
+ *
+ * @param config - The network configuration to serialize
+ * @param format - The output format: 'json', 'yaml', or 'toml' (defaults to 'json')
+ * @returns The serialized configuration as a string in the chosen format
+ * @throws If an unsupported format is specified
+ */
 export function exportConfig(config: NetworkConfig, format: ConfigFormat = 'json'): string {
   const cfg = dumpCfg(config)
   switch (format) {
