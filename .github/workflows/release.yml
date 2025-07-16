@@ -3,13 +3,12 @@ name: release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
-
 
 jobs:
   goreleaser:
@@ -24,14 +23,14 @@ jobs:
 
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: '1.24'
+          go-version: "1.24"
           check-latest: true
       - name: Setup Node.js
         # Pin to the latest v4 commit used at the time of writing
-        uses: actions/setup-node@1e5c05e35c52e3392d0f2958c910260cb9d9fc04 # v4.0.2
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.0.2
         with:
           node-version: 20
-          cache: 'npm'
+          cache: "npm"
           # cache-dependency-path: **/package-lock.json   # uncomment if you have multiple lockfiles
       - name: Login to GitHub Container Registry
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
@@ -41,7 +40,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: |
           go install github.com/goreleaser/goreleaser/v2@latest 
-          goreleaser release 
+          goreleaser release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
