@@ -40,31 +40,6 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
     });
   }
 
-  // Validate block/allow lists for SNI routing
-  if (entryPoint.routing === 'sni') {
-    if (entryPoint.block_list) {
-      entryPoint.block_list.forEach((domain, index) => {
-        if (!isValidDomain(domain)) {
-          errors.push({ 
-            field: `block_list.${index}`, 
-            message: 'Invalid domain format' 
-          });
-        }
-      });
-    }
-
-    if (entryPoint.allow_list) {
-      entryPoint.allow_list.forEach((domain, index) => {
-        if (!isValidDomain(domain)) {
-          errors.push({ 
-            field: `allow_list.${index}`, 
-            message: 'Invalid domain format' 
-          });
-        }
-      });
-    }
-  }
-
   return errors;
 };
 
@@ -92,10 +67,4 @@ const isValidProxyUrl = (url: string): boolean => {
   } catch {
     return false;
   }
-};
-
-const isValidDomain = (domain: string): boolean => {
-  // Support wildcards and regular domains
-  const regex = /^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-  return regex.test(domain);
 };

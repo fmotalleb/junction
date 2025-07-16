@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Network, Settings } from 'lucide-react';
+import { Plus, Network } from 'lucide-react';
 import { NetworkConfig, EntryPoint } from './types/config';
 import { createDefaultEntryPoint } from './utils/config';
 import { EntryPointCard } from './components/EntryPointCard';

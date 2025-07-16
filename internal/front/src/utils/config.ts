@@ -1,9 +1,11 @@
+import YAML from 'yaml';
+
+import TOML from "@iarna/toml";
 import { NetworkConfig, EntryPoint } from '../types/config';
 
 export const generateId = (): string => {
   return Math.random().toString(36).substr(2, 9);
 };
-
 export const createDefaultEntryPoint = (): EntryPoint => ({
   id: generateId(),
   routing: 'sni',
@@ -12,16 +14,47 @@ export const createDefaultEntryPoint = (): EntryPoint => ({
   timeout: '1h',
   block_list: [],
   allow_list: [],
-  proxy: []
+  proxy: [],
+
 });
 
-export const exportConfig = (config: NetworkConfig): string => {
-  const exportData = {
-    entrypoints: config.entrypoints
-      .map(({ id, ...rest }) => rest),
-  };
-  return JSON.stringify(exportData, null, 2);
-};
+
+export type ConfigFormat = 'json' | 'yaml' | 'toml';
+
+function getMap(self: EntryPoint) {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(self)) {
+    if (
+      key !== 'id' &&
+      value !== undefined &&
+      value !== null &&
+      value !== '' &&
+      !(Array.isArray(value) && value.length === 0)
+    ) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function dumpCfg(cfg: NetworkConfig): any {
+  const entrypoints = cfg.entrypoints.map(e => getMap(e));
+  return { entrypoints };
+}
+
+export function exportConfig(config: NetworkConfig, format: ConfigFormat = 'json'): string {
+  const cfg = dumpCfg(config)
+  switch (format) {
+    case 'json':
+      return JSON.stringify(cfg, null, 2);
+    case 'yaml':
+      return YAML.stringify(cfg);
+    case 'toml':
+      return TOML.stringify(cfg);
+    default:
+      throw new Error(`Unsupported format: ${format}`);
+  }
+}
 
 export const importConfig = (jsonString: string): NetworkConfig => {
   try {

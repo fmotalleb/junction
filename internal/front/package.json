@@ -10,11 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@iarna/toml": "^2.2.5",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-beautiful-dnd": "^13.1.1",
     "react-dom": "^18.3.1",
-    "tailwind-scrollbar": "^3.1.0"
+    "tailwind-scrollbar": "^3.1.0",
+    "toml": "^3.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

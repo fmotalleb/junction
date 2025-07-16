@@ -38,15 +38,19 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
     onSave(formData);
   };
 
-  const handleFieldChange = (field: keyof EntryPoint, value: any) => {
-    var old = formData
+  const handleFieldChange = (field: keyof EntryPoint, value: unknown) => {
     if (field === 'routing') {
-      old.listen = "";
-      old.to = "";
-      old.allow_list = undefined;
-      old.block_list = undefined
+      setFormData({
+        ...formData,
+        routing: value as RoutingType,
+        listen: '',
+        to: '',
+        allow_list: undefined,
+        block_list: undefined,
+      });
+    } else {
+        setFormData({ ...formData, [field]: value });
     }
-    setFormData({ ...formData, [field]: value });
     setTouched({ ...touched, [field]: true });
   };
 
