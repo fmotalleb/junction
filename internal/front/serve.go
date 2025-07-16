@@ -20,10 +20,15 @@ import (
 //go:embed dist/*
 var distFS embed.FS
 
+// getDist returns a filesystem rooted at the embedded "dist" directory.
+// It enables access to static files embedded at compile time.
 func getDist() (fs.FS, error) {
 	return fs.Sub(distFS, "dist")
 }
 
+// Serve starts an HTTP server on the specified address, serving embedded static files from the "dist" directory at the root path.
+// The server logs connection state changes and applies one-minute timeouts for read, write, and idle operations.
+// Returns an error if initialization fails or if the server encounters an error while running.
 func Serve(listen string) error {
 	ctx := context.Background()
 	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)

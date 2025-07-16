@@ -23,6 +23,7 @@ var generatorCmd = &cobra.Command{
 	},
 }
 
+// init registers the generatorCmd as a subcommand of rootCmd and defines the "listen" flag for configuring the listen address.
 func init() {
 	rootCmd.AddCommand(generatorCmd)
 	generatorCmd.Flags().StringP("listen", "l", "127.0.0.1:8080", "listen address, use 0.0.0.0:8080 if you want to publish this globally")
