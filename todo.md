@@ -48,3 +48,5 @@
 * [x] Dump config
 * [x] Loose type config parser
 * [x] Include more than one config file
+* [ ] Web GUI to create/manage entrypoint configs
+* [ ] Run proxy in API mode and update config from front

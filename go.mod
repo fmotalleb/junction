@@ -9,7 +9,7 @@ tool (
 )
 
 require (
-	github.com/FMotalleb/go-tools v0.1.26
+	github.com/FMotalleb/go-tools v0.1.28
 	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/go-viper/mapstructure/v2 v2.3.0
 	github.com/pelletier/go-toml v1.9.5
@@ -18,7 +18,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.40.0
-	golang.org/x/net v0.41.0
+	golang.org/x/net v0.42.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

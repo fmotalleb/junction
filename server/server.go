@@ -16,14 +16,14 @@ import (
 )
 
 // Serve starts server components based on the provided configuration, including optional Singbox integration, and waits for all entry points to complete.
-// Returns an error if initialization fails or if all listeners have stopped.
+// Serve starts all configured server entry points and the optional Singbox service, blocking until all listeners have stopped.
+// Returns an error if logger initialization fails or if all listeners exit.
 func Serve(c config.Config) error {
 	wg := new(sync.WaitGroup)
 
 	ctx := context.Background()
 	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)
-	logBuilders := make([]log.BuilderFunc, 0)
-	ctx, err := log.WithNewEnvLogger(ctx, logBuilders...)
+	ctx, err := log.WithNewEnvLogger(ctx)
 	if err != nil {
 		return err
 	}

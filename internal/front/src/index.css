@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.animated-container {
+  transition: max-height 0.3s ease, opacity 0.3s ease, padding-top 0.3s ease, padding-bottom 0.3s ease;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.animated-container.open {
+  max-height: 100%;
+  opacity: 1;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  pointer-events: auto;
+}
+
+.animated-container.closed {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  pointer-events: none; 
+}
