@@ -116,7 +116,7 @@ function App() {
 
               <button
                 onClick={handleAddEntryPoint}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:from-pink-600 hover:to-purple-700 rounded-lg transition-all duration-300 shadow-lg hover:shadow-pink-500/25 backdrop-blur-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:from-pink-600 hover:to-purple-700 rounded-lg transition-all duration-300 shadow-lg hover:shadow-pink-500/25 "
               >
                 <Plus className="w-4 h-4" />
                 Add Entry Point
@@ -124,7 +124,7 @@ function App() {
             </div>
 
             {config.entrypoints.length === 0 ? (
-              <div className="text-center py-12 bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
+              <div className="text-center py-12 bg-gray-800/50  rounded-lg border border-gray-700/50">
                 <Network className="w-12 h-12 text-gray-500 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-white mb-2">No Entry Points</h3>
                 <p className="text-gray-400 mb-6">Get started by adding your first network entry point.</p>

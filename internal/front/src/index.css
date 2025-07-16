@@ -3,34 +3,23 @@
 @tailwind utilities;
 
 .animated-container {
-  overflow: hidden;
-  max-height: 0;
-  /* Collapsed state */
-  opacity: 0;
-  /* Fully transparent when collapsed */
   transition: max-height 0.3s ease, opacity 0.3s ease, padding-top 0.3s ease, padding-bottom 0.3s ease;
-  padding-top: 0;
-  padding-bottom: 0;
-  overflow: visible;
-  /* No padding when collapsed */
+  overflow: hidden;
+  pointer-events: auto;
 }
 
 .animated-container.open {
   max-height: 100%;
-  /* Adjust based on content height */
   opacity: 1;
-  /* Fully opaque when expanded */
   padding-top: 10px;
   padding-bottom: 10px;
-  /* Add padding when expanded */
+  pointer-events: auto;
 }
 
 .animated-container.closed {
   max-height: 0;
-  /* Completely collapsed */
   opacity: 0;
-  /* Fully transparent */
   padding-top: 0;
   padding-bottom: 0;
-  /* No padding */
+  pointer-events: none; 
 }

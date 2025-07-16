@@ -73,7 +73,7 @@ export const ArrayInput: React.FC<ArrayInputProps> = ({
                 newValues[index] = e.target.value;
                 onChange(newValues);
               }}
-              className="flex-1 px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm transition-all duration-300"
+              className="flex-1 px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 text-sm  transition-all duration-300"
             />
             <button
               type="button"
@@ -94,7 +94,7 @@ export const ArrayInput: React.FC<ArrayInputProps> = ({
           onChange={(e) => setNewValue(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder={placeholder}
-          className={`flex-1 px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm transition-all duration-300 ${errors[-1] ? 'border-red-500/50' : 'border-gray-600'
+          className={`flex-1 px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 text-sm  transition-all duration-300 ${errors[-1] ? 'border-red-500/50' : 'border-gray-600'
             }`}
         />
         <button

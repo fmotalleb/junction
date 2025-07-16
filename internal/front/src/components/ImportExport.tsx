@@ -79,7 +79,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({ config, onImport }) 
 
       {/* Import Modal */}
       {isImportModalOpen && renderModal(
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/70  flex items-center justify-center p-4 z-50">
           <div className="bg-gray-800/90 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-700/50 max-w-2xl w-full max-h-[90vh] overflow-auto">
             <div className="p-6 border-b border-gray-700/50">
               <h2 className="text-xl font-semibold text-white">Import Configuration</h2>
@@ -101,7 +101,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({ config, onImport }) 
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 hover:border-gray-500 rounded-lg transition-all duration-300 text-gray-300 hover:bg-gray-700/30 backdrop-blur-sm"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-600 hover:border-gray-500 rounded-lg transition-all duration-300 text-gray-300 hover:bg-gray-700/30 "
                   >
                     <FileText className="w-4 h-4" />
                     Choose File
@@ -135,21 +135,21 @@ export const ImportExport: React.FC<ImportExportProps> = ({ config, onImport }) 
                   }}
                   placeholder="Paste your configuration JSON here..."
                   rows={10}
-                  className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent font-mono text-sm text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${importError ? 'border-red-500/50' : 'border-gray-600'
+                  className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent font-mono text-sm text-white placeholder-gray-400  transition-all duration-300 ${importError ? 'border-red-500/50' : 'border-gray-600'
                     }`}
                 />
               </div>
 
               {/* Status Messages */}
               {importError && (
-                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg backdrop-blur-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg ">
                   <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
                   <span className="text-sm text-red-300">{importError}</span>
                 </div>
               )}
 
               {importSuccess && (
-                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg backdrop-blur-sm">
+                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg ">
                   <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
                   <span className="text-sm text-green-300">Configuration imported successfully!</span>
                 </div>
@@ -163,7 +163,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({ config, onImport }) 
                   setIsImportModalOpen(false);
                   resetImport();
                 }}
-                className="px-4 py-2 text-gray-300 bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-all duration-300 backdrop-blur-sm"
+                className="px-4 py-2 text-gray-300 bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-all duration-300 "
               >
                 Cancel
               </button>

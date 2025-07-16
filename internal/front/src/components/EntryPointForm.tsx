@@ -78,7 +78,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
   const canProxy = selected.features.includes('proxy');
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50
+    <div className="fixed inset-0 bg-black/70  flex items-center justify-center p-4 z-50
   transition-opacity duration-300 ease-out
   opacity-0 animate-fadeIn">
       <div className="overflow-y-auto scrollbar-thin scrollbar-thumb-transparent scrollbar-track-transparent
@@ -99,7 +99,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
               {routingTypes.map((type) => (
                 <label
                   key={type.value}
-                  className={`relative flex items-center p-4 border rounded-lg cursor-pointer transition-all duration-300 backdrop-blur-sm ${formData.routing === type.value
+                  className={`relative flex items-center p-4 border rounded-lg cursor-pointer transition-all duration-300  ${formData.routing === type.value
                     ? 'border-pink-500/50 bg-gradient-to-r from-pink-500/10 to-purple-600/10'
                     : 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/30'
                     }`}
@@ -133,7 +133,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
               onChange={(e) => handleFieldChange('listen', e.target.value)}
               onBlur={() => setTouched({ ...touched, listen: true })}
               placeholder={selected.defaultListener}
-              className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${getFieldError('listen') ? 'border-red-500/50' : 'border-gray-600'
+              className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400  transition-all duration-300 ${getFieldError('listen') ? 'border-red-500/50' : 'border-gray-600'
                 }`}
             />
             {getFieldError('listen') && (
@@ -155,7 +155,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
               onChange={(e) => handleFieldChange('to', e.target.value)}
               onBlur={() => setTouched({ ...touched, to: true })}
               placeholder={selected.defaultTarget}
-              className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300 ${getFieldError('to') ? 'border-red-500/50' : 'border-gray-600'
+              className={`w-full px-3 py-2 bg-gray-700/50 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400  transition-all duration-300 ${getFieldError('to') ? 'border-red-500/50' : 'border-gray-600'
                 }`}
             />
             {getFieldError('to') && (
@@ -176,7 +176,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
               value={formData.timeout || ''}
               onChange={(e) => handleFieldChange('timeout', e.target.value)}
               placeholder="30s, 5m, 1h"
-              className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-300"
+              className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400  transition-all duration-300"
             />
           </div>
 
@@ -226,7 +226,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 text-gray-300 bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-all duration-300 flex items-center gap-2 backdrop-blur-sm"
+              className="px-4 py-2 text-gray-300 bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-all duration-300 flex items-center gap-2 "
             >
               <X className="w-4 h-4" />
               Cancel
