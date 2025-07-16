@@ -1,5 +1,7 @@
 # Junction
 
+[![build](https://github.com/FMotalleb/junction/actions/workflows/build.yml/badge.svg)](https://github.com/FMotalleb/junction/actions/workflows/build.yml) [![release](https://github.com/FMotalleb/junction/actions/workflows/release.yml/badge.svg)](https://github.com/FMotalleb/junction/actions/workflows/release.yml) [![CodeQL](https://github.com/FMotalleb/junction/actions/workflows/codeql.yml/badge.svg)](https://github.com/FMotalleb/junction/actions/workflows/codeql.yml)
+
 **Junction** is a lightweight reverse proxy optimized for efficient TCP and TLS traffic routing. It inspects protocol-level metadata (such as SNI in TLS) to forward encrypted connections to the appropriate backend, without decrypting the traffic. Junction supports both SOCKS5 and SSH proxy protocols (and chaining them), making it ideal for complex egress scenarios where transparent, performant routing is required.
 
 ---
