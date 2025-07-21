@@ -11,7 +11,7 @@ tool (
 require (
 	github.com/FMotalleb/go-tools v0.1.28
 	github.com/alecthomas/assert/v2 v2.11.0
-	github.com/go-viper/mapstructure/v2 v2.3.0
+	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/pelletier/go-toml v1.9.5
 	github.com/sagernet/sing-box v1.11.15
 	github.com/spf13/cast v1.9.2
