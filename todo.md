@@ -31,6 +31,7 @@
 * [ ] Access logging
 * [ ] Monitoring support (for raw protocols)
 * [ ] Hot reload configuration
+* [ ] Interception
 
 ## Performance Enhancements
 
