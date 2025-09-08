@@ -13,7 +13,7 @@ require (
 	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/pelletier/go-toml v1.9.5
-	github.com/sagernet/sing-box v1.12.3
+	github.com/sagernet/sing-box v1.12.4
 	github.com/spf13/cast v1.9.2
 	github.com/spf13/cobra v1.9.1
 	go.uber.org/zap v1.27.0
@@ -215,7 +215,7 @@ require (
 	github.com/sagernet/netlink v0.0.0-20240916134442-83396419aa8b // indirect
 	github.com/sagernet/nftables v0.3.0-beta.4 // indirect
 	github.com/sagernet/quic-go v0.52.0-beta.1 // indirect
-	github.com/sagernet/sing v0.7.6-0.20250815070458-d33ece7a184f // indirect
+	github.com/sagernet/sing v0.7.6-0.20250825114712-2aeec120ce28 // indirect
 	github.com/sagernet/sing-mux v0.3.3 // indirect
 	github.com/sagernet/sing-quic v0.5.0 // indirect
 	github.com/sagernet/sing-shadowsocks v0.2.8 // indirect
@@ -224,7 +224,7 @@ require (
 	github.com/sagernet/sing-tun v0.7.0-beta.1 // indirect
 	github.com/sagernet/sing-vmess v0.2.7 // indirect
 	github.com/sagernet/smux v1.5.34-mod.2 // indirect
-	github.com/sagernet/tailscale v1.80.3-mod.5 // indirect
+	github.com/sagernet/tailscale v1.80.3-sing-box-1.12-mod.1 // indirect
 	github.com/sagernet/wireguard-go v0.0.1-beta.7 // indirect
 	github.com/sagernet/ws v0.0.0-20231204124109-acfe8907c854 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
