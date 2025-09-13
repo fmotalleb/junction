@@ -290,6 +290,7 @@ Use environment variables for dynamic runtime configuration. Below is an example
 VLESS_PROXY=
 HTTP_PORT=80
 SNI_PORT=443
+UDP_BUFFER=65507 # don't change unless you faced buffer size issue
 ```
 
 These variables help configure VLESS proxies and expose specific endpoints for HTTP/HTTPS traffic.
