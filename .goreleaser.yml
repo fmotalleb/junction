@@ -18,7 +18,7 @@ builds:
     goos:
       - darwin
       - linux
-      - windows
+      # - windows
     tags:
       - with_utls
     goarch:
