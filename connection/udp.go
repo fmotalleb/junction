@@ -2,13 +2,12 @@ package connection
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/FMotalleb/go-tools/env"
 	"github.com/FMotalleb/junction/config"
 	"go.uber.org/zap"
 )
@@ -132,11 +131,14 @@ func (m *UDPClientManager) dialTarget() (*net.UDPConn, error) {
 	return targetConn, nil
 }
 
+var bufferSize = sync.OnceValue(
+	func() int { return env.IntOr("UDP_BUFFER", 65507) },
+)
+
 func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UDPClientConn, serverConn *net.UDPConn) {
 	defer client.targetConn.Close()
 
-	// Use a larger initial buffer that can handle most common cases
-	buffer := make([]byte, 65535) // Max UDP packet size
+	buffer := make([]byte, bufferSize())
 	clientKey := client.clientAddr.String()
 
 	for {
@@ -164,9 +166,10 @@ func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UD
 			break
 		}
 
-		// Handle the received data
-		if err := m.forwardResponse(buffer[:n], client, serverConn); err != nil {
-			m.logger.Error("failed to forward response",
+		// Forward response back to client
+		_, err = serverConn.WriteToUDP(buffer[:n], client.clientAddr)
+		if err != nil {
+			m.logger.Error("failed to forward response to client",
 				zap.String("client", clientKey),
 				zap.Error(err))
 			break
@@ -176,106 +179,6 @@ func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UD
 	}
 
 	m.removeClient(clientKey)
-}
-
-func (m *UDPClientManager) forwardResponse(data []byte, client *UDPClientConn, serverConn *net.UDPConn) error {
-	// For very large messages, you might want to implement fragmentation handling
-	// Here's a simple approach that handles sending large UDP packets
-
-	maxUDPSize := 65507 // Maximum UDP payload size
-
-	if len(data) <= maxUDPSize {
-		// Single packet fits within UDP limits
-		_, err := serverConn.WriteToUDP(data, client.clientAddr)
-		return err
-	}
-
-	// Handle large messages by implementing application-level fragmentation
-	// This is a simple example - you might want more sophisticated fragmentation protocol
-	m.logger.Warn("large UDP message detected, implementing simple fragmentation",
-		zap.String("client", client.clientAddr.String()),
-		zap.Int("total_size", len(data)))
-
-	// Split into chunks that fit within UDP limits
-	chunkSize := maxUDPSize - 100 // Leave some room for headers if needed
-	for i := 0; i < len(data); i += chunkSize {
-		end := i + chunkSize
-		if end > len(data) {
-			end = len(data)
-		}
-
-		chunk := data[i:end]
-		_, err := serverConn.WriteToUDP(chunk, client.clientAddr)
-		if err != nil {
-			return fmt.Errorf("failed to send chunk %d: %w", i/chunkSize, err)
-		}
-
-		// Small delay to avoid overwhelming the network
-		time.Sleep(1 * time.Millisecond)
-	}
-
-	return nil
-}
-
-// Alternative: Use a dynamically growing buffer for extremely large messages.
-func (m *UDPClientManager) handleTargetResponsesWithDynamicBuffer(ctx context.Context, client *UDPClientConn, serverConn *net.UDPConn) {
-	defer client.targetConn.Close()
-
-	clientKey := client.clientAddr.String()
-	var reassemblyBuffer []byte
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		// Set read timeout
-		_ = client.targetConn.SetReadDeadline(time.Now().Add(time.Second))
-
-		// Read with a reasonable buffer size
-		buffer := make([]byte, 65535)
-		n, err := client.targetConn.Read(buffer)
-		if err != nil {
-			netErr := new(net.Error)
-			if ok := errors.As(err, netErr); ok && (*netErr).Timeout() {
-				continue
-			}
-			if ctx.Err() != nil {
-				return
-			}
-			m.logger.Error("failed to read from target", zap.String("client", clientKey), zap.Error(err))
-			break
-		}
-
-		// Process the received data
-		reassemblyBuffer = append(reassemblyBuffer, buffer[:n]...)
-
-		// Check if we have a complete message (you'll need to define what constitutes a complete message)
-		if m.isCompleteMessage(reassemblyBuffer) {
-			if err := m.forwardResponse(reassemblyBuffer, client, serverConn); err != nil {
-				m.logger.Error("failed to forward response", zap.String("client", clientKey), zap.Error(err))
-				break
-			}
-			reassemblyBuffer = nil // Reset buffer
-		}
-
-		client.lastSeen = time.Now()
-	}
-
-	m.removeClient(clientKey)
-}
-
-func (m *UDPClientManager) isCompleteMessage(data []byte) bool {
-	// Implement your message completion logic here
-	// This could be based on a specific protocol, message delimiter, length prefix, etc.
-	// For example, if your protocol uses a length prefix:
-	if len(data) >= 4 {
-		expectedLength := binary.BigEndian.Uint32(data[:4])
-		return len(data) >= int(expectedLength)+4
-	}
-	return false
 }
 
 func (m *UDPClientManager) clientCleanupTimer(ctx context.Context, clientKey string) {
