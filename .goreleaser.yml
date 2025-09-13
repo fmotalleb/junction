@@ -16,9 +16,9 @@ builds:
       - "-X github.com/FMotalleb/go-tools/git.Date={{.Date}}"
       - "-X github.com/FMotalleb/go-tools/git.Branch={{.Branch}}"
     goos:
-      # - darwin
+      - darwin
       - linux
-      # - windows
+      - windows
     tags:
       - with_utls
     goarch:
