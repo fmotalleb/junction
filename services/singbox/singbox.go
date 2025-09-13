@@ -37,6 +37,8 @@ func Start(
 		include.InboundRegistry(),
 		include.OutboundRegistry(),
 		include.EndpointRegistry(),
+		include.DNSTransportRegistry(),
+		include.ServiceRegistry(),
 	)
 	opt := &sb.Options{
 		Context: sbCtx,
