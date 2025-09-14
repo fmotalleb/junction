@@ -137,8 +137,8 @@ var bufferSize = sync.OnceValue(
 
 func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UDPClientConn, serverConn *net.UDPConn) {
 	defer client.targetConn.Close()
-
-	buffer := make([]byte, bufferSize())
+	size := bufferSize()
+	buffer := make([]byte, size)
 	clientKey := client.clientAddr.String()
 
 	for {
@@ -162,6 +162,7 @@ func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UD
 			}
 			m.logger.Error("failed to read from target",
 				zap.String("client", clientKey),
+				zap.Int("buffer-size", size),
 				zap.Error(err))
 			break
 		}
