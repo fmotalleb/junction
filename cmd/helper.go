@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/FMotalleb/junction/config"
+	"github.com/fmotalleb/junction/config"
 	"github.com/pelletier/go-toml"
 	"gopkg.in/yaml.v3"
 )

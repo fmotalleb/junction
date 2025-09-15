@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/FMotalleb/go-tools/config"
-	"github.com/FMotalleb/go-tools/decoder"
-	"github.com/FMotalleb/go-tools/log"
+	"github.com/fmotalleb/go-tools/config"
+	"github.com/fmotalleb/go-tools/decoder"
+	"github.com/fmotalleb/go-tools/log"
 	"go.uber.org/zap/zapcore"
 )
 

@@ -4,8 +4,8 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"github.com/FMotalleb/go-tools/log"
-	"github.com/FMotalleb/junction/internal/front"
+	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/junction/internal/front"
 	"github.com/spf13/cobra"
 )
 

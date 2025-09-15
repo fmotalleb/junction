@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/server"
+	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/server"
 	"github.com/spf13/cobra"
 )
 

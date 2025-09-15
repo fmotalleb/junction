@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/FMotalleb/go-tools/env"
-	"github.com/FMotalleb/go-tools/log"
+	"github.com/fmotalleb/go-tools/env"
+	"github.com/fmotalleb/go-tools/log"
 	sb "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/include"
 	"github.com/sagernet/sing-box/option"

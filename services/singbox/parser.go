@@ -3,7 +3,7 @@ package singbox
 import (
 	"net/url"
 
-	"github.com/FMotalleb/go-tools/builder"
+	"github.com/fmotalleb/go-tools/builder"
 	"github.com/spf13/cast"
 )
 

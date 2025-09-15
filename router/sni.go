@@ -4,9 +4,9 @@ import (
 	"context"
 	"net"
 
-	"github.com/FMotalleb/go-tools/log"
-	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/crypto/tls"
+	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/crypto/tls"
 	"go.uber.org/zap"
 )
 

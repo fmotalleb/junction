@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/FMotalleb/go-tools/env"
-	"github.com/FMotalleb/junction/config"
+	"github.com/fmotalleb/go-tools/env"
+	"github.com/fmotalleb/junction/config"
 	"go.uber.org/zap"
 )
 

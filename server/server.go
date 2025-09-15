@@ -7,11 +7,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/FMotalleb/go-tools/log"
-	"github.com/FMotalleb/go-tools/sysctx"
-	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/router"
-	"github.com/FMotalleb/junction/services/singbox"
+	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/go-tools/sysctx"
+	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/router"
+	"github.com/fmotalleb/junction/services/singbox"
 	"go.uber.org/zap"
 )
 

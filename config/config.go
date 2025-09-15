@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/FMotalleb/go-tools/env"
-	"github.com/FMotalleb/go-tools/matcher"
+	"github.com/fmotalleb/go-tools/env"
+	"github.com/fmotalleb/go-tools/matcher"
 )
 
 type Config struct {

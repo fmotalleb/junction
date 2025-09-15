@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/proxy"
-	"github.com/FMotalleb/junction/utils"
+	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/proxy"
+	"github.com/fmotalleb/junction/utils"
 	"go.uber.org/zap"
 )
 

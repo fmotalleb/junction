@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/FMotalleb/go-tools/log"
-	"github.com/FMotalleb/go-tools/sysctx"
+	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/go-tools/sysctx"
 	"go.uber.org/zap"
 )
 

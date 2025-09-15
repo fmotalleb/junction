@@ -11,10 +11,10 @@ builds:
     ldflags:
       - "-s"
       - "-w"
-      - "-X github.com/FMotalleb/go-tools/git.Version={{.Version}}"
-      - "-X github.com/FMotalleb/go-tools/git.Commit={{.ShortCommit}}"
-      - "-X github.com/FMotalleb/go-tools/git.Date={{.Date}}"
-      - "-X github.com/FMotalleb/go-tools/git.Branch={{.Branch}}"
+      - "-X github.com/fmotalleb/go-tools/git.Version={{.Version}}"
+      - "-X github.com/fmotalleb/go-tools/git.Commit={{.ShortCommit}}"
+      - "-X github.com/fmotalleb/go-tools/git.Date={{.Date}}"
+      - "-X github.com/fmotalleb/go-tools/git.Branch={{.Branch}}"
     goos:
       - darwin
       - linux
@@ -32,10 +32,10 @@ builds:
     ldflags:
       - "-s"
       - "-w"
-      - "-X github.com/FMotalleb/go-tools/git.Version={{.Version}}"
-      - "-X github.com/FMotalleb/go-tools/git.Commit={{.ShortCommit}}"
-      - "-X github.com/FMotalleb/go-tools/git.Date={{.Date}}"
-      - "-X github.com/FMotalleb/go-tools/git.Branch={{.Branch}}"
+      - "-X github.com/fmotalleb/go-tools/git.Version={{.Version}}"
+      - "-X github.com/fmotalleb/go-tools/git.Commit={{.ShortCommit}}"
+      - "-X github.com/fmotalleb/go-tools/git.Date={{.Date}}"
+      - "-X github.com/fmotalleb/go-tools/git.Branch={{.Branch}}"
     goos:
       - linux
     goarch:

@@ -20,10 +20,10 @@ package cmd
 import (
 	"os"
 
-	"github.com/FMotalleb/go-tools/git"
-	"github.com/FMotalleb/go-tools/log"
-	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/server"
+	"github.com/fmotalleb/go-tools/git"
+	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/server"
 	"github.com/spf13/cobra"
 )
 

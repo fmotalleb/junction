@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/FMotalleb/junction/crypto/tls"
 	"github.com/alecthomas/assert/v2"
+	"github.com/fmotalleb/junction/crypto/tls"
 )
 
 //go:embed testdata/sni/*

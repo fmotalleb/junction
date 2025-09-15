@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net"
 
-	"github.com/FMotalleb/go-tools/log"
-	"github.com/FMotalleb/junction/config"
+	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/junction/config"
 	"go.uber.org/zap"
 )
 

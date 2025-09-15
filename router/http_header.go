@@ -9,9 +9,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/FMotalleb/go-tools/log"
-	"github.com/FMotalleb/junction/config"
-	"github.com/FMotalleb/junction/proxy"
+	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/proxy"
 	"go.uber.org/zap"
 )
 

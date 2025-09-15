@@ -6,7 +6,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/FMotalleb/junction/config"
+	"github.com/fmotalleb/junction/config"
 	"github.com/spf13/cobra"
 )
 
