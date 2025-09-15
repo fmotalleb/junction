@@ -57,9 +57,7 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) error {
 				return nil
 			}
 			logger.Error("failed to read UDP packet", zap.Error(err))
-			if len(buffer) == 0 {
-				continue
-			}
+			continue
 		}
 
 		go clientManager.HandlePacket(clientAddr, buffer[:n], conn)
