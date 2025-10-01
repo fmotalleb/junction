@@ -155,7 +155,7 @@ junction run --listen 8443 \
   ```toml
   include = [
     "./*.toml",
-    "http://kamand-pwa.dornicademo.ir/config.toml",
+    "http://remote-server.com/config.toml",
   ]
   ```
 
