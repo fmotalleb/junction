@@ -13,7 +13,7 @@ require (
 	github.com/fmotalleb/go-tools v0.1.53
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/pelletier/go-toml v1.9.5
-	github.com/sagernet/sing-box v1.12.8
+	github.com/sagernet/sing-box v1.12.9
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/cobra v1.10.1
 	go.uber.org/zap v1.27.0
@@ -50,7 +50,7 @@ require (
 	github.com/alingse/asasalint v0.0.11 // indirect
 	github.com/alingse/nilnesserr v0.1.2 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
-	github.com/anytls/sing-anytls v0.0.8 // indirect
+	github.com/anytls/sing-anytls v0.0.11 // indirect
 	github.com/ashanbrown/forbidigo v1.6.0 // indirect
 	github.com/ashanbrown/makezero v1.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -219,8 +219,8 @@ require (
 	github.com/sagernet/gvisor v0.0.0-20250325023245-7a9c0f5725fb // indirect
 	github.com/sagernet/netlink v0.0.0-20240916134442-83396419aa8b // indirect
 	github.com/sagernet/nftables v0.3.0-beta.4 // indirect
-	github.com/sagernet/quic-go v0.52.0-beta.1 // indirect
-	github.com/sagernet/sing v0.7.10 // indirect
+	github.com/sagernet/quic-go v0.52.0-sing-box-mod.2 // indirect
+	github.com/sagernet/sing v0.7.12 // indirect
 	github.com/sagernet/sing-mux v0.3.3 // indirect
 	github.com/sagernet/sing-quic v0.5.2-0.20250909083218-00a55617c0fb // indirect
 	github.com/sagernet/sing-shadowsocks v0.2.8 // indirect
