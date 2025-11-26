@@ -16,7 +16,7 @@ require (
 	github.com/sagernet/sing-box v1.12.12
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/cobra v1.10.1
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.27.1
 	golang.org/x/crypto v0.45.0
 	golang.org/x/net v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
