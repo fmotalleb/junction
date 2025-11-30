@@ -34,9 +34,10 @@ type EntryPoint struct {
 }
 
 type FakeDNS struct {
-	Listen     *netip.AddrPort `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
-	ReturnAddr *netip.Addr     `mapstructure:"answer,omitempty" toml:"answer,omitempty" yaml:"answer,omitempty" json:"answer,omitempty"`
-	Forwarder  *netip.AddrPort `mapstructure:"forwarder,omitempty" toml:"forwarder,omitempty" yaml:"forwarder,omitempty" json:"forwarder,omitempty"`
+	Listen     *netip.AddrPort   `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
+	ReturnAddr *netip.Addr       `mapstructure:"answer,omitempty" toml:"answer,omitempty" yaml:"answer,omitempty" json:"answer,omitempty"`
+	Forwarder  *netip.AddrPort   `mapstructure:"forwarder,omitempty" toml:"forwarder,omitempty" yaml:"forwarder,omitempty" json:"forwarder,omitempty"`
+	Allowed    []matcher.Matcher `mapstructure:"allowed,omitempty" toml:"allowed,omitempty" yaml:"allowed,omitempty" json:"allowed,omitempty"`
 }
 
 func (e *EntryPoint) IsDirect() bool {

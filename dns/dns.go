@@ -3,8 +3,10 @@ package dns
 import (
 	"context"
 	"net"
+	"strings"
 
 	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/go-tools/matcher"
 	"github.com/fmotalleb/junction/config"
 	"github.com/miekg/dns"
 	"go.uber.org/zap"
@@ -14,6 +16,7 @@ type handler struct {
 	logger    *zap.Logger
 	answer    string // IP to return
 	forwarder string // upstream DNS (e.g., "8.8.8.8:53")
+	allowList []matcher.Matcher
 }
 
 func Serve(ctx context.Context, cfg *config.FakeDNS) error {
@@ -30,6 +33,7 @@ func Serve(ctx context.Context, cfg *config.FakeDNS) error {
 		logger:    logger,
 		answer:    ans,       // e.g., "10.0.0.1"
 		forwarder: forwarder, // e.g., "1.1.1.1:53"
+		allowList: cfg.Allowed,
 	}
 	listenAddr := "0.0.0.0:53"
 	if cfg.Listen != nil {
@@ -51,6 +55,19 @@ func Serve(ctx context.Context, cfg *config.FakeDNS) error {
 	return dns.ActivateAndServe(nil, l, h)
 }
 
+func (h *handler) IsAllowed(question string) bool {
+	if len(h.allowList) == 0 {
+		return true
+	}
+	q := strings.TrimRight(question, ".")
+	for _, m := range h.allowList {
+		if m.Match(q) {
+			return true
+		}
+	}
+	return false
+}
+
 // ServeDNS implements dns.Handler.
 func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	msg := new(dns.Msg)
@@ -64,9 +81,13 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	q := r.Question[0]
-	logger := h.logger.WithLazy(zap.String("question", q.String()))
+	logger := h.logger.WithLazy(
+		zap.String("name", q.Name),
+		zap.Uint16("class", q.Qclass),
+		zap.Uint16("type", q.Qtype),
+	)
 	// Always respond with your answer for A requests
-	if q.Qtype == dns.TypeA {
+	if q.Qtype == dns.TypeA && h.IsAllowed(q.Name) {
 		rr := &dns.A{
 			Hdr: dns.RR_Header{
 				Name:   q.Name,
