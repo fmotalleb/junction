@@ -12,12 +12,12 @@ import (
 )
 
 func init() {
-	hooks.RegisterHook(StringToNetAddrPortSanitizerHook())
-	hooks.RegisterHook(StringToNetAddrSanitizerHook())
+	hooks.RegisterHook(StringToNetAddrPortHook())
+	hooks.RegisterHook(StringToNetAddrHook())
 	hooks.RegisterHook(IntToNetAddrPortHook())
 }
 
-func StringToNetAddrPortSanitizerHook() mapstructure.DecodeHookFunc {
+func StringToNetAddrPortHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
 			return val, nil
@@ -52,7 +52,7 @@ func StringToNetAddrPortSanitizerHook() mapstructure.DecodeHookFunc {
 	}
 }
 
-func StringToNetAddrSanitizerHook() mapstructure.DecodeHookFunc {
+func StringToNetAddrHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
 			return val, nil
