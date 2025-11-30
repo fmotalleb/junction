@@ -19,7 +19,7 @@ type Config struct {
 }
 
 type CoreCfg struct {
-	FakeDNS    FakeDNS        `mapstructure:"fake_dns" toml:"fake_dns,omitempty" yaml:"fake_dns,omitempty" json:"fake_dns,omitempty"`
+	FakeDNS    *FakeDNS       `mapstructure:"fake_dns" toml:"fake_dns,omitempty" yaml:"fake_dns,omitempty" json:"fake_dns,omitempty"`
 	SingboxCfg map[string]any `mapstructure:"singbox,omitempty" toml:"singbox,omitempty" yaml:"singbox,omitempty" json:"singbox,omitempty"`
 }
 
@@ -32,10 +32,11 @@ type EntryPoint struct {
 	Target    string             `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
 	Timeout   time.Duration      `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
-type FakeDNS struct {
-	Listen netip.AddrPort `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
 
-	ReturnAddr netip.Addr
+type FakeDNS struct {
+	Listen     *netip.AddrPort `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
+	ReturnAddr *netip.Addr     `mapstructure:"answer,omitempty" toml:"answer,omitempty" yaml:"answer,omitempty" json:"answer,omitempty"`
+	Forwarder  *netip.AddrPort `mapstructure:"forwarder,omitempty" toml:"forwarder,omitempty" yaml:"forwarder,omitempty" json:"forwarder,omitempty"`
 }
 
 func (e *EntryPoint) IsDirect() bool {
@@ -114,5 +115,33 @@ func (e *EntryPoint) Decode(from reflect.Type, val interface{}) (any, error) {
 		return val, errors.New("there are more than allowed separator (;) in config string")
 	}
 
+	return result, nil
+}
+
+func (e *FakeDNS) Decode(from reflect.Type, val interface{}) (any, error) {
+	if from.Kind() != reflect.String {
+		return val, nil
+	}
+
+	raw, ok := val.(string)
+	if !ok {
+		return val, errors.New("expected string value for dns object")
+	}
+
+	parts := strings.SplitN(raw, ";", 3)
+
+	result := make(map[string]any, 3)
+
+	switch len(parts) {
+	case 3:
+		result["listen"] = strings.TrimSpace(parts[0])
+		result["answer"] = strings.TrimSpace(parts[1])
+		result["forwarder"] = strings.TrimSpace(parts[2])
+	case 2:
+		result["listen"] = strings.TrimSpace(parts[0])
+		result["answer"] = strings.TrimSpace(parts[1])
+	case 1:
+		result["answer"] = strings.TrimSpace(parts[0])
+	}
 	return result, nil
 }

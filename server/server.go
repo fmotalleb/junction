@@ -10,6 +10,7 @@ import (
 	"github.com/fmotalleb/go-tools/log"
 	"github.com/fmotalleb/go-tools/sysctx"
 	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/dns"
 	"github.com/fmotalleb/junction/router"
 	"github.com/fmotalleb/junction/services/singbox"
 	"github.com/sethvargo/go-retry"
@@ -25,11 +26,15 @@ func Serve(c config.Config) error {
 	ctx := context.Background()
 	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)
 	ctx, err := log.WithNewEnvLogger(ctx)
+	dns.Serve(ctx, c.Core.FakeDNS)
 	if err != nil {
 		return err
 	}
 	if len(c.Core.SingboxCfg) != 0 {
 		go runSingbox(ctx, c.Core.SingboxCfg)
+	}
+	if c.Core.FakeDNS != nil {
+		go dns.Serve(ctx, c.Core.FakeDNS)
 	}
 	for _, e := range c.EntryPoints {
 		wg.Add(1)
