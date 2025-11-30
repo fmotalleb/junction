@@ -12,6 +12,7 @@ import (
 	sb "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/include"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sethvargo/go-retry"
 	"go.uber.org/zap"
 )
 
@@ -68,11 +69,9 @@ func Start(
 			err,
 		)
 	}
+
 	if err = box.Start(); err != nil {
-		return errors.Join(
-			errors.New("failed to start singbox instance"),
-			err,
-		)
+		return retry.RetryableError(err)
 	}
 
 	// Wait for context cancellation to shutdown gracefully

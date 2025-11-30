@@ -12,6 +12,7 @@ import (
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/router"
 	"github.com/fmotalleb/junction/services/singbox"
+	"github.com/sethvargo/go-retry"
 	"go.uber.org/zap"
 )
 
@@ -42,18 +43,17 @@ func Serve(c config.Config) error {
 // Returns an error if Singbox fails to start.
 func runSingbox(ctx context.Context, cfg map[string]any) {
 	l := log.Of(ctx)
-	maxTry := 50
-	tryCount := 0
-	for tryCount < maxTry {
+
+	b := BuildBackoff()
+	err := retry.Do(ctx, b, func(ctx context.Context) error {
 		err := singbox.Start(ctx, cfg)
 		if err != nil {
-			tryCount++
-			go func() {
-				<-time.After(time.Second)
-				tryCount = 0
-			}()
-			l.Error("singbox error", zap.Error(err))
+			l.Error("singbox crashed", zap.Error(err))
 		}
+		return err
+	})
+	if err != nil {
+		l.Panic("singbox had unrecoverable crash", zap.Error(err))
 	}
 }
 
@@ -72,4 +72,10 @@ func handleEntry(ctx context.Context, e config.EntryPoint, wg *sync.WaitGroup) {
 			)
 		return
 	}
+}
+
+func BuildBackoff() retry.Backoff {
+	backoff := retry.NewExponential(time.Second)
+	backoff = retry.WithCappedDuration(time.Second*16, backoff)
+	return backoff
 }
