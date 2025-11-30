@@ -12,11 +12,12 @@ import (
 )
 
 func init() {
-	hooks.RegisterHook(StringToIPSanitizerHook())
-	hooks.RegisterHook(IntToIPHook())
+	hooks.RegisterHook(StringToNetAddrPortSanitizerHook())
+	hooks.RegisterHook(StringToNetAddrSanitizerHook())
+	hooks.RegisterHook(IntToNetAddrPortHook())
 }
 
-func StringToIPSanitizerHook() mapstructure.DecodeHookFunc {
+func StringToNetAddrPortSanitizerHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
 			return val, nil
@@ -51,7 +52,29 @@ func StringToIPSanitizerHook() mapstructure.DecodeHookFunc {
 	}
 }
 
-func IntToIPHook() mapstructure.DecodeHookFunc {
+func StringToNetAddrSanitizerHook() mapstructure.DecodeHookFunc {
+	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
+		if f.Kind() != reflect.String {
+			return val, nil
+		}
+		if t != reflect.TypeOf(netip.Addr{}) {
+			return val, nil
+		}
+		if str, ok := val.(string); ok {
+			if str == "" {
+				return netip.Addr{}, nil
+			}
+			addr, err := netip.ParseAddr(str)
+			if err != nil {
+				return nil, err
+			}
+			return addr, nil
+		}
+		return val, errors.New("expected string value for netip.Addr")
+	}
+}
+
+func IntToNetAddrPortHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		switch f.Kind() {
 		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
