@@ -20,7 +20,7 @@ func init() {
 }
 
 // StringToNetAddrPortHook returns a mapstructure.DecodeHookFunc that converts string values into netip.AddrPort.
-// 
+//
 // The hook accepts either "host:port" or "port". If only a port is provided, the host defaults to "127.0.0.1".
 // An empty string yields the zero netip.AddrPort. If the input is not a string, the hook returns an error;
 // if the string cannot be parsed as an address:port, the hook returns the parsing error.
