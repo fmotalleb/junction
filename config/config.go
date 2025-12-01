@@ -36,9 +36,14 @@ type EntryPoint struct {
 
 type FakeDNS struct {
 	Listen     *netip.AddrPort   `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
-	ReturnAddr *net.IP           `mapstructure:"answer,omitempty" toml:"answer,omitempty" yaml:"answer,omitempty" json:"answer,omitempty"`
+	ReturnAddr []*DNSResult      `mapstructure:"answer,omitempty" toml:"answer,omitempty" yaml:"answer,omitempty" json:"answer,omitempty"`
 	Forwarder  *netip.AddrPort   `mapstructure:"forwarder,omitempty" toml:"forwarder,omitempty" yaml:"forwarder,omitempty" json:"forwarder,omitempty"`
 	Allowed    []matcher.Matcher `mapstructure:"allowed,omitempty" toml:"allowed,omitempty" yaml:"allowed,omitempty" json:"allowed,omitempty"`
+}
+
+type DNSResult struct {
+	From   []*net.IPNet `mapstructure:"from,omitempty" toml:"from,omitempty" yaml:"from,omitempty" json:"from,omitempty"`
+	Result *net.IP      `mapstructure:"answer,omitempty" toml:"answer,omitempty" yaml:"answer,omitempty" json:"answer,omitempty"`
 }
 
 func (e *EntryPoint) IsDirect() bool {
@@ -146,4 +151,27 @@ func (e *FakeDNS) Decode(from reflect.Type, val interface{}) (any, error) {
 		result["answer"] = strings.TrimSpace(parts[0])
 	}
 	return result, nil
+}
+
+func (e *DNSResult) Decode(from reflect.Type, val interface{}) (any, error) {
+	if from.Kind() != reflect.String {
+		return val, nil
+	}
+	zeroMask := &net.IPNet{
+		IP:   net.IPv4(0, 0, 0, 0),
+		Mask: net.CIDRMask(0, 0), // /0 mask
+	}
+	e.From = make([]*net.IPNet, 1)
+	e.From[0] = zeroMask
+
+	switch val := val.(type) {
+	case string:
+		ans := net.ParseIP(val)
+		if ans == nil {
+			return nil, errors.New("failed to parse input string to ip")
+		}
+		e.Result = &ans
+		return e, nil
+	}
+	return val, nil
 }

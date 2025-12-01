@@ -14,6 +14,15 @@ allowed = [                             # Allowed domain patterns for fake DNS
   "regex:allowed\\.domain.+",           # Regex pattern
 ]
 
+# [[core.fake_dns.answer]]
+# answer = "127.0.0.1"
+# from = "127.0.0.1/24"
+
+# [[core.fake_dns.answer]]
+# answer = "192.168.1.15"
+# from = "192.168.1.0/24"
+
+
 # SNI-based routing example
 [[entrypoints]]
 routing = "sni"                         # Uses SNI to detect target hostname
