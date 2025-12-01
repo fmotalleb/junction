@@ -157,6 +157,10 @@ func (e *DNSResult) Decode(from reflect.Type, val interface{}) (any, error) {
 	if from.Kind() != reflect.String {
 		return val, nil
 	}
+	raw, ok := val.(string)
+	if !ok {
+		return val, nil
+	}
 	zeroMask := &net.IPNet{
 		IP:   net.IPv4(0, 0, 0, 0),
 		Mask: net.CIDRMask(0, 32), // /0 mask
@@ -164,14 +168,10 @@ func (e *DNSResult) Decode(from reflect.Type, val interface{}) (any, error) {
 	e.From = make([]*net.IPNet, 1)
 	e.From[0] = zeroMask
 
-	if val, ok := val.(string); ok {
-		ans := net.ParseIP(val)
-		if ans == nil {
-			return nil, errors.New("failed to parse input string to ip")
-		}
-		e.Result = &ans
-		return e, nil
+	ans := net.ParseIP(raw)
+	if ans == nil {
+		return nil, errors.New("failed to parse input string to ip")
 	}
-
-	return val, nil
+	e.Result = &ans
+	return e, nil
 }
