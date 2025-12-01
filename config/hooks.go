@@ -107,7 +107,7 @@ func IntToNetAddrPortHook() mapstructure.DecodeHookFunc {
 }
 
 func StringToCIDRHook() mapstructure.DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
+	return func(f reflect.Type, _ reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
 			return val, nil
 		}

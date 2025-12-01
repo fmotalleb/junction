@@ -164,8 +164,7 @@ func (e *DNSResult) Decode(from reflect.Type, val interface{}) (any, error) {
 	e.From = make([]*net.IPNet, 1)
 	e.From[0] = zeroMask
 
-	switch val := val.(type) {
-	case string:
+	if val, ok := val.(string); ok {
 		ans := net.ParseIP(val)
 		if ans == nil {
 			return nil, errors.New("failed to parse input string to ip")
@@ -173,5 +172,6 @@ func (e *DNSResult) Decode(from reflect.Type, val interface{}) (any, error) {
 		e.Result = &ans
 		return e, nil
 	}
+
 	return val, nil
 }
