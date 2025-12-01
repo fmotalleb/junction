@@ -51,6 +51,9 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 
 	resolvers := make([]resolver, len(cfg.ReturnAddr))
 	for index, e := range cfg.ReturnAddr {
+		if e.Result == nil {
+			return fmt.Errorf("fake DNS answer entry %d has no result IP configured", index)
+		}
 		ranger := cidranger.NewPCTrieRanger()
 		for _, r := range e.From {
 			err := ranger.Insert(
@@ -118,8 +121,12 @@ func (h *handler) logger() *zap.Logger {
 }
 
 func (h *handler) findAnswer(a net.Addr) net.IP {
-	src := net.ParseIP(strings.Split(a.String(), ":")[0])
-	fmt.Println(a.String())
+	host, _, err := net.SplitHostPort(a.String())
+	if err != nil {
+		h.logger().Error("failed to parse remote address", zap.String("addr", a.String()), zap.Error(err))
+		return nil
+	}
+	src := net.ParseIP(host)
 	for _, r := range h.resolvers {
 		if ok, err := r.ranger.Contains(src); ok {
 			return r.answer
