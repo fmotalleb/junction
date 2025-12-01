@@ -6,9 +6,9 @@
 * [x] HTTP support
 * [x] TCP (with predefined targets)
 * [x] UDP support
-* [ ] DNS (basic UDP-based server): (currently use singbox)
-  * [ ] Fake DNS response generation
-  * [ ] DNS request forwarding (requires request filtering to be effective)
+* [x] DNS (basic UDP-based server):
+  * [x] Fake DNS response generation
+  * [x] DNS request forwarding (requires request filtering to be effective)
   * [ ] DNS over HTTPS (DoH) spoofing
   * [ ] DoH request forwarding
 

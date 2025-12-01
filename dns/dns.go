@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -13,13 +14,20 @@ import (
 	"github.com/miekg/dns"
 	"github.com/sethvargo/go-retry"
 	"go.uber.org/zap"
+
+	"github.com/yl2chen/cidranger"
 )
 
 type handler struct {
-	answer    net.IP // IP to return
-	forwarder string // upstream DNS (e.g., "8.8.8.8:53")
+	resolvers []resolver // IP to return
+	forwarder string     // upstream DNS (e.g., "8.8.8.8:53")
 	allowList []matcher.Matcher
 	ctx       context.Context
+}
+
+type resolver struct {
+	ranger cidranger.Ranger
+	answer net.IP
 }
 
 // Serve starts and runs a fake DNS server based on the provided configuration.
@@ -31,17 +39,40 @@ type handler struct {
 func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	logger := log.Of(ctx).Named("DNS")
 	sCtx := log.WithLogger(ctx, logger)
-	if cfg.ReturnAddr == nil {
+
+	if len(cfg.ReturnAddr) == 0 {
 		return errors.New("fake DNS requires a return address (answer) to be configured")
 	}
+
 	forwarder := ""
 	if cfg.Forwarder != nil {
 		forwarder = cfg.Forwarder.String()
 	}
+
+	resolvers := make([]resolver, len(cfg.ReturnAddr))
+	for index, e := range cfg.ReturnAddr {
+		if e.Result == nil {
+			return fmt.Errorf("fake DNS answer entry %d has no result IP configured", index)
+		}
+		ranger := cidranger.NewPCTrieRanger()
+		for _, r := range e.From {
+			err := ranger.Insert(
+				cidranger.NewBasicRangerEntry(*r),
+			)
+			if err != nil {
+				return err
+			}
+		}
+		resolvers[index] = resolver{
+			ranger: ranger,
+			answer: *e.Result,
+		}
+	}
+
 	h := &handler{
 		ctx:       sCtx,
-		answer:    *cfg.ReturnAddr, // e.g., "10.0.0.1"
-		forwarder: forwarder,       // e.g., "1.1.1.1:53"
+		resolvers: resolvers, // e.g., "10.0.0.1"
+		forwarder: forwarder, // e.g., "1.1.1.1:53"
 		allowList: cfg.Allowed,
 	}
 	listenAddr := "0.0.0.0:53"
@@ -89,6 +120,23 @@ func (h *handler) logger() *zap.Logger {
 	return log.Of(h.ctx)
 }
 
+func (h *handler) findAnswer(a net.Addr) net.IP {
+	host, _, err := net.SplitHostPort(a.String())
+	if err != nil {
+		h.logger().Error("failed to parse remote address", zap.String("addr", a.String()), zap.Error(err))
+		return nil
+	}
+	src := net.ParseIP(host)
+	for _, r := range h.resolvers {
+		if ok, err := r.ranger.Contains(src); ok {
+			return r.answer
+		} else if err != nil {
+			h.logger().Error("error happened trying to match ip with ranger", zap.Error(err))
+		}
+	}
+	return nil
+}
+
 // ServeDNS implements dns.Handler.
 func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	msg := new(dns.Msg)
@@ -116,7 +164,7 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 				Class:  dns.ClassINET,
 				Ttl:    10,
 			},
-			A: h.answer,
+			A: h.findAnswer(w.RemoteAddr()),
 		}
 		msg.Answer = append(msg.Answer, rr)
 		if err := w.WriteMsg(msg); err != nil {

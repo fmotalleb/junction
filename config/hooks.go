@@ -17,6 +17,7 @@ func init() {
 	hooks.RegisterHook(StringToNetAddrPortHook())
 	hooks.RegisterHook(StringToNetAddrHook())
 	hooks.RegisterHook(IntToNetAddrPortHook())
+	hooks.RegisterHook(StringToCIDRHook())
 }
 
 // StringToNetAddrPortHook returns a mapstructure.DecodeHookFunc that converts string values into netip.AddrPort.
@@ -102,5 +103,24 @@ func IntToNetAddrPortHook() mapstructure.DecodeHookFunc {
 			return nil, err
 		}
 		return addrPort, nil
+	}
+}
+
+func StringToCIDRHook() mapstructure.DecodeHookFunc {
+	return func(f reflect.Type, _ reflect.Type, val interface{}) (interface{}, error) {
+		if f.Kind() != reflect.String {
+			return val, nil
+		}
+		if str, ok := val.(string); ok {
+			if str == "" {
+				return nil, nil
+			}
+			_, addr, err := net.ParseCIDR(str)
+			if err != nil {
+				return nil, err
+			}
+			return *addr, nil
+		}
+		return val, nil
 	}
 }

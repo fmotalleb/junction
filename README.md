@@ -23,6 +23,10 @@
 - 🐳 **Dockerized Deployment**  
    Includes a ready-to-use Docker setup for seamless deployment in any environment.
 
+- 🌐 **Internal Fake DNS**  
+   Fake DNS with ability to match only some domains, change result based on client's ip address,
+   and forward unmatched requests to an optional forwarder DNS.
+
 ---
 
 ## 📋 **Table of Contents**
@@ -126,6 +130,10 @@ docker run --rm -it \
 ### Configuration
 
 Remember that the cli has an `example` sub command that will be updated more than this section,
+Config specifications defined here may not be complete
+Most parameters are loosely typed
+arrays can be defined as single items and it will be mapped to array internally
+some objects are able to parse themselves from strings
 
 #### Run SubCommand
 
@@ -148,6 +156,7 @@ junction run --listen 8443 \
 - **Include**
   You can include multiple config files (even from a remote http source):
   Please note that this list is not loosely typed so you have to declare an array of strings
+  Order of included files are not guaranteed, do not mix ordered sensitive items in multiple files
 
   - Support Glob pattern matching
   - Support `HTTP` and `HTTPS` with basic authentication
@@ -171,6 +180,24 @@ junction run --listen 8443 \
     Config:
       - `listen`: UDP listen address, requires a UDP ip:port
       - `answer`: IPv4 Answer, requires a single IPv4 address
+        alternatively this field is able to receive array(or just an object) as value
+        - `answer`: Single IPv4 to answer
+        - `from`: CIDR address of remote user that queries DNS
+           Order is important on masking networks
+
+        ```toml
+        [[core.fake_dns.answer]]
+        answer = "127.0.0.1"
+        from = "127.0.0.1/24"
+        
+        [[core.fake_dns.answer]]
+        answer = "192.168.1.1"
+        from = [
+          "192.168.2.0/24",
+          "128.1.1.0/24"
+        ]
+        ```
+
       - `forwarder`: Upstream DNS server for unresolvable/not-allowed queries, (e.g. `8.8.8.8:53`), if omitted will return empty response
       - `allowed`: Allowed list matcher
         - Supports wildcards (e.g., `"*.example.com"`)
