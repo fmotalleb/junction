@@ -159,7 +159,7 @@ func (e *DNSResult) Decode(from reflect.Type, val interface{}) (any, error) {
 	}
 	zeroMask := &net.IPNet{
 		IP:   net.IPv4(0, 0, 0, 0),
-		Mask: net.CIDRMask(0, 0), // /0 mask
+		Mask: net.CIDRMask(0, 32), // /0 mask
 	}
 	e.From = make([]*net.IPNet, 1)
 	e.From[0] = zeroMask

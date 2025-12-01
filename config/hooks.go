@@ -111,9 +111,6 @@ func StringToCIDRHook() mapstructure.DecodeHookFunc {
 		if f.Kind() != reflect.String {
 			return val, nil
 		}
-		if t != reflect.TypeOf(net.IPNet{}) {
-			return val, nil
-		}
 		if str, ok := val.(string); ok {
 			if str == "" {
 				return nil, nil
@@ -122,8 +119,8 @@ func StringToCIDRHook() mapstructure.DecodeHookFunc {
 			if err != nil {
 				return nil, err
 			}
-			return addr, nil
+			return *addr, nil
 		}
-		return val, errors.New("expected string value for net.IPNet")
+		return val, nil
 	}
 }
