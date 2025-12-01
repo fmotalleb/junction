@@ -12,7 +12,8 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 )
 
-// configuration values into netip.AddrPort and net.IP types.
+// init registers mapstructure decode hooks that convert configuration values into netip.AddrPort and net.IP types.
+// It registers StringToNetAddrPortHook, StringToNetAddrHook, IntToNetAddrPortHook, and StringToCIDRHook.
 func init() {
 	hooks.RegisterHook(StringToNetAddrPortHook())
 	hooks.RegisterHook(StringToNetAddrHook())
@@ -86,7 +87,8 @@ func StringToNetAddrHook() mapstructure.DecodeHookFunc {
 }
 
 // IntToNetAddrPortHook produces a mapstructure.DecodeHookFunc that converts signed integer values into netip.AddrPort values.
-// The hook activates when the source kind is a signed integer and the target type is netip.AddrPort; it formats the integer as the port of "127.0.0.1", parses the resulting "127.0.0.1:<port>" string into a netip.AddrPort, and returns the parsed AddrPort or an error if parsing fails.
+// IntToNetAddrPortHook returns a mapstructure.DecodeHookFunc that converts signed integers into netip.AddrPort values.
+// The hook treats the integer as a port on "127.0.0.1", parses "127.0.0.1:<port>" into a netip.AddrPort, and returns a parsing error if the port is invalid.
 func IntToNetAddrPortHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		switch f.Kind() {
@@ -106,6 +108,12 @@ func IntToNetAddrPortHook() mapstructure.DecodeHookFunc {
 	}
 }
 
+// StringToCIDRHook provides a mapstructure.DecodeHookFunc that parses CIDR-formatted
+// strings into net.IP values.
+//
+// Empty string inputs produce a nil result. For valid CIDR strings the hook
+// returns the IP component from net.ParseCIDR. Invalid CIDR strings return the
+// parsing error. Non-string source values are returned unchanged.
 func StringToCIDRHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, _ reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
