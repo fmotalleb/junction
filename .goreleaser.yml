@@ -46,6 +46,8 @@ builds:
 dockers_v2:
   - id: junction-vless
     sbom: false
+    platforms:
+      - linux/amd64
     images:
       - ghcr.io/fmotalleb/junction
     tags:
@@ -67,6 +69,8 @@ dockers_v2:
 
   - id: junction
     sbom: false
+    platforms:
+      - linux/amd64
     images:
       - ghcr.io/fmotalleb/junction
     tags:
