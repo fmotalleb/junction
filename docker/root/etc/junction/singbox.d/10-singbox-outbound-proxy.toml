@@ -2,12 +2,12 @@
 [[core.singbox.outbounds]]
 domain_strategy = ""
 flow = ""
-packet_encoding = "$VLESS_PACKET_ENCODING"
-server = "$VLESS_ADDRESS"
-server_port = "$VLESS_PORT"
+packet_encoding = "${VLESS_PACKET_ENCODING:-xdup}"
+server = "${VLESS_ADDRESS:?Expected vless address in VLESS_ADDRESS}"
+server_port = "${VLESS_PORT:-443}"
 tag = "proxy"
 type = "vless"
-uuid = "$VLESS_UUID"
+uuid = "${VLESS_UUID:?Expected UUID in VLESS_UUID}"
 
 [core.singbox.outbounds.transport]
 path = "${VLESS_TRANSPORT_PATH:-/}"
@@ -15,13 +15,13 @@ type = "${VLESS_TRANSPORT_TYPE:-ws}"
 
 
 [core.singbox.outbounds.transport.headers]
-Host = "${VLESS_HOSTNAME_HEADER:-localhost}"
+Host = "${VLESS_HOSTNAME_HEADER}"
 
 
 [core.singbox.outbounds.tls]
 enabled = "${VLESS_TLS_ENABLED:-false}"
 insecure = "${VLESS_TLS_INSECURE:-true}"
-server_name = "${VLESS_SNI:-localhost}"
+server_name = "${VLESS_SNI}"
 
 [core.singbox.outbounds.tls.utls]
 enabled = "${VLESS_UTLS_ENABLED:-false}"
