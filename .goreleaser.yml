@@ -44,7 +44,8 @@ builds:
     skip: "archive"
 
 dockers_v2:
-  - images:
+  - id: junction-vless
+    images:
       - ghcr.io/fmotalleb/junction
     tags:
       - "{{ .Version }}-vless"
@@ -63,7 +64,8 @@ dockers_v2:
     extra_files:
       - docker
 
-  - images:
+  - id: junction
+    images:
       - ghcr.io/fmotalleb/junction
     tags:
       - "{{ .Version }}-distroless"
