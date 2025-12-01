@@ -4,33 +4,36 @@ import (
 	"context"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/fmotalleb/go-tools/log"
 	"github.com/fmotalleb/go-tools/matcher"
 	"github.com/fmotalleb/junction/config"
 	"github.com/miekg/dns"
+	"github.com/sethvargo/go-retry"
 	"go.uber.org/zap"
 )
 
 type handler struct {
-	logger    *zap.Logger
-	answer    string // IP to return
+	answer    net.IP // IP to return
 	forwarder string // upstream DNS (e.g., "8.8.8.8:53")
 	allowList []matcher.Matcher
+	ctx       context.Context
 }
 
-func Serve(ctx context.Context, cfg *config.FakeDNS) error {
+func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	logger := log.Of(ctx).Named("DNS")
-	ans := ""
+	sCtx := log.WithLogger(ctx, logger)
+	ans := make(net.IP, 0)
 	if cfg.ReturnAddr != nil {
-		ans = cfg.ReturnAddr.String()
+		ans = *cfg.ReturnAddr
 	}
 	forwarder := ""
 	if cfg.Forwarder != nil {
 		forwarder = cfg.Forwarder.String()
 	}
 	h := &handler{
-		logger:    logger,
+		ctx:       sCtx,
 		answer:    ans,       // e.g., "10.0.0.1"
 		forwarder: forwarder, // e.g., "1.1.1.1:53"
 		allowList: cfg.Allowed,
@@ -52,7 +55,15 @@ func Serve(ctx context.Context, cfg *config.FakeDNS) error {
 		}
 	}()
 
-	return dns.ActivateAndServe(nil, l, h)
+	if serverErr := dns.ActivateAndServe(nil, l, h); serverErr != nil {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			return retry.RetryableError(serverErr)
+		}
+	}
+	return nil
 }
 
 func (h *handler) IsAllowed(question string) bool {
@@ -68,6 +79,10 @@ func (h *handler) IsAllowed(question string) bool {
 	return false
 }
 
+func (h *handler) logger() *zap.Logger {
+	return log.Of(h.ctx)
+}
+
 // ServeDNS implements dns.Handler.
 func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	msg := new(dns.Msg)
@@ -75,13 +90,13 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	if len(r.Question) == 0 {
 		if err := w.WriteMsg(msg); err != nil {
-			h.logger.Info("failed to write answer to empty question", zap.Error(err))
+			h.logger().Info("failed to write answer to empty question", zap.Error(err))
 		}
 		return
 	}
 
 	q := r.Question[0]
-	logger := h.logger.WithLazy(
+	logger := h.logger().WithLazy(
 		zap.String("name", q.Name),
 		zap.Uint16("class", q.Qclass),
 		zap.Uint16("type", q.Qtype),
@@ -95,7 +110,7 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 				Class:  dns.ClassINET,
 				Ttl:    10,
 			},
-			A: net.ParseIP(h.answer),
+			A: h.answer,
 		}
 		msg.Answer = append(msg.Answer, rr)
 		if err := w.WriteMsg(msg); err != nil {
@@ -110,8 +125,11 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		}
 		return
 	}
+	ctx, cancel := context.WithTimeout(h.ctx, time.Second*10)
+	defer cancel()
+
 	// Otherwise forward to upstream
-	resp, exchangeErr := dns.Exchange(r, h.forwarder)
+	resp, exchangeErr := dns.ExchangeContext(ctx, r, h.forwarder)
 	if exchangeErr != nil {
 		logger.Warn("failed to read result from forwarder", zap.Error(exchangeErr))
 		// If forward failed, still return NXDOMAIN instead of crashing

@@ -26,7 +26,6 @@ func Serve(c config.Config) error {
 	ctx := context.Background()
 	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)
 	ctx, err := log.WithNewEnvLogger(ctx)
-	dns.Serve(ctx, c.Core.FakeDNS)
 	if err != nil {
 		return err
 	}
@@ -34,7 +33,7 @@ func Serve(c config.Config) error {
 		go runSingbox(ctx, c.Core.SingboxCfg)
 	}
 	if c.Core.FakeDNS != nil {
-		go dns.Serve(ctx, c.Core.FakeDNS)
+		go runDNS(ctx, c.Core.FakeDNS)
 	}
 	for _, e := range c.EntryPoints {
 		wg.Add(1)
@@ -48,7 +47,6 @@ func Serve(c config.Config) error {
 // Returns an error if Singbox fails to start.
 func runSingbox(ctx context.Context, cfg map[string]any) {
 	l := log.Of(ctx)
-
 	b := BuildBackoff()
 	err := retry.Do(ctx, b, func(ctx context.Context) error {
 		err := singbox.Start(ctx, cfg)
@@ -59,6 +57,23 @@ func runSingbox(ctx context.Context, cfg map[string]any) {
 	})
 	if err != nil {
 		l.Panic("singbox had unrecoverable crash", zap.Error(err))
+	}
+}
+
+// runSingbox starts the Singbox service with the provided configuration and context.
+// Returns an error if Singbox fails to start.
+func runDNS(ctx context.Context, cfg *config.FakeDNS) {
+	l := log.Of(ctx)
+	b := BuildBackoff()
+	err := retry.Do(ctx, b, func(ctx context.Context) error {
+		err := dns.Serve(ctx, *cfg)
+		if err != nil {
+			l.Error("dns crashed", zap.Error(err))
+		}
+		return err
+	})
+	if err != nil {
+		l.Panic("dns had unrecoverable crash", zap.Error(err))
 	}
 }
 

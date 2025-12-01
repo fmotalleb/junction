@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -57,17 +58,14 @@ func StringToNetAddrHook() mapstructure.DecodeHookFunc {
 		if f.Kind() != reflect.String {
 			return val, nil
 		}
-		if t != reflect.TypeOf(netip.Addr{}) {
+		if t != reflect.TypeOf(net.IP{}) {
 			return val, nil
 		}
 		if str, ok := val.(string); ok {
 			if str == "" {
-				return netip.Addr{}, nil
+				return net.IP{}, nil
 			}
-			addr, err := netip.ParseAddr(str)
-			if err != nil {
-				return nil, err
-			}
+			addr := net.ParseIP(str)
 			return addr, nil
 		}
 		return val, errors.New("expected string value for netip.Addr")

@@ -1,6 +1,7 @@
 [core.fake_dns]
 allowed = [
   "*.google.com",
+  "regex:allowed\\.domain.+",
 ]
 listen = "127.0.0.1:5453"
 answer = "127.0.0.1"
