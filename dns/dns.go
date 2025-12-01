@@ -35,7 +35,17 @@ type resolver struct {
 // optionally forward other queries to cfg.Forwarder, and listen on cfg.Listen (default 0.0.0.0:53).
 // It returns an error if cfg.ReturnAddr is not provided or if the UDP listener cannot be created.
 // If the server exits with an error while the provided context is still active, that error is wrapped
-// as retry.RetryableError; if the context is done, Serve returns nil.
+// Serve starts and runs a fake DNS server configured by cfg.
+// It validates configuration (requires at least one ReturnAddr entry with a result IP),
+// builds per-entry CIDR resolvers that map client source ranges to response IPs, and
+// binds a UDP listener on cfg.Listen or "0.0.0.0:53" to handle DNS queries.
+// A-type queries for names allowed by cfg.Allowed are answered from the matching resolver;
+// other queries are forwarded to cfg.Forwarder when configured or refused otherwise.
+// The listener is closed when ctx is done.
+//
+// The function returns nil on successful shutdown or when the provided context is done.
+// It returns an error for configuration or binding failures (e.g., missing result IP or listen error).
+// Runtime server errors are returned wrapped as retry.RetryableError unless the context is done.
 func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	logger := log.Of(ctx).Named("DNS")
 	sCtx := log.WithLogger(ctx, logger)
