@@ -2,6 +2,7 @@ package dns
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"time"
@@ -24,9 +25,8 @@ type handler struct {
 func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	logger := log.Of(ctx).Named("DNS")
 	sCtx := log.WithLogger(ctx, logger)
-	ans := make(net.IP, 0)
-	if cfg.ReturnAddr != nil {
-		ans = *cfg.ReturnAddr
+	if cfg.ReturnAddr == nil {
+		return errors.New("fake DNS requires a return address (answer) to be configured")
 	}
 	forwarder := ""
 	if cfg.Forwarder != nil {
@@ -34,8 +34,8 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	}
 	h := &handler{
 		ctx:       sCtx,
-		answer:    ans,       // e.g., "10.0.0.1"
-		forwarder: forwarder, // e.g., "1.1.1.1:53"
+		answer:    *cfg.ReturnAddr, // e.g., "10.0.0.1"
+		forwarder: forwarder,       // e.g., "1.1.1.1:53"
 		allowList: cfg.Allowed,
 	}
 	listenAddr := "0.0.0.0:53"
@@ -120,8 +120,9 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if h.forwarder == "" {
-		if err := w.WriteMsg(r); err != nil {
-			logger.Warn("failed to write nil answer", zap.Error(err))
+		msg = msg.SetRcode(r, dns.RcodeRefused)
+		if err := w.WriteMsg(msg); err != nil {
+			logger.Warn("failed to write refused answer", zap.Error(err))
 		}
 		return
 	}

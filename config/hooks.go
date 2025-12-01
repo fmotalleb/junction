@@ -63,12 +63,15 @@ func StringToNetAddrHook() mapstructure.DecodeHookFunc {
 		}
 		if str, ok := val.(string); ok {
 			if str == "" {
-				return net.IP{}, nil
+				return nil, nil
 			}
 			addr := net.ParseIP(str)
+			if addr == nil {
+				return nil, fmt.Errorf("failed to parse input '%s' into net.IP", str)
+			}
 			return addr, nil
 		}
-		return val, errors.New("expected string value for netip.Addr")
+		return val, errors.New("expected string value for net.IP")
 	}
 }
 

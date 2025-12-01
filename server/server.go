@@ -60,8 +60,8 @@ func runSingbox(ctx context.Context, cfg map[string]any) {
 	}
 }
 
-// runSingbox starts the Singbox service with the provided configuration and context.
-// Returns an error if Singbox fails to start.
+// runDNS starts the DNS service with the provided configuration and context.
+// Panics if DNS fails to start after retries are exhausted.
 func runDNS(ctx context.Context, cfg *config.FakeDNS) {
 	l := log.Of(ctx)
 	b := BuildBackoff()

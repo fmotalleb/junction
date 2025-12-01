@@ -163,7 +163,7 @@ junction run --listen 8443 \
   Some specific global configurations are stored here
 
   - fake_dns: object or string of fake DNS config:
-    In order to cerate a very simple dns server to manipulate requests into this server (needs manual ip configuration)
+    In order to create a simple dns server to manipulate requests into this server (needs manual IP configuration)
     Limitations:
     - A Record support (for now since i don't use AAAA records)
     - UDP listener
@@ -175,7 +175,6 @@ junction run --listen 8443 \
       - `allowed`: Allowed list matcher
         - Supports wildcards (e.g., `"*.example.com"`)
         - Supports Regular Expression (e.g. `"regexp:allowed"`, `"grep:.+google.com^"`)
-
   - singbox: object of singbox config
     [singbox](https://github.com/SagerNet/sing-box/) is a successor to xray
     Its config is complex you can see an example of how to provide a simple config in [example](https://github.com/fmotalleb/junction/blob/main/example) directory
