@@ -47,23 +47,23 @@
 #### Standalone binary installation
 
 You can grab one of builds from [Release](https://github.com/fmotalleb/junction/releases) page
-or use the shell script (please review [the scripts](https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh) before executing it in your shell, or any script you find online who paste them in the shell without checking)
+or use the shell script (please review [the scripts](https://raw.githubusercontent.com/fmotalleb/junction/refs/heads/main/install.sh) before executing it in your shell, or any script you find online who paste them in the shell without checking)
 This script requires `curl`, `tar`, `jq` (if version is missing), `sha256sum` (optional but recommended) and `bash` itself.
 
 Install latest version (requires `jq`):
 
 ```bash
-bash <<<"$(curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh)"
+bash <<<"$(curl -fL https://raw.githubusercontent.com/fmotalleb/junction/refs/heads/main/install.sh)"
 ```
 
 ```sh
-curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh | bash
+curl -fL https://raw.githubusercontent.com/fmotalleb/junction/refs/heads/main/install.sh | bash
 ```
 
 or select a version manually:
 
 ```bash
-VERSION=0.4.2 bash <<<"$(curl -fL https://raw.githubusercontent.com/FMotalleb/junction/refs/heads/main/install.sh)"
+VERSION=0.4.2 bash <<<"$(curl -fL https://raw.githubusercontent.com/fmotalleb/junction/refs/heads/main/install.sh)"
 ```
 
 #### Using Go cli

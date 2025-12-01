@@ -10,7 +10,7 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color (RESET)
 
-REPO="FMotalleb/junction"
+REPO="fmotalleb/junction"
 API="https://api.github.com/repos/${REPO}/releases/latest"
 WORKING_DIR="$(pwd)"
 

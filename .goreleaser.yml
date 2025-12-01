@@ -98,7 +98,7 @@ archives:
 
 release:
   github:
-    owner: FMotalleb
+    owner: fmotalleb
     name: junction
   name_template: "{{.Version}}"
   prerelease: auto
