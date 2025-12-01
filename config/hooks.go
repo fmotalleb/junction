@@ -12,12 +12,18 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 )
 
+// configuration values into netip.AddrPort and net.IP types.
 func init() {
 	hooks.RegisterHook(StringToNetAddrPortHook())
 	hooks.RegisterHook(StringToNetAddrHook())
 	hooks.RegisterHook(IntToNetAddrPortHook())
 }
 
+// StringToNetAddrPortHook returns a mapstructure.DecodeHookFunc that converts string values into netip.AddrPort.
+// 
+// The hook accepts either "host:port" or "port". If only a port is provided, the host defaults to "127.0.0.1".
+// An empty string yields the zero netip.AddrPort. If the input is not a string, the hook returns an error;
+// if the string cannot be parsed as an address:port, the hook returns the parsing error.
 func StringToNetAddrPortHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
@@ -53,6 +59,9 @@ func StringToNetAddrPortHook() mapstructure.DecodeHookFunc {
 	}
 }
 
+// StringToNetAddrHook returns a mapstructure.DecodeHookFunc that converts string inputs into net.IP values.
+//
+// The returned hook only acts when the source kind is string and the target type is net.IP. For an empty string it yields nil; for a non-empty string it parses the value with net.ParseIP and returns the resulting net.IP or an error if parsing fails. If the incoming value is not a string, the hook returns an error stating a string was expected. For non-matching source/target types the hook returns the input unchanged.
 func StringToNetAddrHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
@@ -75,6 +84,8 @@ func StringToNetAddrHook() mapstructure.DecodeHookFunc {
 	}
 }
 
+// IntToNetAddrPortHook produces a mapstructure.DecodeHookFunc that converts signed integer values into netip.AddrPort values.
+// The hook activates when the source kind is a signed integer and the target type is netip.AddrPort; it formats the integer as the port of "127.0.0.1", parses the resulting "127.0.0.1:<port>" string into a netip.AddrPort, and returns the parsed AddrPort or an error if parsing fails.
 func IntToNetAddrPortHook() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		switch f.Kind() {

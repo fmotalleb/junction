@@ -22,6 +22,12 @@ type handler struct {
 	ctx       context.Context
 }
 
+// Serve starts and runs a fake DNS server based on the provided configuration.
+// The server will answer A queries with cfg.ReturnAddr for names allowed by cfg.Allowed,
+// optionally forward other queries to cfg.Forwarder, and listen on cfg.Listen (default 0.0.0.0:53).
+// It returns an error if cfg.ReturnAddr is not provided or if the UDP listener cannot be created.
+// If the server exits with an error while the provided context is still active, that error is wrapped
+// as retry.RetryableError; if the context is done, Serve returns nil.
 func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	logger := log.Of(ctx).Named("DNS")
 	sCtx := log.WithLogger(ctx, logger)
