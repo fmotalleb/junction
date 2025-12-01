@@ -5,11 +5,20 @@ include = [
   "https://example.conf/example.toml",  # Remote HTTPS configuration
 ]
 
+[core.fake_dns]
+listen = "127.0.0.1:5453"               # Listen address for fake DNS server (UDP address)
+answer = "127.0.0.1"                    # IP address in response to allowed A record queries (ip address of server running this software)
+forwarder = "8.8.8.8:53"                # Upstream DNS server for unresolvable/not-allowed queries
+allowed = [                             # Allowed domain patterns for fake DNS
+  "*.google.com",                       # Wildcard pattern
+  "regex:allowed\\.domain.+",           # Regex pattern
+]
+
 # SNI-based routing example
 [[entrypoints]]
 routing = "sni"                         # Uses SNI to detect target hostname
-listen = "0.0.0.0:8443"                # Bind to all interfaces on port 8443
-proxy = "socks5://10.11.12.22:8999"    # Single SOCKS5 proxy
+listen = "0.0.0.0:8443"                 # Bind to all interfaces on port 8443
+proxy = "socks5://10.11.12.22:8999"     # Single SOCKS5 proxy
 to = "443"                              # Target port for SNI connections (default: 443)
 timeout = "50s"                         # Connection timeout (default: TIMEOUT env or 24h)
 

@@ -12,6 +12,7 @@ require (
 	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/fmotalleb/go-tools v0.1.58
 	github.com/go-viper/mapstructure/v2 v2.4.0
+	github.com/miekg/dns v1.1.67
 	github.com/pelletier/go-toml v1.9.5
 	github.com/sagernet/sing-box v1.12.12
 	github.com/sethvargo/go-retry v0.3.0
@@ -179,7 +180,6 @@ require (
 	github.com/metacubex/utls v1.8.3 // indirect
 	github.com/mgechev/revive v1.7.0 // indirect
 	github.com/mholt/acmez/v3 v3.1.2 // indirect
-	github.com/miekg/dns v1.1.67 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect

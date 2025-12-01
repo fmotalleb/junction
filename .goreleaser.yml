@@ -43,34 +43,47 @@ builds:
     binary: junction
     skip: "archive"
 
-dockers:
-  - image_templates:
-      - "ghcr.io/fmotalleb/junction:{{ .Version }}-vless"
-      - "ghcr.io/fmotalleb/junction:latest-vless"
-    dockerfile: Dockerfile
-    goos: linux
-    goarch: amd64
+dockers_v2:
+  - id: junction-vless
+    images:
+      - ghcr.io/fmotalleb/junction
+    tags:
+      - "{{ .Version }}-vless"
+      - latest-vless
+    labels:
+      "org.opencontainers.image.description": "Junction (VLESS Support)"
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.name": "{{.ProjectName}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
     ids:
       - slim
+    flags:
+      - --target=slim
     extra_files:
       - docker
-    build_flag_templates:
-      - "--target=slim"
-    use: buildx
-  - image_templates:
-      - "ghcr.io/fmotalleb/junction:{{ .Version }}-distroless"
-      - "ghcr.io/fmotalleb/junction:latest-distroless"
-      - "ghcr.io/fmotalleb/junction:latest"
-    dockerfile: Dockerfile
-    goos: linux
-    goarch: amd64
+
+  - id: junction
+    images:
+      - ghcr.io/fmotalleb/junction
+    tags:
+      - "{{ .Version }}-distroless"
+      - latest-distroless
+      - latest
+    labels:
+      "org.opencontainers.image.description": "Junction"
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.name": "{{.ProjectName}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
     ids:
       - slim
+    flags:
+      - --target=distroless
     extra_files:
       - docker
-    build_flag_templates:
-      - "--target=distroless"
-    use: buildx
 
 archives:
   - id: default
