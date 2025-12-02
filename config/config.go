@@ -32,6 +32,9 @@ type EntryPoint struct {
 	Proxy     []*url.URL         `mapstructure:"proxy,omitempty" toml:"proxy,omitempty" yaml:"proxy,omitempty" json:"proxy,omitempty"`
 	Target    string             `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
 	Timeout   time.Duration      `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
+
+	// Tag used for grouping entrypoints of auto-router kind
+	Tag *string `mapstructure:"tag,omitempty" toml:"tag,omitempty" yaml:"tag,omitempty" json:"tag,omitempty"`
 }
 
 type FakeDNS struct {

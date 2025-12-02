@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -16,6 +17,11 @@ import (
 )
 
 const DefaultHTTPPort = ""
+
+var (
+	httpGroupMu sync.Mutex
+	httpGroups  = map[string][]config.EntryPoint{} // tag → entry list
+)
 
 func init() {
 	registerHandler(httpHandler)
@@ -27,6 +33,15 @@ func init() {
 func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 	if entry.Routing != config.RouterHTTPHeader {
 		return nil
+	}
+
+	// --- Tag registration ---
+	if entry.Tag != nil {
+		isFirst := registerHTTPTaggedEntry(*entry.Tag, entry)
+		if !isFirst {
+			// Not the first entry → do not start another listener.
+			return nil
+		}
 	}
 
 	logger := log.FromContext(ctx).Named("router.http").With(zap.Any("entry", entry))
@@ -41,6 +56,7 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 			proxyAddr:  entry.Proxy,
 			targetPort: entry.GetTargetOr(DefaultHTTPPort),
 			entry:      entry,
+			tag:        entry.Tag, // NEW FIELD
 		},
 	}
 
@@ -49,11 +65,26 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 	if err := server.ListenAndServe(); err != nil {
 		logger.Error("HTTP server error", zap.Error(err))
 		return errors.Join(
-			errors.New("failed to start listener for http webserver"),
+			errors.New("failed to start listener for http proxy"),
 			err,
 		)
 	}
+
 	return nil
+}
+
+func registerHTTPTaggedEntry(tag string, entry config.EntryPoint) bool {
+	httpGroupMu.Lock()
+	defer httpGroupMu.Unlock()
+
+	group, ok := httpGroups[tag]
+	if !ok {
+		httpGroups[tag] = []config.EntryPoint{entry}
+		return true // first entry → should start server
+	}
+
+	httpGroups[tag] = append(group, entry)
+	return false // listener already running
 }
 
 type httpProxyHandler struct {
@@ -62,6 +93,7 @@ type httpProxyHandler struct {
 	proxyAddr  []*url.URL
 	targetPort string
 	entry      config.EntryPoint
+	tag        *string // NEW
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -71,11 +103,26 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No host specified", http.StatusBadRequest)
 		return
 	}
-	if !h.entry.Allowed(targetHost) {
-		h.logger.Warn("detected hostname is not allowed", zap.String("hostname", targetHost))
+
+	// --- Tag group selection logic ---
+	entry := h.entry
+	if h.tag != nil {
+		group := httpGroups[*h.tag]
+
+		for _, ep := range group {
+			if ep.Allowed(targetHost) {
+				entry = ep
+				break
+			}
+		}
+	}
+
+	if !entry.Allowed(targetHost) {
+		h.logger.Warn("hostname rejected", zap.String("hostname", targetHost))
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+
 	h.logger.Info("HTTP request received",
 		zap.String("method", r.Method),
 		zap.String("targetHost", targetHost),
