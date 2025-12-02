@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync"
 
@@ -14,8 +15,9 @@ import (
 const DefaultSNIPort = "443"
 
 var (
-	sniGroups = make(map[string][]config.EntryPoint, 0)
-	groupMu   sync.Mutex
+	sniGroups     = make(map[string][]config.EntryPoint, 0)
+	groupMu       sync.Mutex
+	errSNIMissing = errors.New("SNI missing in ClientHello")
 )
 
 func init() {
@@ -156,7 +158,7 @@ func readSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
 	name := tls.ExtractSNI(buf[:n])
 	if name == nil {
 		logger.Warn("SNI missing")
-		return nil, nil, 0, err
+		return nil, nil, 0, errSNIMissing
 	}
 	return name, buf, n, nil
 }
