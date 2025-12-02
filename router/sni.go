@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"net"
+	"sync"
 
 	"github.com/fmotalleb/go-tools/log"
 	"github.com/fmotalleb/junction/config"
@@ -11,6 +12,11 @@ import (
 )
 
 const DefaultSNIPort = "443"
+
+var (
+	sniGroups sync.Map // map[tag]string][]config.EntryPoint
+	groupMu   sync.Mutex
+)
 
 func init() {
 	registerHandler(sniRouter)
@@ -21,21 +27,45 @@ func sniRouter(ctx context.Context, entry config.EntryPoint) error {
 		return nil
 	}
 
-	logger := log.FromContext(ctx).
-		Named("router.sni").
+	// Register entry by tag if available
+	if entry.Tag != nil {
+		if isFirst := registerTaggedEntry(*entry.Tag, entry); !isFirst {
+			return nil // listener already exists for this group
+		}
+	}
+
+	return serveSNIRouter(ctx, entry)
+}
+
+func registerTaggedEntry(tag string, entry config.EntryPoint) bool {
+	groupMu.Lock()
+	defer groupMu.Unlock()
+
+	val, _ := sniGroups.LoadOrStore(tag, []config.EntryPoint{})
+	group := val.([]config.EntryPoint)
+	first := len(group) == 0
+
+	group = append(group, entry)
+	sniGroups.Store(tag, group)
+
+	return first
+}
+
+func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
+	logger := log.FromContext(ctx).Named("router.sni").
 		With(zap.Any("entry", entry))
 
-	addrPort := entry.Listen
-	tcpAddr := net.TCPAddrFromAddrPort(addrPort)
-	listener, err := net.ListenTCP("tcp", tcpAddr)
+	addr := net.TCPAddrFromAddrPort(entry.Listen)
+	listener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		logger.Error("failed to listen", zap.String("addr", addrPort.String()), zap.Error(err))
+		logger.Error("listen failed", zap.String("addr", entry.Listen.String()), zap.Error(err))
 		return err
 	}
 	defer listener.Close()
 
-	logger.Info("SNI proxy booted")
+	logger.Info("SNI router started")
 
+	// Shutdown listener on context close
 	go func() {
 		<-ctx.Done()
 		_ = listener.Close()
@@ -45,70 +75,90 @@ func sniRouter(ctx context.Context, entry config.EntryPoint) error {
 		conn, err := listener.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
-				logger.Info("listener closed due to context cancellation")
+				logger.Info("router exit due to context cancellation")
 				return nil
 			}
-			logger.Error("failed to accept connection", zap.Error(err))
+			logger.Warn("accept failed", zap.Error(err))
 			continue
 		}
-		go handleSNIConnection(ctx, logger, conn, entry)
+
+		go handleClient(ctx, conn, entry, logger)
 	}
 }
 
-// handleSNIConnection manages a single incoming client connection by extracting the SNI from the TLS handshake, validating it, and proxying traffic to the appropriate target if allowed.
-// The function enforces a timeout, ensures proper cleanup of resources, and logs relevant connection events.
-func handleSNIConnection(parentCtx context.Context, logger *zap.Logger, clientConn net.Conn, entry config.EntryPoint) {
+func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, logger *zap.Logger) {
+	serverName, buf, n, err := readSNI(conn, logger)
+	if err != nil {
+		_ = conn.Close()
+		return
+	}
+
+	sni := string(serverName)
+	l := logger.With(zap.String("sni", sni))
+
+	if entry.Tag == nil {
+		if !entry.Allowed(sni) {
+			l.Warn("SNI rejected")
+			_ = conn.Close()
+			return
+		}
+		go proxyToTarget(ctx, conn, sni, buf, n, l, entry)
+		return
+	}
+
+	// Tagged routing
+	if v, ok := sniGroups.Load(*entry.Tag); ok {
+		for _, ep := range v.([]config.EntryPoint) {
+			if ep.Allowed(sni) {
+				go proxyToTarget(ctx, conn, sni, buf, n, l, ep)
+				return
+			}
+		}
+	}
+
+	l.Warn("no matching entry for SNI")
+	_ = conn.Close()
+}
+
+// PROXY HANDLER.
+func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf []byte, n int, logger *zap.Logger, entry config.EntryPoint) {
 	ctx, cancel := context.WithTimeout(parentCtx, entry.GetTimeout())
-	defer func() {
-		clientConn.Close()
-		cancel()
-	}()
+	defer cancel()
 
 	go func() {
 		<-ctx.Done()
-		_ = clientConn.Close()
+		_ = client.Close()
 	}()
 
-	serverName, buffer, n, err := ReadAndExtractSNI(clientConn, logger)
+	target := net.JoinHostPort(sni, entry.GetTargetOr(DefaultSNIPort))
+	server, err := DialTarget(entry.Proxy, target, logger)
 	if err != nil {
+		_ = client.Close()
 		return
 	}
-	sni := string(serverName)
-	connLogger := logger.With(zap.String("SNI", sni))
-	connLogger.Debug("SNI detected")
-	if !entry.Allowed(sni) {
-		connLogger.Warn("detected sni is not allowed")
+	defer server.Close()
+
+	if _, err := server.Write(buf[:n]); err != nil {
+		logger.Error("initial write failed", zap.Error(err))
+		_ = client.Close()
 		return
 	}
 
-	targetAddr := net.JoinHostPort(sni, entry.GetTargetOr(DefaultSNIPort))
-	targetConn, err := DialTarget(entry.Proxy, targetAddr, connLogger)
-	if err != nil {
-		return
-	}
-	defer targetConn.Close()
-
-	if _, err := targetConn.Write(buffer[:n]); err != nil {
-		connLogger.Error("failed to write initial buffer to target", zap.Error(err))
-		return
-	}
-
-	RelayTraffic(clientConn, targetConn, connLogger)
+	RelayTraffic(client, server, logger)
 }
 
-func ReadAndExtractSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
-	buffer := make([]byte, 4096)
-	n, err := conn.Read(buffer)
+func readSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
 	if err != nil {
-		logger.Error("failed to read from client", zap.Error(err))
+		logger.Error("client read failed", zap.Error(err))
 		return nil, nil, 0, err
 	}
-	// Since we only care about hostname we use this function instead of parsing whole hello packet
-	serverName := tls.ExtractSNI(buffer[:n])
-	if serverName == nil {
-		logger.Error("failed to extract SNI from connection")
-		return nil, nil, 0, nil
-	}
 
-	return serverName, buffer, n, nil
+	name := tls.ExtractSNI(buf[:n])
+	if name == nil {
+		logger.Warn("SNI missing")
+		return nil, nil, 0, err
+	}
+	return name, buf, n, nil
 }
