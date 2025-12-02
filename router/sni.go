@@ -14,7 +14,7 @@ import (
 const DefaultSNIPort = "443"
 
 var (
-	sniGroups sync.Map // map[tag]string][]config.EntryPoint
+	sniGroups = make(map[string][]config.EntryPoint, 0)
 	groupMu   sync.Mutex
 )
 
@@ -41,13 +41,13 @@ func registerTaggedEntry(tag string, entry config.EntryPoint) bool {
 	groupMu.Lock()
 	defer groupMu.Unlock()
 
-	val, _ := sniGroups.LoadOrStore(tag, []config.EntryPoint{})
-	group := val.([]config.EntryPoint)
+	group, ok := sniGroups[tag]
+	if !ok {
+		group = make([]config.EntryPoint, 0)
+	}
 	first := len(group) == 0
-
 	group = append(group, entry)
-	sniGroups.Store(tag, group)
-
+	sniGroups[tag] = group
 	return first
 }
 
@@ -107,12 +107,10 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 	}
 
 	// Tagged routing
-	if v, ok := sniGroups.Load(*entry.Tag); ok {
-		for _, ep := range v.([]config.EntryPoint) {
-			if ep.Allowed(sni) {
-				go proxyToTarget(ctx, conn, sni, buf, n, l, ep)
-				return
-			}
+	for _, ep := range sniGroups[*entry.Tag] {
+		if ep.Allowed(sni) {
+			go proxyToTarget(ctx, conn, sni, buf, n, l, ep)
+			return
 		}
 	}
 
