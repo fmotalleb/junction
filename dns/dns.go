@@ -101,7 +101,7 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 			logger.Info("failed to close listener", zap.Error(err))
 		}
 	}()
-
+	logger.Info("dns server started")
 	if serverErr := dns.ActivateAndServe(nil, l, h); serverErr != nil {
 		select {
 		case <-ctx.Done():
@@ -164,7 +164,9 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		zap.String("name", q.Name),
 		zap.Uint16("class", q.Qclass),
 		zap.Uint16("type", q.Qtype),
+		zap.String("from", w.RemoteAddr().String()),
 	)
+	logger.Debug("handling dns request")
 	// Always respond with your answer for A requests
 	if q.Qtype == dns.TypeA && h.IsAllowed(q.Name) {
 		rr := &dns.A{
