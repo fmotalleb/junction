@@ -1,4 +1,4 @@
-FROM library/debian:bookworm-slim AS slim
+FROM library/debian:trixie-slim AS slim
 
 COPY /docker/root/ /
 
@@ -47,7 +47,7 @@ RUN CGO_ENABLED=0 go build -o junction -tags with_utls
 RUN chmod +x junction
 
 
-FROM library/debian:bookworm-slim AS standalone
+FROM library/debian:trixie-slim AS standalone
 
 COPY /docker/root/ /
 COPY --from=builder /app/junction /usr/bin/junction

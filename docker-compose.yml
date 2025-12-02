@@ -1,8 +1,15 @@
 services:
   junction:
-    image: fmotalleb/junction:0.9.0-distroless
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: standalone
+    command: ["junction", "--config=/config.toml", "-d"]
+    volumes:
+      - ./config.toml:/config.toml:ro
     ports:
-      - 7892:6980
+      - 5453:5453/udp
+      - 5453:5453/tcp
       - 80:80
       - 443:443
     environment:
