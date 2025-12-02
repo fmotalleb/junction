@@ -25,7 +25,7 @@
 ## Core Features
 
 * [ ] Handler pipeline:
-  * [ ] Support filtering to route a single entrypoint via different proxies or targets
+  * [x] Support filtering to route a single entrypoint via different proxies or targets
   * [ ] Request transformation/mutation
 * [ ] Metrics collection
 * [ ] Access logging
