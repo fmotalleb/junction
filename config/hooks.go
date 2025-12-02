@@ -115,8 +115,11 @@ func IntToNetAddrPortHook() mapstructure.DecodeHookFunc {
 // returns the IP component from net.ParseCIDR. Invalid CIDR strings return the
 // parsing error. Non-string source values are returned unchanged.
 func StringToCIDRHook() mapstructure.DecodeHookFunc {
-	return func(f reflect.Type, _ reflect.Type, val interface{}) (interface{}, error) {
+	return func(f reflect.Type, t reflect.Type, val interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
+			return val, nil
+		}
+		if t != reflect.TypeOf(net.IPNet{}) {
 			return val, nil
 		}
 		if str, ok := val.(string); ok {
