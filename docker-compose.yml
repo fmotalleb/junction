@@ -1,13 +1,6 @@
 services:
   junction:
-    image: docker.dornica-co.local/fmotalleb/junction:0.6.4-distroless
-    command:
-      - run
-      - --routing=tcp-raw
-      - --listen=0.0.0.0:443
-      - --target=172.16.17.23:80
-      - --timeout=2s
-      - --debug
+    image: fmotalleb/junction:0.9.0-distroless
     ports:
       - 7892:6980
       - 80:80
