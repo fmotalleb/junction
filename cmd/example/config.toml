@@ -82,3 +82,27 @@ allow_list = [                        # Allowlist (if specified, only these are 
 proxy = "socks5://10.11.12.22:8999"
 to = "443"
 timeout = "50s"
+
+
+## This is a more complex rule, its a group of two entrypoints with the same tag
+## This allows you to listen on a single port but have different routing rules for different domains
+## Only supported in SNI and HTTP header routing modes
+## Since the order is not guaranteed, make sure the rules do not overlap, they listen on the same port, they have same routing mode and the same tag
+
+[[entrypoints]]
+routing = "sni"
+tag = "8446"                        # Shared tag with next entrypoint(s)
+block_list = [
+  "*.example.com"
+]
+listen = "0.0.0.0:8446"
+proxy = "socks5://10.11.12.22:8990"
+
+[[entrypoints]]
+routing = "sni"
+tag = "8446"
+allow_list = [
+  "*.example.com"
+]
+listen = "0.0.0.0:8446"
+proxy = "socks5://10.11.12.22:8999"

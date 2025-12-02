@@ -223,6 +223,14 @@ junction run --listen 8443 \
     - `http-header`: Uses HTTP `Host` header. Default port: `80`
     - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port` in `to` field
     - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field. **Note**: Proxy not supported
+  - **`tag`** (optional):
+      The tag attribute groups multiple entrypoints so they share a single listening socket while applying different domain-matching rules. A tag represents a routing group evaluated on the same port.
+      This causes all entrypoints with the same tag to have a fallback behavior
+      Order is not guaranteed, thus modify allow list and block list on all entrypoints manually
+      All entrypoints in a tag group must:
+        - use the same listen address
+        - use the same routing mode (sni or http-header)
+        - specify the same tag identifier
 
   - **`proxy`** (optional):
     Upstream proxy configuration. Accepts:

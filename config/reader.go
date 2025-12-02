@@ -35,6 +35,5 @@ func Parse(dst *Config, path string, debug bool) error {
 	if err := decoder.Decode(cfg); err != nil {
 		return fmt.Errorf("decode: %w", err)
 	}
-
 	return nil
 }
