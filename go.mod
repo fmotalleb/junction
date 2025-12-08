@@ -17,7 +17,7 @@ require (
 	github.com/sagernet/sing-box v1.12.12
 	github.com/sethvargo/go-retry v0.3.0
 	github.com/spf13/cast v1.10.0
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	github.com/yl2chen/cidranger v1.0.2
 	go.uber.org/zap v1.27.1
 	golang.org/x/crypto v0.45.0
