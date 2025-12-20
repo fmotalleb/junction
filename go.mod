@@ -14,7 +14,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/miekg/dns v1.1.68
 	github.com/pelletier/go-toml v1.9.5
-	github.com/sagernet/sing-box v1.12.12
+	github.com/sagernet/sing-box v1.12.13
 	github.com/sethvargo/go-retry v0.3.0
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/cobra v1.10.2
