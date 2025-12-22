@@ -129,8 +129,8 @@ github.com/fatih/structtag v1.2.0 h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4
 github.com/fatih/structtag v1.2.0/go.mod h1:mBJUNpUnHmRKrKlQQlmCrh5PuhftFbNv8Ys4/aAZl94=
 github.com/firefart/nonamedreturns v1.0.5 h1:tM+Me2ZaXs8tfdDw3X6DOX++wMCOqzYUho6tUTYIdRA=
 github.com/firefart/nonamedreturns v1.0.5/go.mod h1:gHJjDqhGM4WyPt639SOZs+G89Ko7QKH5R5BhnO6xJhw=
-github.com/fmotalleb/go-tools v0.1.58 h1:AXbcZ6TSyQE6USwJMgwpwg4DgXE2qjUpyqrCbb6X0gI=
-github.com/fmotalleb/go-tools v0.1.58/go.mod h1:uD01wfVyufjFKUvDucmYj0ukifLYFzssJF0FE2f6pRw=
+github.com/fmotalleb/go-tools v0.1.59 h1:5DbcA6WHmaXukCQD9YNESxxN9zrH18M1J7X8g0Xc6vI=
+github.com/fmotalleb/go-tools v0.1.59/go.mod h1:uD01wfVyufjFKUvDucmYj0ukifLYFzssJF0FE2f6pRw=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
