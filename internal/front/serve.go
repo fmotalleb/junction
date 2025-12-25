@@ -6,11 +6,9 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
-	"syscall"
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
-	"github.com/fmotalleb/go-tools/sysctx"
 	"go.uber.org/zap"
 )
 
@@ -29,13 +27,7 @@ func getDist() (fs.FS, error) {
 // Serve starts an HTTP server on the specified address, serving embedded static files from the "dist" directory at the root path.
 // The server logs connection state changes and applies one-minute timeouts for read, write, and idle operations.
 // Returns an error if initialization fails or if the server encounters an error while running.
-func Serve(listen string) error {
-	ctx := context.Background()
-	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)
-	ctx, err := log.WithNewEnvLogger(ctx)
-	if err != nil {
-		return err
-	}
+func Serve(ctx context.Context, listen string) error {
 	dist, err := getDist()
 	if err != nil {
 		return err

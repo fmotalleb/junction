@@ -26,7 +26,12 @@ var dumpCmd = &cobra.Command{
 			fmt.Printf("Error reading format flag: %v\n", err)
 			return err
 		}
-		if err = config.Parse(&cfg, configFile, debug); err != nil {
+		ctx, cancel, err := buildAppContext()
+		if err != nil {
+			return err
+		}
+		defer cancel()
+		if err = config.Parse(ctx, &cfg, configFile); err != nil {
 			fmt.Printf("Error parsing config: %v\n", err)
 			return err
 		}

@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
-	"github.com/fmotalleb/go-tools/sysctx"
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/dns"
 	"github.com/fmotalleb/junction/router"
@@ -20,15 +18,8 @@ import (
 // Serve starts server components based on the provided configuration, including optional Singbox integration, and waits for all entry points to complete.
 // Serve starts all configured server entry points and the optional Singbox service, blocking until all listeners have stopped.
 // It returns an error if logger initialization fails or when all listeners have exited.
-func Serve(c config.Config) error {
+func Serve(ctx context.Context, c config.Config) error {
 	wg := new(sync.WaitGroup)
-
-	ctx := context.Background()
-	ctx = sysctx.CancelWith(ctx, syscall.SIGTERM)
-	ctx, err := log.WithNewEnvLogger(ctx)
-	if err != nil {
-		return err
-	}
 	if len(c.Core.SingboxCfg) != 0 {
 		go runSingbox(ctx, c.Core.SingboxCfg)
 	}

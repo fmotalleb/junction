@@ -61,7 +61,12 @@ var runCmd = &cobra.Command{
 		if dump {
 			return dumpConf(&cfg)
 		}
-		if err = server.Serve(cfg); err != nil {
+		ctx, cancel, err := buildAppContext()
+		if err != nil {
+			return err
+		}
+		defer cancel()
+		if err = server.Serve(ctx, cfg); err != nil {
 			return err
 		}
 		return nil

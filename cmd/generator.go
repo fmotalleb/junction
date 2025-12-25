@@ -19,7 +19,12 @@ var generatorCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return front.Serve(l)
+		ctx, cancel, err := buildAppContext()
+		if err != nil {
+			return err
+		}
+		defer cancel()
+		return front.Serve(ctx, l)
 	},
 }
 

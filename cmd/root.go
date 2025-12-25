@@ -18,10 +18,13 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 package cmd
 
 import (
+	"context"
 	"os"
+	"time"
 
 	"github.com/fmotalleb/go-tools/git"
 	"github.com/fmotalleb/go-tools/log"
+	"github.com/fmotalleb/go-tools/reloader"
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/server"
 	"github.com/spf13/cobra"
@@ -56,13 +59,28 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		if err = config.Parse(&cfg, configFile, debug); err != nil {
+		ctx, cancel, err := buildAppContext()
+		if err != nil {
 			return err
 		}
-		if dump {
-			return dumpConf(&cfg)
-		}
-		if err := server.Serve(cfg); err != nil {
+		defer cancel()
+		err = reloader.WithOsSignal(
+			ctx,
+			func(ctx context.Context) error {
+				if pErr := config.Parse(ctx, &cfg, configFile); pErr != nil {
+					return pErr
+				}
+				if dump {
+					return dumpConf(&cfg)
+				}
+				if sErr := server.Serve(ctx, cfg); sErr != nil {
+					return sErr
+				}
+				return nil
+			},
+			time.Second*60,
+		)
+		if err != nil {
 			return err
 		}
 		return nil

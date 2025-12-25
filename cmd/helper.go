@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/signal"
 
+	"github.com/fmotalleb/go-tools/log"
 	"github.com/fmotalleb/junction/config"
 	"github.com/pelletier/go-toml"
 	"gopkg.in/yaml.v3"
@@ -43,4 +47,16 @@ func dumpConf(cfg *config.Config, form ...string) error {
 	}
 	fmt.Println(string(result))
 	return nil
+}
+
+func buildAppContext() (context.Context, context.CancelFunc, error) {
+	ctx, cancel := signal.NotifyContext(
+		context.Background(),
+		os.Kill,
+	)
+	ctx, err := log.WithNewEnvLogger(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ctx, cancel, nil
 }
