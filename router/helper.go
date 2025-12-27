@@ -2,6 +2,7 @@ package router
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"sync"
@@ -68,4 +69,10 @@ func relayTraffic(src, dst net.Conn, logger *zap.Logger) {
 			logger.Warn("connection collapsed", zap.Error(err))
 		}
 	}
+}
+
+var ErrFieldMissing = errors.New("a mandatory field is missing")
+
+func buildFieldMissing(service, field string) error {
+	return fmt.Errorf("%w, router: %s, field: %s", ErrFieldMissing, service, field)
 }

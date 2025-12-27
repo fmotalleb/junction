@@ -35,9 +35,9 @@ func init() {
 // httpHandler starts an HTTP proxy server for entry points configured with RouterHTTPHeader routing.
 // It initializes the server with a proxy handler that forwards requests through a SOCKS5 proxy chain as specified by the entry configuration.
 // Returns an error if the server fails to start.
-func httpHandler(ctx context.Context, entry config.EntryPoint) error {
+func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterHTTPHeader {
-		return nil
+		return false, nil
 	}
 
 	// --- Tag registration ---
@@ -45,7 +45,7 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 		isFirst := registerHTTPTaggedEntry(*entry.Tag, entry)
 		if !isFirst {
 			// Not the first entry → do not start another listener.
-			return nil
+			return true, nil
 		}
 	}
 
@@ -69,13 +69,13 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) error {
 
 	if err := server.ListenAndServe(); err != nil {
 		logger.Error("HTTP server error", zap.Error(err))
-		return errors.Join(
+		return true, errors.Join(
 			errors.New("failed to start listener for http proxy"),
 			err,
 		)
 	}
 
-	return nil
+	return true, nil
 }
 
 func registerHTTPTaggedEntry(tag string, entry config.EntryPoint) bool {

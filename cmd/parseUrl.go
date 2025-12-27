@@ -12,21 +12,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var ErrParseURLMissingArg = errors.New("parse-url requires one positional argument")
+
 // parseURLCmd represents the parseUrl command.
 var parseURLCmd = &cobra.Command{
 	Use:   "parse-url",
 	Short: "Parse a url into singbox outbound",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return errors.New("parse-url requires one positional argument")
+			return ErrParseURLMissingArg
 		}
 
 		u, err := url.Parse(args[0])
 		if err != nil {
-			return errors.Join(
-				errors.New("failed to parse given argument to url object"),
-				err,
-			)
+			return err
 		}
 		format, err := cmd.Flags().GetString("format")
 		if err != nil {
@@ -34,17 +33,11 @@ var parseURLCmd = &cobra.Command{
 		}
 		var ob map[string]any
 		if ob, err = singbox.TryParseOutboundURL(u); err != nil {
-			return errors.Join(
-				errors.New("failed to parse url into outbound object"),
-				err,
-			)
+			return err
 		}
 		var o []byte
 		if o, err = marshalData(ob, format); err != nil {
-			return errors.Join(
-				errors.New("possible internal issue, failed to marshalize the map"),
-				err,
-			)
+			return err
 		}
 		fmt.Println(string(o))
 		return nil

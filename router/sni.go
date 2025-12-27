@@ -29,19 +29,19 @@ func init() {
 	})
 }
 
-func sniRouter(ctx context.Context, entry config.EntryPoint) error {
+func sniRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterSNI {
-		return nil
+		return false, nil
 	}
 
 	// Register entry by tag if available
 	if entry.Tag != nil {
 		if isFirst := registerTaggedEntry(*entry.Tag, entry); !isFirst {
-			return nil // listener already exists for this group
+			return true, nil // listener already exists for this group
 		}
 	}
 
-	return serveSNIRouter(ctx, entry)
+	return true, serveSNIRouter(ctx, entry)
 }
 
 func registerTaggedEntry(tag string, entry config.EntryPoint) bool {

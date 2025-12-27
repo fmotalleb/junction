@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"errors"
 	"net"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -14,9 +13,9 @@ func init() {
 	registerHandler(tcpRouter)
 }
 
-func tcpRouter(ctx context.Context, entry config.EntryPoint) error {
+func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterTCPRaw {
-		return nil
+		return false, nil
 	}
 
 	logger := log.FromContext(ctx).
@@ -28,13 +27,13 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) error {
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
 		logger.Error("failed to listen", zap.String("addr", addrPort.String()), zap.Error(err))
-		return err
+		return true, err
 	}
 	defer listener.Close()
 
 	if entry.Target == "" {
 		logger.Error("TCP proxy must have a target ip:port address")
-		return errors.New("router: tcp-raw must have `to` field")
+		return true, buildFieldMissing("tcp-raw", "to")
 	}
 
 	logger.Info("raw TCP proxy booted")
@@ -49,7 +48,7 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) error {
 		if err != nil {
 			if ctx.Err() != nil {
 				logger.Info("listener closed due to context cancellation")
-				return nil
+				return true, nil
 			}
 			logger.Error("failed to accept connection", zap.Error(err))
 			continue

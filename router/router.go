@@ -7,7 +7,7 @@ import (
 	"github.com/fmotalleb/junction/config"
 )
 
-type handler func(context.Context, config.EntryPoint) error
+type handler func(context.Context, config.EntryPoint) (bool, error) // Handled, error
 
 var (
 	handlers = []handler{}
@@ -24,11 +24,13 @@ func registerReset(r func()) {
 
 func Handle(ctx context.Context, e config.EntryPoint) error {
 	for _, h := range handlers {
-		if err := h(ctx, e); err != nil {
+		if handled, err := h(ctx, e); err != nil {
 			return errors.Join(
 				errors.New("handler denied the configuration"),
 				err,
 			)
+		} else if handled {
+			return nil
 		}
 	}
 	return errors.New("no handler found for config")

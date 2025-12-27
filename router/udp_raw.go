@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"errors"
 	"net"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -15,9 +14,9 @@ func init() {
 	registerHandler(udpRouter)
 }
 
-func udpRouter(ctx context.Context, entry config.EntryPoint) error {
+func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterUDPRaw {
-		return nil
+		return false, nil
 	}
 
 	logger := log.FromContext(ctx).
@@ -29,13 +28,13 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) error {
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		logger.Error("failed to listen", zap.String("addr", addrPort.String()), zap.Error(err))
-		return err
+		return true, err
 	}
 	defer conn.Close()
 
 	if entry.Target == "" {
 		logger.Error("UDP proxy must have a target ip:port address")
-		return errors.New("router: udp-raw must have `to` field")
+		return true, buildFieldMissing("udp-raw", "to")
 	}
 
 	logger.Info("raw UDP proxy booted")
@@ -54,7 +53,7 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) error {
 		if err != nil {
 			if ctx.Err() != nil {
 				logger.Info("listener closed due to context cancellation")
-				return nil
+				return true, nil
 			}
 			logger.Error("failed to read UDP packet", zap.Error(err))
 			continue

@@ -13,6 +13,8 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+var ErrSSHAuthMissing = errors.New("no auth method provided (password or key path required)")
+
 func init() {
 	registerGenerator(sshDialer)
 }
@@ -36,7 +38,7 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 		}
 		auth = append(auth, gossh.PublicKeys(key))
 	default:
-		return nil, errors.New("no auth method provided (password or key path required)")
+		return nil, ErrSSHAuthMissing
 	}
 
 	host := url.Host
