@@ -20,18 +20,35 @@ import (
 // It returns an error if logger initialization fails or when all listeners have exited.
 func Serve(ctx context.Context, c config.Config) error {
 	wg := new(sync.WaitGroup)
+	defer router.Reset()
 	if len(c.Core.SingboxCfg) != 0 {
-		go runSingbox(ctx, c.Core.SingboxCfg)
+		wg.Go(
+			func() {
+				runSingbox(ctx, c.Core.SingboxCfg)
+			},
+		)
 	}
 	if c.Core.FakeDNS != nil {
-		go runDNS(ctx, c.Core.FakeDNS)
+		wg.Go(
+			func() {
+				runDNS(ctx, c.Core.FakeDNS)
+			},
+		)
 	}
 	for _, e := range c.EntryPoints {
-		wg.Add(1)
-		go handleEntry(ctx, e, wg)
+		wg.Go(
+			func() {
+				handleEntry(ctx, e)
+			},
+		)
 	}
 	wg.Wait()
-	return errors.New("every listener died")
+	select {
+	case <-ctx.Done(): // normal behavior is context cancellation
+		return nil
+	default: // If wait group is done without context cancellation its an error in configuration
+		return errors.New("every listener died")
+	}
 }
 
 // runSingbox starts the Singbox service with the provided configuration and context.
@@ -73,8 +90,7 @@ func runDNS(ctx context.Context, cfg *config.FakeDNS) {
 // handleEntry starts handling the specified entry point within the given context and marks the wait group as done when finished.
 // handleEntry starts handling the given entry point and marks the wait group as done when it returns.
 // If starting the handler fails, it logs a warning that includes the entry and the error.
-func handleEntry(ctx context.Context, e config.EntryPoint, wg *sync.WaitGroup) {
-	defer wg.Done()
+func handleEntry(ctx context.Context, e config.EntryPoint) {
 	if err := router.Handle(ctx, e); err != nil {
 		log.
 			FromContext(ctx).

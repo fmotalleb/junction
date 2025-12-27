@@ -22,6 +22,11 @@ var (
 
 func init() {
 	registerHandler(sniRouter)
+	registerReset(func() {
+		groupMu.Lock()
+		sniGroups = make(map[string][]config.EntryPoint)
+		groupMu.Unlock()
+	})
 }
 
 func sniRouter(ctx context.Context, entry config.EntryPoint) error {
@@ -131,7 +136,7 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 	}()
 
 	target := net.JoinHostPort(sni, entry.GetTargetOr(DefaultSNIPort))
-	server, err := DialTarget(entry.Proxy, target, logger)
+	server, err := dialTarget(entry.Proxy, target, logger)
 	if err != nil {
 		_ = client.Close()
 		return
@@ -144,7 +149,7 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 		return
 	}
 
-	RelayTraffic(client, server, logger)
+	relayTraffic(client, server, logger)
 }
 
 func readSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {

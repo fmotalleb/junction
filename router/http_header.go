@@ -25,6 +25,11 @@ var (
 
 func init() {
 	registerHandler(httpHandler)
+	registerReset(func() {
+		httpGroupMu.Lock()
+		httpGroups = make(map[string][]config.EntryPoint)
+		httpGroupMu.Unlock()
+	})
 }
 
 // httpHandler starts an HTTP proxy server for entry points configured with RouterHTTPHeader routing.
@@ -183,7 +188,7 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request,
 	}
 	defer clientConn.Close()
 
-	RelayTraffic(clientConn, targetConn, h.logger)
+	relayTraffic(clientConn, targetConn, h.logger)
 }
 
 func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Request, targetHost string) {

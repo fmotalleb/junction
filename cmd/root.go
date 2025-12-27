@@ -80,10 +80,7 @@ var rootCmd = &cobra.Command{
 			},
 			time.Second*60,
 		)
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	},
 }
 

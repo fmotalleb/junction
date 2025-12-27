@@ -68,11 +68,11 @@ func handleTCPConnection(parentCtx context.Context, logger *zap.Logger, conn net
 		_ = conn.Close()
 	}()
 
-	targetConn, err := DialTarget(entry.Proxy, entry.Target, logger)
+	targetConn, err := dialTarget(entry.Proxy, entry.Target, logger)
 	if err != nil {
 		return
 	}
 	defer targetConn.Close()
 
-	RelayTraffic(conn, targetConn, logger)
+	relayTraffic(conn, targetConn, logger)
 }
