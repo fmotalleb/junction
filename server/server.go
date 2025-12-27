@@ -15,6 +15,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var ErrServerDiedBeforeContext = errors.New("context is not canceled but listeners are dead")
+
 // Serve starts server components based on the provided configuration, including optional Singbox integration, and waits for all entry points to complete.
 // Serve starts all configured server entry points and the optional Singbox service, blocking until all listeners have stopped.
 // It returns an error if logger initialization fails or when all listeners have exited.
@@ -47,7 +49,7 @@ func Serve(ctx context.Context, c config.Config) error {
 	case <-ctx.Done(): // normal behavior is context cancellation
 		return nil
 	default: // If wait group is done without context cancellation its an error in configuration
-		return errors.New("every listener died")
+		return ErrServerDiedBeforeContext
 	}
 }
 
