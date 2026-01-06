@@ -10,7 +10,7 @@ tool (
 
 require (
 	github.com/alecthomas/assert/v2 v2.11.0
-	github.com/fmotalleb/go-tools v0.1.65
+	github.com/fmotalleb/go-tools v0.1.66
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/miekg/dns v1.1.69
 	github.com/pelletier/go-toml v1.9.5
