@@ -24,25 +24,6 @@ builds:
     goarch:
       - amd64
 
-  - id: slim
-    env:
-      - CGO_ENABLED=0
-    tags:
-      - with_utls
-    ldflags:
-      - "-s"
-      - "-w"
-      - "-X github.com/fmotalleb/go-tools/git.Version={{.Version}}"
-      - "-X github.com/fmotalleb/go-tools/git.Commit={{.ShortCommit}}"
-      - "-X github.com/fmotalleb/go-tools/git.Date={{.Date}}"
-      - "-X github.com/fmotalleb/go-tools/git.Branch={{.Branch}}"
-    goos:
-      - linux
-    goarch:
-      - amd64
-    binary: junction
-    skip: "archive"
-
 dockers_v2:
   - id: junction-vless
     sbom: false
@@ -61,7 +42,7 @@ dockers_v2:
       "org.opencontainers.image.version": "{{.Version}}"
       "org.opencontainers.image.source": "{{.GitURL}}"
     ids:
-      - slim
+      - default
     flags:
       - --target=slim
     extra_files:
@@ -85,7 +66,7 @@ dockers_v2:
       "org.opencontainers.image.version": "{{.Version}}"
       "org.opencontainers.image.source": "{{.GitURL}}"
     ids:
-      - slim
+      - default
     flags:
       - --target=distroless
     extra_files:
