@@ -91,11 +91,6 @@ dockers_v2:
     extra_files:
       - docker
 
-archives:
-  - id: default
-    builds:
-      - default
-
 release:
   github:
     owner: fmotalleb
