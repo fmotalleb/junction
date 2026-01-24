@@ -9,17 +9,6 @@ import (
 )
 
 func Parse(ctx context.Context, dst *Config, path string) error {
-	// if debug {
-	// 	ctx = log.WithNewEnvLoggerForced(
-	// 		ctx,
-	// 		func(b *log.Builder) *log.Builder {
-	// 			return b.
-	// 				LevelValue(zapcore.DebugLevel).
-	// 				Name("config").
-	// 				Development(true)
-	// 		},
-	// 	)
-	// }
 	cfg, err := config.ReadAndMergeConfig(ctx, path)
 	if err != nil {
 		return fmt.Errorf("failed to read and merge configs: %w", err)

@@ -157,8 +157,8 @@ github.com/fatih/structtag v1.2.0 h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4
 github.com/fatih/structtag v1.2.0/go.mod h1:mBJUNpUnHmRKrKlQQlmCrh5PuhftFbNv8Ys4/aAZl94=
 github.com/firefart/nonamedreturns v1.0.6 h1:vmiBcKV/3EqKY3ZiPxCINmpS431OcE1S47AQUwhrg8E=
 github.com/firefart/nonamedreturns v1.0.6/go.mod h1:R8NisJnSIpvPWheCq0mNRXJok6D8h7fagJTF8EMEwCo=
-github.com/fmotalleb/go-tools v0.1.68 h1:wAun5Wo0F/p+o4AjkvN1cDFYZ92ShjoojN7O59U8zpE=
-github.com/fmotalleb/go-tools v0.1.68/go.mod h1:+V89jU1KF+/lBifZjWI7KpH6P/hhMxA6qVDXqRh54Vo=
+github.com/fmotalleb/go-tools v0.1.70 h1:hd8OkSEiQsUl6b+EcNCkF3RLOGK4XAdTvW/pOPbiGQg=
+github.com/fmotalleb/go-tools v0.1.70/go.mod h1:+V89jU1KF+/lBifZjWI7KpH6P/hhMxA6qVDXqRh54Vo=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
@@ -405,8 +405,8 @@ github.com/mgechev/revive v1.13.0 h1:yFbEVliCVKRXY8UgwEO7EOYNopvjb1BFbmYqm9hZjBM
 github.com/mgechev/revive v1.13.0/go.mod h1:efJfeBVCX2JUumNQ7dtOLDja+QKj9mYGgEZA7rt5u+0=
 github.com/mholt/acmez/v3 v3.1.2 h1:auob8J/0FhmdClQicvJvuDavgd5ezwLBfKuYmynhYzc=
 github.com/mholt/acmez/v3 v3.1.2/go.mod h1:L1wOU06KKvq7tswuMDwKdcHeKpFFgkppZy/y0DFxagQ=
-github.com/miekg/dns v1.1.70 h1:DZ4u2AV35VJxdD9Fo9fIWm119BsQL5cZU1cQ9s0LkqA=
-github.com/miekg/dns v1.1.70/go.mod h1:+EuEPhdHOsfk6Wk5TT2CzssZdqkmFhf8r+aVyDEToIs=
+github.com/miekg/dns v1.1.72 h1:vhmr+TF2A3tuoGNkLDFK9zi36F2LS+hKTRW0Uf8kbzI=
+github.com/miekg/dns v1.1.72/go.mod h1:+EuEPhdHOsfk6Wk5TT2CzssZdqkmFhf8r+aVyDEToIs=
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=
 github.com/mitchellh/copystructure v1.2.0/go.mod h1:qLl+cE2AmVv+CoeAwDPye/v+N2HKCj9FbZEVFJRxO9s=
 github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=
