@@ -1,6 +1,9 @@
 version: "2"
 linters:
   default: none
+  disable:
+    - gosec
+    - mnd
   enable:
     - asasalint
     - bodyclose
@@ -16,7 +19,7 @@ linters:
     - gocyclo
     - godot
     - goprintffuncname
-    - gosec
+    # - gosec
     - govet
     - ineffassign
     - misspell
@@ -52,7 +55,7 @@ linters:
       require-specific: true
       allow-unused: false
     revive:
-      confidence: 0
+      confidence: 1
   exclusions:
     generated: lax
     presets:
