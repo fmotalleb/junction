@@ -45,14 +45,14 @@ func Start(
 		Context: sbCtx,
 	}
 
-	if err = opt.Options.UnmarshalJSONContext(sbCtx, cfg); err != nil {
+	if err = opt.UnmarshalJSONContext(sbCtx, cfg); err != nil {
 		return errors.Join(
 			errors.New("failed to parse singbox config"),
 			err,
 		)
 	}
 
-	for _, i := range opt.Options.Outbounds {
+	for _, i := range opt.Outbounds {
 		vless, ok := (i.Options.(*option.VLESSOutboundOptions))
 		if !ok {
 			continue

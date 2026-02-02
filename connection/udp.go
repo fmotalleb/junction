@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/fmotalleb/go-tools/env"
-	"github.com/fmotalleb/junction/config"
 	"go.uber.org/zap"
+
+	"github.com/fmotalleb/junction/config"
 )
 
 type UDPClientManager struct {

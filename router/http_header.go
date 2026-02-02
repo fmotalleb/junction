@@ -11,9 +11,10 @@ import (
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
+	"go.uber.org/zap"
+
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/proxy"
-	"go.uber.org/zap"
 )
 
 const DefaultHTTPPort = ""

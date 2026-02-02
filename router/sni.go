@@ -7,9 +7,10 @@ import (
 	"sync"
 
 	"github.com/fmotalleb/go-tools/log"
+	"go.uber.org/zap"
+
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/crypto/tls"
-	"go.uber.org/zap"
 )
 
 const DefaultSNIPort = "443"

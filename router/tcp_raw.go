@@ -5,8 +5,9 @@ import (
 	"net"
 
 	"github.com/fmotalleb/go-tools/log"
-	"github.com/fmotalleb/junction/config"
 	"go.uber.org/zap"
+
+	"github.com/fmotalleb/junction/config"
 )
 
 func init() {

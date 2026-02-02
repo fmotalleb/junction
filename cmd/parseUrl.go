@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/fmotalleb/junction/services/singbox"
 	"github.com/spf13/cobra"
+
+	"github.com/fmotalleb/junction/services/singbox"
 )
 
 var ErrParseURLMissingArg = errors.New("parse-url requires one positional argument")

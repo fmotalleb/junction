@@ -25,9 +25,10 @@ import (
 	"github.com/fmotalleb/go-tools/git"
 	"github.com/fmotalleb/go-tools/log"
 	"github.com/fmotalleb/go-tools/reloader"
+	"github.com/spf13/cobra"
+
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/server"
-	"github.com/spf13/cobra"
 )
 
 var (

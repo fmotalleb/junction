@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
+	"github.com/sethvargo/go-retry"
+	"go.uber.org/zap"
+
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/dns"
 	"github.com/fmotalleb/junction/router"
 	"github.com/fmotalleb/junction/services/singbox"
-	"github.com/sethvargo/go-retry"
-	"go.uber.org/zap"
 )
 
 var ErrServerDiedBeforeContext = errors.New("context is not canceled but listeners are dead")

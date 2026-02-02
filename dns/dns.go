@@ -10,10 +10,11 @@ import (
 
 	"github.com/fmotalleb/go-tools/log"
 	"github.com/fmotalleb/go-tools/matcher"
-	"github.com/fmotalleb/junction/config"
 	"github.com/miekg/dns"
 	"github.com/sethvargo/go-retry"
 	"go.uber.org/zap"
+
+	"github.com/fmotalleb/junction/config"
 
 	"github.com/yl2chen/cidranger"
 )

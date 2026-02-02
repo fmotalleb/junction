@@ -5,8 +5,9 @@ package cmd
 
 import (
 	"github.com/fmotalleb/go-tools/log"
-	"github.com/fmotalleb/junction/internal/front"
 	"github.com/spf13/cobra"
+
+	"github.com/fmotalleb/junction/internal/front"
 )
 
 // generatorCmd represents the generator command.

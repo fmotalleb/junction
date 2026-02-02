@@ -6,8 +6,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/fmotalleb/junction/config"
 	"github.com/spf13/cobra"
+
+	"github.com/fmotalleb/junction/config"
 )
 
 // dumpCmd represents the dump command.

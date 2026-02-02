@@ -39,7 +39,7 @@ func StringToNetAddrPortHook() mapstructure.DecodeHookFunc {
 				return netip.AddrPort{}, nil
 			}
 			split := strings.Split(str, ":")
-			final := make([]string, 2)
+			final := new([2]string)
 			switch len(split) {
 			case 1:
 				final[0] = ""

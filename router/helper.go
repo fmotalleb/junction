@@ -7,9 +7,10 @@ import (
 	"net/url"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/fmotalleb/junction/proxy"
 	"github.com/fmotalleb/junction/utils"
-	"go.uber.org/zap"
 )
 
 func dialTarget(proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Conn, error) {

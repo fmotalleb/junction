@@ -8,9 +8,10 @@ import (
 	"os/signal"
 
 	"github.com/fmotalleb/go-tools/log"
-	"github.com/fmotalleb/junction/config"
 	"github.com/pelletier/go-toml"
 	"gopkg.in/yaml.v3"
+
+	"github.com/fmotalleb/junction/config"
 )
 
 // marshalData serializes the given data into the specified format.
