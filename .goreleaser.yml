@@ -57,6 +57,7 @@ dockers_v2:
     tags:
       - "{{ .Version }}-distroless"
       - latest-distroless
+      - "{{ .Version }}"
       - latest
     labels:
       "org.opencontainers.image.description": "Junction"
