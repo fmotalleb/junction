@@ -90,18 +90,19 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	if cfg.Listen != nil {
 		listenAddr = cfg.Listen.String()
 	}
-	l, err := net.ListenPacket("udp", listenAddr)
+	listener := new(net.ListenConfig)
+	l, err := listener.ListenPacket(ctx, "udp", listenAddr)
 	if err != nil {
 		logger.Error("failed to start server", zap.Error(err))
 		return err
 	}
-	go func() {
-		<-ctx.Done()
-		logger.Info("context deadline reached")
-		if err := l.Close(); err != nil {
-			logger.Info("failed to close listener", zap.Error(err))
-		}
-	}()
+	// go func() {
+	// 	<-ctx.Done()
+	// 	logger.Info("context deadline reached")
+	// 	if err := l.Close(); err != nil {
+	// 		logger.Info("failed to close listener", zap.Error(err))
+	// 	}
+	// }()
 	logger.Info("dns server started")
 	if serverErr := dns.ActivateAndServe(nil, l, h); serverErr != nil {
 		select {
