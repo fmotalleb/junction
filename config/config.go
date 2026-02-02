@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fmotalleb/go-tools/constants"
 	"github.com/fmotalleb/go-tools/env"
 	"github.com/fmotalleb/go-tools/matcher"
 )
@@ -56,7 +57,7 @@ func (e *EntryPoint) IsDirect() bool {
 func (e *EntryPoint) GetTimeout() time.Duration {
 	return cmp.Or(
 		e.Timeout,
-		env.DurationOr("TIMEOUT", time.Hour*24),
+		env.DurationOr("TIMEOUT", constants.Day),
 	)
 }
 
@@ -96,7 +97,8 @@ func (e *EntryPoint) Decode(from reflect.Type, val interface{}) (any, error) {
 	}
 
 	split := strings.Split(strVal, ";")
-	result := make(map[string]any, 5)
+	const entryPointsStringSegments = 5
+	result := make(map[string]any, entryPointsStringSegments)
 	result["timeout"] = e.GetTimeout()
 	switch len(split) {
 	case 5:

@@ -79,7 +79,7 @@ var rootCmd = &cobra.Command{
 				}
 				return nil
 			},
-			time.Second*60,
+			time.Minute,
 		)
 		return err
 	},

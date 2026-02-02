@@ -6,9 +6,10 @@ package cmd
 import (
 	"net/netip"
 	"net/url"
-	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/fmotalleb/go-tools/constants"
 
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/server"
@@ -82,7 +83,7 @@ func init() {
 	runCmd.Flags().StringSliceP("proxy", "x", nil, "Proxy URLs (multiple or none allowed, e.g., socks5://127.0.0.1:7890)")
 	runCmd.Flags().StringP("routing", "r", "", "Routing method (e.g., sni, http-header, tcp-raw)")
 	runCmd.Flags().StringP("target", "t", "", "Target (based on routing method)")
-	runCmd.Flags().DurationP("timeout", "T", time.Hour*24, "Timeout for requests")
+	runCmd.Flags().DurationP("timeout", "T", constants.Day, "Timeout for requests")
 
 	requireOrPanic("target")
 	requireOrPanic("routing")

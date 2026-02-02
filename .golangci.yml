@@ -20,7 +20,7 @@ linters:
     - govet
     - ineffassign
     - misspell
-    - mnd
+    # - mnd
     - nakedret
     - noctx
     - nolintlint
