@@ -1,12 +1,15 @@
 package router
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,7 +106,8 @@ type httpProxyHandler struct {
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	targetHost := prepareTargetHost(r.Host, r.Header.Get("Host"), h.targetPort)
+
+	targetHost := prepareTargetHost(cmp.Or(r.Host, r.Header.Get("Host")), h.targetPort)
 	if targetHost == "" {
 		h.logger.Warn("No host specified in request")
 		http.Error(w, "No host specified", http.StatusBadRequest)
@@ -142,19 +146,30 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func prepareTargetHost(hostHeader, fallback string, targetPort string) string {
-	host := hostHeader
-	if host == "" {
-		host = fallback
-	}
+func prepareTargetHost(hostHeader, targetPort string) string {
+	host := strings.TrimSpace(hostHeader)
 	if host == "" {
 		return ""
+	}
+	if u, err := url.Parse(host); err == nil && u.Host != "" {
+		host = u.Host
+	}
+	host = strings.TrimSpace(host)
+	if targetPort != "" {
+		if p, err := strconv.Atoi(targetPort); err != nil || p < 1 || p > 65535 {
+			targetPort = ""
+		}
 	}
 	if targetPort == "" {
 		return host
 	}
-	hostname, _, _ := net.SplitHostPort(host)
-	return net.JoinHostPort(hostname, targetPort)
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return net.JoinHostPort(h, targetPort)
+	}
+	if strings.Count(host, ":") > 1 && !strings.HasPrefix(host, "[") {
+		return net.JoinHostPort(host, targetPort)
+	}
+	return net.JoinHostPort(host, targetPort)
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
