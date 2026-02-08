@@ -4,11 +4,12 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -21,10 +22,18 @@ import (
 )
 
 const DefaultHTTPPort = ""
+const maxHostnameLength = 255
 
 var (
-	httpGroupMu sync.Mutex
-	httpGroups  = map[string][]config.EntryPoint{} // tag → entry list
+	httpGroupMu          sync.Mutex
+	httpGroups           = map[string][]config.EntryPoint{} // tag → entry list
+	validHostnameRfc1123 = regexp.MustCompile(`^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$`)
+	localhostIdentifiers = []string{
+		"localhost",
+		"localhost.localdomain",
+		"localhost6.localdomain6",
+		"ip6-localhost",
+	}
 )
 
 func init() {
@@ -97,20 +106,23 @@ func registerHTTPTaggedEntry(tag string, entry config.EntryPoint) bool {
 }
 
 type httpProxyHandler struct {
-	ctx        context.Context
-	logger     *zap.Logger
-	proxyAddr  []*url.URL
-	targetPort string
-	entry      config.EntryPoint
-	tag        *string // NEW
+	ctx          context.Context
+	logger       *zap.Logger
+	proxyAddr    []*url.URL
+	targetPort   string
+	entry        config.EntryPoint
+	tag          *string // NEW
+	flexiblePort bool
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
-	targetHost := prepareTargetHost(cmp.Or(r.Host, r.Header.Get("Host")), h.targetPort)
-	if targetHost == "" {
-		h.logger.Warn("No host specified in request")
-		http.Error(w, "No host specified", http.StatusBadRequest)
+	targetHost, err := prepareTargetHost(
+		cmp.Or(r.Host, r.Header.Get("Host")),
+		h.targetPort,
+	)
+	if err != nil {
+		h.logger.Warn("failed to prepare target host", zap.Error(err))
+		http.Error(w, "malformed host value, refusing to process request", http.StatusBadRequest)
 		return
 	}
 
@@ -146,30 +158,65 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func prepareTargetHost(hostHeader, targetPort string) string {
+func prepareTargetHost(hostHeader, targetPort string) (string, error) {
 	host := strings.TrimSpace(hostHeader)
 	if host == "" {
-		return ""
+		return "", fmt.Errorf("host header is empty")
 	}
-	if u, err := url.Parse(host); err == nil && u.Host != "" {
+
+	// Only parse URL if scheme exists
+	if strings.Contains(host, "://") {
+		u, err := url.Parse(host)
+		if err != nil || u.Host == "" {
+			return "", fmt.Errorf("invalid URL in host header: %w", err)
+		}
 		host = u.Host
 	}
-	host = strings.TrimSpace(host)
-	if targetPort != "" {
-		if p, err := strconv.Atoi(targetPort); err != nil || p < 1 || p > 65535 {
-			targetPort = ""
+
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+
+	if err := isValidHostname(host); err != nil {
+		return "", err
+	}
+
+	if targetPort == "" {
+		return host, nil
+	}
+
+	buf := make([]byte, 0, len(host)+1+len(targetPort))
+	buf = append(buf, host...)
+	buf = append(buf, ':')
+	buf = append(buf, targetPort...)
+	return string(buf), nil
+}
+
+// ValidHostname determines whether the passed string is a valid hostname.
+// In case it's not, the returned error contains the details of the failure.
+// From: https://github.com/datadog/datadog-agent/blob/914b7646d5d4/pkg/util/hostname/validate/validate.go#L16C1-L55C2
+func isValidHostname(hostname string) error {
+	if hostname == "" {
+		return fmt.Errorf("hostname is empty")
+	} else if isLocal(hostname) {
+		return fmt.Errorf("%s is a local hostname", hostname)
+	} else if len(hostname) > maxHostnameLength {
+		return fmt.Errorf("name exceeded the maximum length of %d characters", maxHostnameLength)
+	} else if !validHostnameRfc1123.MatchString(hostname) {
+		return fmt.Errorf("%s is not RFC1123 compliant", hostname)
+	}
+	return nil
+}
+
+// check whether the name is in the list of local hostnames
+func isLocal(name string) bool {
+	name = strings.ToLower(name)
+	for _, val := range localhostIdentifiers {
+		if val == name {
+			return true
 		}
 	}
-	if targetPort == "" {
-		return host
-	}
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		return net.JoinHostPort(h, targetPort)
-	}
-	if strings.Count(host, ":") > 1 && !strings.HasPrefix(host, "[") {
-		return net.JoinHostPort(host, targetPort)
-	}
-	return net.JoinHostPort(host, targetPort)
+	return false
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
