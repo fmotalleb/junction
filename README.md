@@ -271,6 +271,14 @@ junction run --listen 8443 \
     - Default: `24h` (or `TIMEOUT` environment variable)
     - Format: Go duration syntax (e.g., `"50s"`, `"5h3m15s"`)
 
+  - **`features`** (optional):
+    List of feature flags that enable routing-specific behavior.
+
+    - `http-header`:
+      - `flexible-port`: Allows per-request port override using the `Junction-Port` HTTP header.
+        If the header is missing or empty, the `to` value (or the router default) is used.
+    - Other routers currently ignore feature flags (unknown features are ignored with a warning).
+
   - **`block_list`** (optional) [only when using sni,http-header]:
     List of hostnames/patterns to block.
     - Supports wildcards (e.g., `"*.example.com"`, `"glob:*.example.com"`)
@@ -303,6 +311,7 @@ listen = ":8080" # Listen on 127.0.0.1:8080
 routing = "http-header"
 to = "80" # Defaults from `Host`
 proxy = "socks5://127.0.0.1:7890"
+features = ["flexible-port"] # Allow per-request port override via Junction-Port header
 
 [[entrypoints]]
 listen = 8090 # Listen on 127.0.0.1:8090
@@ -331,6 +340,8 @@ entrypoints:
     to: "80" # Defaults to 80
     proxy: socks5://127.0.0.1:7890
 ```
+
+JSON Schema for the configuration file is available at `config.schema.json`.
 
 > You can specify config file path using `--config (-c)` flag (detects config file)
 > Default behavior is to read config from `stdin` using `toml` format
