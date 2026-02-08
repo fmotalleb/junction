@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -19,10 +20,15 @@ import (
 
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/proxy"
+	"github.com/fmotalleb/junction/utils"
 )
 
-const DefaultHTTPPort = ""
-const maxHostnameLength = 255
+const (
+	DefaultHTTPPort   = ""
+	maxHostnameLength = 255
+
+	flexiblePortFeature = "flexible-port"
+)
 
 var (
 	httpGroupMu          sync.Mutex
@@ -63,21 +69,25 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	}
 
 	logger := log.FromContext(ctx).Named("router.http").With(zap.Any("entry", entry))
+	features := slices.Clone(entry.Features)
 
 	server := &http.Server{
 		ReadHeaderTimeout: time.Second * 30,
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		Addr:              entry.Listen.String(),
 		Handler: &httpProxyHandler{
-			ctx:        ctx,
-			logger:     logger,
-			proxyAddr:  entry.Proxy,
-			targetPort: entry.GetTargetOr(DefaultHTTPPort),
-			entry:      entry,
-			tag:        entry.Tag, // NEW FIELD
+			ctx:          ctx,
+			logger:       logger,
+			proxyAddr:    entry.Proxy,
+			targetPort:   entry.GetTargetOr(DefaultHTTPPort),
+			entry:        entry,
+			tag:          entry.Tag, // NEW FIELD
+			flexiblePort: utils.PopInPlace(&features, flexiblePortFeature),
 		},
 	}
-
+	if len(features) >= 0 {
+		logger.Warn("unused features in entrypoint", zap.Strings("features", features))
+	}
 	logger.Info("HTTP proxy booted")
 
 	if err := server.ListenAndServe(); err != nil {
@@ -116,13 +126,21 @@ type httpProxyHandler struct {
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	port := h.targetPort
+	if h.flexiblePort {
+		port = cmp.Or(r.Header.Get("Junction-Port"), port)
+	}
 	targetHost, err := prepareTargetHost(
 		cmp.Or(r.Host, r.Header.Get("Host")),
-		h.targetPort,
+		port,
 	)
 	if err != nil {
 		h.logger.Warn("failed to prepare target host", zap.Error(err))
 		http.Error(w, "malformed host value, refusing to process request", http.StatusBadRequest)
+		return
+	} else if targetHost == "" {
+		h.logger.Warn("failed to read target host")
+		http.Error(w, "malformed host value, failed to read the value, refusing to process request", http.StatusBadRequest)
 		return
 	}
 

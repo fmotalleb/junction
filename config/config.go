@@ -36,6 +36,8 @@ type EntryPoint struct {
 
 	// Tag used for grouping entrypoints of auto-router kind
 	Tag *string `mapstructure:"tag,omitempty" toml:"tag,omitempty" yaml:"tag,omitempty" json:"tag,omitempty"`
+
+	Features []string `mapstructure:"features,omitempty" toml:"features,omitempty" yaml:"features,omitempty" json:"features,omitempty"`
 }
 
 type FakeDNS struct {
