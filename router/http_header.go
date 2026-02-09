@@ -163,7 +163,7 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("HTTP request received",
+	h.logger.Debug("HTTP request received",
 		zap.String("method", r.Method),
 		zap.String("targetHost", targetHost),
 		zap.String("remoteAddr", r.RemoteAddr),
