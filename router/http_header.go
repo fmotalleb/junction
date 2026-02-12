@@ -21,8 +21,10 @@ import (
 	"github.com/fmotalleb/junction/proxy"
 )
 
-const DefaultHTTPPort = ""
-const maxHostnameLength = 255
+const (
+	DefaultHTTPPort   = ""
+	maxHostnameLength = 255
+)
 
 var (
 	httpGroupMu          sync.Mutex
@@ -161,7 +163,7 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func prepareTargetHost(hostHeader, targetPort string) (string, error) {
 	host := strings.TrimSpace(hostHeader)
 	if host == "" {
-		return "", fmt.Errorf("host header is empty")
+		return "", errors.New("host header is empty")
 	}
 
 	// Only parse URL if scheme exists
@@ -196,19 +198,21 @@ func prepareTargetHost(hostHeader, targetPort string) (string, error) {
 // In case it's not, the returned error contains the details of the failure.
 // From: https://github.com/datadog/datadog-agent/blob/914b7646d5d4/pkg/util/hostname/validate/validate.go#L16C1-L55C2
 func isValidHostname(hostname string) error {
-	if hostname == "" {
-		return fmt.Errorf("hostname is empty")
-	} else if isLocal(hostname) {
+	switch {
+	case hostname == "":
+		return errors.New("hostname is empty")
+	case isLocal(hostname):
 		return fmt.Errorf("%s is a local hostname", hostname)
-	} else if len(hostname) > maxHostnameLength {
+	case len(hostname) > maxHostnameLength:
 		return fmt.Errorf("name exceeded the maximum length of %d characters", maxHostnameLength)
-	} else if !validHostnameRfc1123.MatchString(hostname) {
+	case !validHostnameRfc1123.MatchString(hostname):
 		return fmt.Errorf("%s is not RFC1123 compliant", hostname)
+	default:
+		return nil
 	}
-	return nil
 }
 
-// check whether the name is in the list of local hostnames
+// check whether the name is in the list of local hostnames.
 func isLocal(name string) bool {
 	name = strings.ToLower(name)
 	for _, val := range localhostIdentifiers {
