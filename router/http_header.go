@@ -85,6 +85,7 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 			flexiblePort: utils.PopInPlace(&features, flexiblePortFeature),
 		},
 	}
+	//nolint:gocritic // utils.PopInPlace removes the items from array so if the list of features is normal it will be empty here
 	if len(features) >= 0 {
 		logger.Warn("unused features in entrypoint", zap.Strings("features", features))
 	}
