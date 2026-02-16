@@ -14,7 +14,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/miekg/dns v1.1.72
 	github.com/pelletier/go-toml v1.9.5
-	github.com/sagernet/sing-box v1.12.20
+	github.com/sagernet/sing-box v1.12.22
 	github.com/sethvargo/go-retry v0.3.0
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/cobra v1.10.2
@@ -242,7 +242,7 @@ require (
 	github.com/sagernet/quic-go v0.52.0-sing-box-mod.3 // indirect
 	github.com/sagernet/sing v0.7.18 // indirect
 	github.com/sagernet/sing-mux v0.3.4 // indirect
-	github.com/sagernet/sing-quic v0.5.2 // indirect
+	github.com/sagernet/sing-quic v0.5.3 // indirect
 	github.com/sagernet/sing-shadowsocks v0.2.8 // indirect
 	github.com/sagernet/sing-shadowsocks2 v0.2.1 // indirect
 	github.com/sagernet/sing-shadowtls v0.2.1-0.20250503051639-fcd445d33c11 // indirect
