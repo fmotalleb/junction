@@ -31,6 +31,47 @@ type resolver struct {
 	answer net.IP
 }
 
+func newResolvers(returnAddr []*config.DNSResult) ([]resolver, error) {
+	resolvers := make([]resolver, len(returnAddr))
+	for index, e := range returnAddr {
+		if e.Result == nil {
+			return nil, fmt.Errorf("fake DNS answer entry %d has no result IP configured", index)
+		}
+		ranger := cidranger.NewPCTrieRanger()
+		for _, r := range e.From {
+			err := ranger.Insert(
+				cidranger.NewBasicRangerEntry(*r),
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+		resolvers[index] = resolver{
+			ranger: ranger,
+			answer: *e.Result,
+		}
+	}
+	return resolvers, nil
+}
+
+func newHandler(ctx context.Context, resolvers []resolver, forwarder string, allowList []matcher.Matcher) *handler {
+	return &handler{
+		ctx:       ctx,
+		resolvers: resolvers,
+		forwarder: forwarder,
+		allowList: allowList,
+	}
+}
+
+func listen(ctx context.Context, listenAddr string) (net.PacketConn, error) {
+	listener := new(net.ListenConfig)
+	l, err := listener.ListenPacket(ctx, "udp", listenAddr)
+	if err != nil {
+		return nil, err
+	}
+	return l, nil
+}
+
 // Serve starts and runs a fake DNS server based on the provided configuration.
 // The server will answer A queries with cfg.ReturnAddr for names allowed by cfg.Allowed,
 // optionally forward other queries to cfg.Forwarder, and listen on cfg.Listen (default 0.0.0.0:53).
@@ -60,38 +101,17 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 		forwarder = cfg.Forwarder.String()
 	}
 
-	resolvers := make([]resolver, len(cfg.ReturnAddr))
-	for index, e := range cfg.ReturnAddr {
-		if e.Result == nil {
-			return fmt.Errorf("fake DNS answer entry %d has no result IP configured", index)
-		}
-		ranger := cidranger.NewPCTrieRanger()
-		for _, r := range e.From {
-			err := ranger.Insert(
-				cidranger.NewBasicRangerEntry(*r),
-			)
-			if err != nil {
-				return err
-			}
-		}
-		resolvers[index] = resolver{
-			ranger: ranger,
-			answer: *e.Result,
-		}
+	resolvers, err := newResolvers(cfg.ReturnAddr)
+	if err != nil {
+		return err
 	}
 
-	h := &handler{
-		ctx:       sCtx,
-		resolvers: resolvers, // e.g., "10.0.0.1"
-		forwarder: forwarder, // e.g., "1.1.1.1:53"
-		allowList: cfg.Allowed,
-	}
+	h := newHandler(sCtx, resolvers, forwarder, cfg.Allowed)
 	listenAddr := "0.0.0.0:53"
 	if cfg.Listen != nil {
 		listenAddr = cfg.Listen.String()
 	}
-	listener := new(net.ListenConfig)
-	l, err := listener.ListenPacket(ctx, "udp", listenAddr)
+	l, err := listen(ctx, listenAddr)
 	if err != nil {
 		logger.Error("failed to start server", zap.Error(err))
 		return err
@@ -149,51 +169,25 @@ func (h *handler) findAnswer(a net.Addr) net.IP {
 	return nil
 }
 
-// ServeDNS implements dns.Handler.
-func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+func (h *handler) handleARecord(w dns.ResponseWriter, r *dns.Msg, q dns.Question) {
 	msg := new(dns.Msg)
 	msg.SetReply(r)
-
-	if len(r.Question) == 0 {
-		if err := w.WriteMsg(msg); err != nil {
-			h.logger().Info("failed to write answer to empty question", zap.Error(err))
-		}
-		return
+	rr := &dns.A{
+		Hdr: dns.RR_Header{
+			Name:   q.Name,
+			Rrtype: dns.TypeA,
+			Class:  dns.ClassINET,
+			Ttl:    10,
+		},
+		A: h.findAnswer(w.RemoteAddr()),
 	}
-
-	q := r.Question[0]
-	logger := h.logger().WithLazy(
-		zap.String("name", q.Name),
-		zap.Uint16("class", q.Qclass),
-		zap.Uint16("type", q.Qtype),
-		zap.String("from", w.RemoteAddr().String()),
-	)
-	logger.Debug("handling dns request")
-	// Always respond with your answer for A requests
-	if q.Qtype == dns.TypeA && h.IsAllowed(q.Name) {
-		rr := &dns.A{
-			Hdr: dns.RR_Header{
-				Name:   q.Name,
-				Rrtype: dns.TypeA,
-				Class:  dns.ClassINET,
-				Ttl:    10,
-			},
-			A: h.findAnswer(w.RemoteAddr()),
-		}
-		msg.Answer = append(msg.Answer, rr)
-		if err := w.WriteMsg(msg); err != nil {
-			logger.Warn("failed to write answer", zap.Error(err))
-		}
-		return
+	msg.Answer = append(msg.Answer, rr)
+	if err := w.WriteMsg(msg); err != nil {
+		h.logger().Warn("failed to write answer", zap.Error(err))
 	}
+}
 
-	if h.forwarder == "" {
-		msg = msg.SetRcode(r, dns.RcodeRefused)
-		if err := w.WriteMsg(msg); err != nil {
-			logger.Warn("failed to write refused answer", zap.Error(err))
-		}
-		return
-	}
+func (h *handler) forwardRequest(w dns.ResponseWriter, r *dns.Msg, logger *zap.Logger) {
 	ctx, cancel := context.WithTimeout(h.ctx, time.Second*10)
 	defer cancel()
 
@@ -213,4 +207,49 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	if err := w.WriteMsg(resp); err != nil {
 		logger.Warn("failed to write answer from forwarder", zap.Error(err))
 	}
+}
+
+func (h *handler) sendRefusedResponse(w dns.ResponseWriter, r *dns.Msg, logger *zap.Logger) {
+	msg := new(dns.Msg)
+	msg.SetReply(r)
+	msg.SetRcode(r, dns.RcodeRefused)
+	if err := w.WriteMsg(msg); err != nil {
+		logger.Warn("failed to write refused answer", zap.Error(err))
+	}
+}
+
+func (h *handler) handleEmptyQuestion(w dns.ResponseWriter, r *dns.Msg) {
+	msg := new(dns.Msg)
+	msg.SetReply(r)
+	if err := w.WriteMsg(msg); err != nil {
+		h.logger().Info("failed to write answer to empty question", zap.Error(err))
+	}
+}
+
+// ServeDNS implements dns.Handler.
+func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+	if len(r.Question) == 0 {
+		h.handleEmptyQuestion(w, r)
+		return
+	}
+
+	q := r.Question[0]
+	logger := h.logger().WithLazy(
+		zap.String("name", q.Name),
+		zap.Uint16("class", q.Qclass),
+		zap.Uint16("type", q.Qtype),
+		zap.String("from", w.RemoteAddr().String()),
+	)
+	logger.Debug("handling dns request")
+
+	if q.Qtype == dns.TypeA && h.IsAllowed(q.Name) {
+		h.handleARecord(w, r, q)
+		return
+	}
+
+	if h.forwarder == "" {
+		h.sendRefusedResponse(w, r, logger)
+		return
+	}
+	h.forwardRequest(w, r, logger)
 }

@@ -22,6 +22,48 @@ type ClientHello struct {
 	SNICount           int
 }
 
+func (out *ClientHello) parseClientHelloBody(hello []byte) (int, error) {
+	pos := 0
+	if len(hello) < 2+32 {
+		return 0, errors.New("client hello too short")
+	}
+	out.Version = binary.BigEndian.Uint16(hello[pos:])
+	pos += 2
+
+	copy(out.Random[:], hello[pos:pos+32])
+	pos += 32
+
+	sessionIDLen, err := getSessionIDLen(hello, pos)
+	if err != nil {
+		return 0, err
+	}
+	pos++
+	out.SessionID = hello[pos : pos+sessionIDLen]
+	pos += sessionIDLen
+
+	cipherLen, err := getCipherLen(hello, pos)
+	if err != nil {
+		return 0, err
+	}
+	pos += 2
+	cipherCount := cipherLen / 2
+	out.CipherSuites = out.CipherSuites[:0]
+	for i := 0; i < cipherCount; i++ {
+		cs := binary.BigEndian.Uint16(hello[pos+(i*2):])
+		out.CipherSuites = append(out.CipherSuites, cs)
+	}
+	pos += cipherLen
+
+	compMethodsLen, err := getCompMethodsLen(hello, pos)
+	if err != nil {
+		return 0, err
+	}
+	pos++
+	out.CompressionMethods = hello[pos : pos+compMethodsLen]
+	pos += compMethodsLen
+	return pos, nil
+}
+
 func (out *ClientHello) Unmarshal(buf []byte) error {
 	err := checkHeaders(buf)
 	if err != nil {
@@ -38,45 +80,10 @@ func (out *ClientHello) Unmarshal(buf []byte) error {
 	}
 
 	hello := handshake[tlsHandshakeHeaderLen:]
-	pos := 0
-	if len(hello) < 2+32 {
-		return errors.New("client hello too short")
-	}
-	out.Version = binary.BigEndian.Uint16(hello[pos:])
-	pos += 2
-
-	copy(out.Random[:], hello[pos:pos+32])
-	pos += 32
-
-	sessionIDLen, err := getSessionIDLen(hello, pos)
+	pos, err := out.parseClientHelloBody(hello)
 	if err != nil {
 		return err
 	}
-	pos++
-	out.SessionID = hello[pos : pos+sessionIDLen]
-	pos += sessionIDLen
-
-	cipherLen, err := getCipherLen(hello, pos)
-	if err != nil {
-		return err
-	}
-	pos += 2
-	cipherCount := cipherLen / 2
-	out.CipherSuites = out.CipherSuites[:0]
-	for i := 0; i < cipherCount; i++ {
-		cs := binary.BigEndian.Uint16(hello[pos+(i*2):])
-		out.CipherSuites = append(out.CipherSuites, cs)
-	}
-	pos += cipherLen
-
-	compMethodsLen, err := getCompMethodsLen(hello, pos)
-	if err != nil {
-		return err
-	}
-	pos++
-	out.CompressionMethods = hello[pos : pos+compMethodsLen]
-	pos += compMethodsLen
-
 	if pos+2 > len(hello) {
 		// No extensions
 		out.SNICount = 0
