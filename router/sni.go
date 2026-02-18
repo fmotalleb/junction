@@ -150,7 +150,7 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 		return
 	}
 
-	relayTraffic(client, server, logger)
+	relayTraffic(ctx, client, server, logger)
 }
 
 func readSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {

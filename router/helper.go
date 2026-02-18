@@ -1,13 +1,14 @@
 package router
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
-	"sync"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/fmotalleb/junction/proxy"
 	"github.com/fmotalleb/junction/utils"
@@ -30,39 +31,32 @@ func dialTarget(proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Co
 
 // relayTraffic concurrently relays data between two network connections in both directions until either connection is closed or an error occurs.
 // Logs connection closure and errors for diagnostic purposes.
-func relayTraffic(src, dst net.Conn, logger *zap.Logger) {
-	var once sync.Once
-	errCh := make(chan error, 2)
-
-	closeBoth := func() {
+func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
+	defer func() {
 		_ = src.Close()
 		_ = dst.Close()
-	}
-
-	// Copy from src to dst
-	go func() {
-		err := utils.Copy(dst, src)
-		if err != nil {
-			errCh <- errors.Join(errors.New("failed to write to dst"), err)
-		} else {
-			errCh <- nil
-		}
 	}()
-
-	// Copy from dst to src
-	go func() {
-		err := utils.Copy(src, dst)
-		if err != nil {
-			errCh <- errors.Join(errors.New("failed to write to src"), err)
-		} else {
-			errCh <- nil
-		}
-	}()
-
+	errs, _ := errgroup.WithContext(ctx)
+	errs.Go(
+		func() error {
+			if err := utils.Copy(dst, src); err != nil {
+				return errors.Join(errors.New("failed to write to dst"), err)
+			} else {
+				return nil
+			}
+		},
+	)
+	errs.Go(
+		func() error {
+			if err := utils.Copy(src, dst); err != nil {
+				return errors.Join(errors.New("failed to write to dst"), err)
+			} else {
+				return nil
+			}
+		},
+	)
 	// Wait for the first error or closure
-	err := <-errCh
-	once.Do(closeBoth)
-
+	err := errs.Wait()
 	if err != nil {
 		if errors.Is(err, net.ErrClosed) {
 			logger.Debug("connection closed (normal)", zap.Error(err))

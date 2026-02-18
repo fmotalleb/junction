@@ -74,5 +74,5 @@ func handleTCPConnection(parentCtx context.Context, logger *zap.Logger, conn net
 	}
 	defer targetConn.Close()
 
-	relayTraffic(conn, targetConn, logger)
+	relayTraffic(ctx, conn, targetConn, logger)
 }

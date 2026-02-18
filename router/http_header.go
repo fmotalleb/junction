@@ -241,6 +241,8 @@ func isLocal(name string) bool {
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
+	ctx, cancel := context.WithTimeout(h.ctx, h.entry.Timeout)
+	defer cancel()
 	dialer, err := proxy.NewDialer(h.proxyAddr)
 	if err != nil {
 		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
@@ -272,7 +274,7 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request,
 	}
 	defer clientConn.Close()
 
-	relayTraffic(clientConn, targetConn, h.logger)
+	relayTraffic(ctx, clientConn, targetConn, h.logger)
 }
 
 func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Request, targetHost string) {
