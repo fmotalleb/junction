@@ -61,7 +61,10 @@ func registerTaggedEntry(tag string, entry config.EntryPoint) bool {
 
 func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 	logger := log.FromContext(ctx).Named("router.sni").
-		With(zap.Any("entry", entry))
+		With(
+			zap.String("router", string(entry.Routing)),
+			zap.String("listen", entry.Listen.String()),
+		)
 
 	addr := net.TCPAddrFromAddrPort(entry.Listen)
 	listener, err := net.ListenTCP("tcp", addr)
@@ -163,7 +166,10 @@ func readSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
 
 	name := tls.ExtractSNI(buf[:n])
 	if name == nil {
-		logger.Warn("SNI missing")
+		// Its common to happen
+		logger.Debug("SNI missing",
+			zap.String("client", conn.RemoteAddr().String()),
+		)
 		return nil, nil, 0, errSNIMissing
 	}
 	return name, buf, n, nil

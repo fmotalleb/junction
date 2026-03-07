@@ -68,7 +68,12 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		}
 	}
 
-	logger := log.FromContext(ctx).Named("router.http").With(zap.Any("entry", entry))
+	logger := log.FromContext(ctx).
+		Named("router.http").
+		With(
+			zap.String("router", string(entry.Routing)),
+			zap.String("listen", entry.Listen.String()),
+		)
 	features := slices.Clone(entry.Features)
 
 	server := &http.Server{

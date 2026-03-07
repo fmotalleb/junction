@@ -22,7 +22,10 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 
 	logger := log.FromContext(ctx).
 		Named("router.udp-raw").
-		With(zap.Any("entry", entry))
+		With(
+			zap.String("router", string(entry.Routing)),
+			zap.String("listen", entry.Listen.String()),
+		)
 
 	addrPort := entry.Listen
 	udpAddr := net.UDPAddrFromAddrPort(addrPort)
