@@ -194,7 +194,7 @@ func (h *handler) forwardRequest(w dns.ResponseWriter, r *dns.Msg, logger *zap.L
 	// Otherwise forward to upstream
 	resp, exchangeErr := dns.ExchangeContext(ctx, r, h.forwarder)
 	if exchangeErr != nil {
-		logger.Warn("failed to read result from forwarder", zap.Error(exchangeErr))
+		logger.Debug("failed to read result from forwarder", zap.Error(exchangeErr))
 		// If forward failed, still return NXDOMAIN instead of crashing
 		fallback := new(dns.Msg)
 		fallback.SetRcode(r, dns.RcodeNameError)
