@@ -23,7 +23,7 @@ func dialTarget(proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Co
 
 	conn, err := dialer.Dial("tcp", target)
 	if err != nil {
-		logger.Error("failed to connect to target", zap.Error(err))
+		logger.Debug("failed to connect to target", zap.Error(err))
 		return nil, err
 	}
 	return conn, nil

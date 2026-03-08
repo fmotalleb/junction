@@ -278,7 +278,7 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request,
 
 	targetConn, err := dialer.Dial("tcp", targetHost)
 	if err != nil {
-		h.logger.Error("CONNECT failed", zap.String("target", targetHost), zap.Error(err))
+		h.logger.Debug("CONNECT failed", zap.String("target", targetHost), zap.Error(err))
 		http.Error(w, "Failed to connect to target", http.StatusBadGateway)
 		return
 	}

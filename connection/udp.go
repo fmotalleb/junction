@@ -123,7 +123,7 @@ func (m *UDPClientManager) dialTarget() (*net.UDPConn, error) {
 
 	targetConn, err := net.DialUDP("udp", nil, targetAddr)
 	if err != nil {
-		m.logger.Error("failed to connect to target",
+		m.logger.Debug("failed to connect to target",
 			zap.String("target", m.entry.Target),
 			zap.Error(err))
 		return nil, err
