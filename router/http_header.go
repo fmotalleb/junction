@@ -154,7 +154,7 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// --- Tag group selection logic ---
 	entry := h.entry
 	if h.tag == nil && !entry.AllowedFrom(remoteAddr) {
-		h.logger.Warn("connection rejected", zap.String("client", r.RemoteAddr))
+		h.logger.Debug("connection rejected", zap.String("client", r.RemoteAddr))
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -186,7 +186,7 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !entry.AllowedFrom(remoteAddr) {
-		h.logger.Warn("connection rejected", zap.String("client", r.RemoteAddr))
+		h.logger.Debug("connection rejected", zap.String("client", r.RemoteAddr))
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}

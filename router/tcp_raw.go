@@ -59,7 +59,7 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		}
 
 		if !entry.AllowedFrom(conn.RemoteAddr()) {
-			logger.Warn("connection rejected",
+			logger.Debug("connection rejected",
 				zap.String("client", conn.RemoteAddr().String()),
 			)
 			_ = conn.Close()

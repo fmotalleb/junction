@@ -101,7 +101,7 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 	remote := conn.RemoteAddr()
 	if entry.Tag == nil {
 		if !entry.AllowedFrom(remote) {
-			logger.Warn("connection rejected", zap.String("client", remote.String()))
+			logger.Debug("connection rejected", zap.String("client", remote.String()))
 			_ = conn.Close()
 			return
 		}
