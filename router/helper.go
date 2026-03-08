@@ -66,6 +66,28 @@ func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
 	}
 }
 
+type rawAddr string
+
+func (r rawAddr) Network() string { return "raw" }
+func (r rawAddr) String() string  { return string(r) }
+
+func addrFromRemote(remote string) net.Addr {
+	if remote == "" {
+		return rawAddr("")
+	}
+	if addr, err := net.ResolveTCPAddr("tcp", remote); err == nil {
+		return addr
+	}
+	host := remote
+	if h, _, err := net.SplitHostPort(remote); err == nil && h != "" {
+		host = h
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return &net.IPAddr{IP: ip}
+	}
+	return rawAddr(remote)
+}
+
 var ErrFieldMissing = errors.New("a mandatory field is missing")
 
 func buildFieldMissing(service, field string) error {

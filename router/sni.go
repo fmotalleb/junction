@@ -98,6 +98,15 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 }
 
 func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, logger *zap.Logger) {
+	remote := conn.RemoteAddr()
+	if entry.Tag == nil {
+		if !entry.AllowedFrom(remote) {
+			logger.Warn("connection rejected", zap.String("client", remote.String()))
+			_ = conn.Close()
+			return
+		}
+	}
+
 	serverName, buf, n, err := readSNI(conn, logger)
 	if err != nil {
 		_ = conn.Close()
@@ -119,7 +128,7 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 
 	// Tagged routing
 	for _, ep := range sniGroups[*entry.Tag] {
-		if ep.Allowed(sni) {
+		if ep.Allowed(sni) && ep.AllowedFrom(remote) {
 			go proxyToTarget(ctx, conn, sni, buf, n, l, ep)
 			return
 		}

@@ -63,6 +63,13 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 			continue
 		}
 
+		if !entry.AllowedFrom(clientAddr) {
+			logger.Warn("packet rejected",
+				zap.String("client", clientAddr.String()),
+			)
+			continue
+		}
+
 		go clientManager.HandlePacket(clientAddr, buffer[:n], conn)
 	}
 }

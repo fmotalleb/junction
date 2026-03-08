@@ -288,6 +288,14 @@ junction run --listen 8443 \
     - Supports wildcards (e.g., `"*.example.com"`)
     - Supports Regular Expression (e.g. `"regexp:allowed"`, `"grep:.+google.com^"`)
     - Block rules are applied before allow rules
+  - **`block_from`** (optional):
+    List of client address patterns to block (applies to all routers).
+    - Supports wildcards and regular expressions (same matcher rules as `block_list`)
+    - Block rules are applied before allow rules
+  - **`allow_from`** (optional):
+    List of client address patterns to allow (applies to all routers). If specified, only listed clients are allowed.
+    - Supports wildcards and regular expressions (same matcher rules as `allow_list`)
+    - Block rules are applied before allow rules
 
 **Important Notes**:
 
@@ -295,6 +303,7 @@ junction run --listen 8443 \
 - `tcp-raw` and `udp-raw` require explicit `ip:port` targets
 - `udp-raw` routing doesn't support proxy protocols
 - When using `allow_list`, unlisted hosts are implicitly blocked
+- When using `allow_from`, unlisted clients are implicitly blocked
 - Wildcard patterns (e.g., `*.example.com`) match subdomains only, not the base domain
 
 #### **Example: TOML Configuration**
@@ -312,6 +321,7 @@ routing = "http-header"
 to = "80" # Defaults from `Host`
 proxy = "socks5://127.0.0.1:7890"
 features = ["flexible-port"] # Allow per-request port override via Junction-Port header
+allow_from = ["127.0.0.1", "10.0.*", "regexp:^192\\.168\\.1\\."]
 
 [[entrypoints]]
 listen = 8090 # Listen on 127.0.0.1:8090

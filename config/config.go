@@ -30,6 +30,8 @@ type EntryPoint struct {
 	Listen    netip.AddrPort     `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
 	BlockList []*matcher.Matcher `mapstructure:"block_list,omitempty" toml:"block_list,omitempty" yaml:"block_list,omitempty" json:"block_list,omitempty"`
 	AllowList []*matcher.Matcher `mapstructure:"allow_list,omitempty" toml:"allow_list,omitempty" yaml:"allow_list,omitempty" json:"allow_list,omitempty"`
+	AllowFrom []*matcher.Matcher `mapstructure:"allow_from,omitempty" toml:"allow_from,omitempty" yaml:"allow_from,omitempty" json:"allow_from,omitempty"`
+	BlockFrom []*matcher.Matcher `mapstructure:"block_from,omitempty" toml:"block_from,omitempty" yaml:"block_from,omitempty" json:"block_from,omitempty"`
 	Proxy     []*url.URL         `mapstructure:"proxy,omitempty" toml:"proxy,omitempty" yaml:"proxy,omitempty" json:"proxy,omitempty"`
 	Target    string             `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
 	Timeout   time.Duration      `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
@@ -85,6 +87,38 @@ func (e *EntryPoint) Allowed(name string) bool {
 		return false
 	}
 
+	return true
+}
+
+func (e *EntryPoint) AllowedFrom(addr net.Addr) bool {
+	if addr == nil {
+		return len(e.AllowFrom) == 0
+	}
+
+	raw := addr.String()
+	from := raw
+	if host, _, err := net.SplitHostPort(raw); err == nil && host != "" {
+		from = host
+	}
+	if from == "" {
+		from = raw
+	}
+
+	if len(e.BlockFrom) != 0 {
+		for _, b := range e.BlockFrom {
+			if b.Match(from) {
+				return false
+			}
+		}
+	}
+	if len(e.AllowFrom) != 0 {
+		for _, a := range e.AllowFrom {
+			if a.Match(from) {
+				return true
+			}
+		}
+		return false
+	}
 	return true
 }
 

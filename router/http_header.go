@@ -132,6 +132,7 @@ type httpProxyHandler struct {
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	remoteAddr := addrFromRemote(r.RemoteAddr)
 	port := h.targetPort
 	if h.flexiblePort {
 		port = cmp.Or(r.Header.Get("Junction-Port"), port)
@@ -152,19 +153,40 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// --- Tag group selection logic ---
 	entry := h.entry
+	if h.tag == nil && !entry.AllowedFrom(remoteAddr) {
+		h.logger.Warn("connection rejected", zap.String("client", r.RemoteAddr))
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
 	if h.tag != nil {
 		group := httpGroups[*h.tag]
+		matched := false
 
 		for _, ep := range group {
-			if ep.Allowed(targetHost) {
+			if ep.Allowed(targetHost) && ep.AllowedFrom(remoteAddr) {
 				entry = ep
+				matched = true
 				break
 			}
+		}
+
+		if !matched {
+			h.logger.Warn("no matching entry for http request",
+				zap.String("hostname", targetHost),
+				zap.String("client", r.RemoteAddr),
+			)
+			w.WriteHeader(http.StatusForbidden)
+			return
 		}
 	}
 
 	if !entry.Allowed(targetHost) {
 		h.logger.Warn("hostname rejected", zap.String("hostname", targetHost))
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if !entry.AllowedFrom(remoteAddr) {
+		h.logger.Warn("connection rejected", zap.String("client", r.RemoteAddr))
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
