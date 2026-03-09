@@ -127,12 +127,14 @@ func handleSSHConnection(parentCtx context.Context, logger *zap.Logger, conn net
 			continue
 		}
 
-		if !entry.Allowed(req.DestAddr) {
+		destHost := req.DestAddr
+		destAddr := net.JoinHostPort(req.DestAddr, strconv.Itoa(int(req.DestPort)))
+		if !allowedTarget(entry, destHost, destAddr) {
 			_ = newChannel.Reject(gossh.Prohibited, "destination not allowed")
 			continue
 		}
 
-		target := net.JoinHostPort(req.DestAddr, strconv.Itoa(int(req.DestPort)))
+		target := destAddr
 		targetConn, err := dialTarget(entry.Proxy, target, logger)
 		if err != nil {
 			_ = newChannel.Reject(gossh.ConnectionFailed, "failed to connect to destination")

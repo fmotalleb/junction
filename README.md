@@ -135,6 +135,11 @@ junction run --listen 8443 \
              --proxy socks5://127.0.0.1:7890 \
              --target 443 \
              --routing sni
+
+# SSH jump server example (accept any public key)
+junction run --listen 0.0.0.0:2222 \
+             --routing ssh-server \
+             --params authorized_keys=allow-all
 ```
 
 #### Fields
@@ -209,6 +214,7 @@ junction run --listen 8443 \
     - `http-header`: Uses HTTP `Host` header. Default port: `80`
     - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port` in `to` field
     - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field. **Note**: Proxy not supported
+    - `ssh-server`: SSH jump server. Only `direct-tcpip` is supported; no shell/exec sessions
   - **`tag`** (optional):
       The tag attribute groups multiple entrypoints so they share a single listening socket while applying different domain-matching rules. A tag represents a routing group evaluated on the same port.
       This causes all entrypoints with the same tag to have a fallback behavior
@@ -245,7 +251,7 @@ junction run --listen 8443 \
       Proxy3 --> Target["example.com:80"]
     ```
 
-  - **`to`** (required):
+  - **`to`** (required unless `ssh-server`):
     Target destination:
 
     - For `sni`/`http-header`: Port number (string)
@@ -265,12 +271,23 @@ junction run --listen 8443 \
         If the header is missing or empty, the `to` value (or the router default) is used.
     - Other routers currently ignore feature flags (unknown features are ignored with a warning).
 
-  - **`block_list`** (optional) [only when using sni,http-header]:
-    List of hostnames/patterns to block.
+  - **`params`** (optional, `ssh-server` only):
+    Extra SSH server configuration. Accepted keys:
+
+    - `host_key`: Path to SSH host private key. If omitted, a random in-memory Ed25519 key is generated.
+    - `authorized_keys`: Path to `authorized_keys` file. Use `allow-all` to accept any public key.
+    - `password`: Password for password auth.
+    - `user` or `users`: Restrict username(s). If omitted, any user is accepted.
+    - `banner`: SSH banner text.
+    - `allow_any_user`: `true` to ignore username restrictions.
+    - `allow_any_public_key`: `true` to accept any public key.
+
+  - **`block_list`** (optional) [sni, http-header, ssh-server]:
+    List of hostnames/patterns to block (ssh-server matches destination host or host:port).
     - Supports wildcards (e.g., `"*.example.com"`, `"glob:*.example.com"`)
     - Supports Regular Expression (contain check) (e.g. `"regexp:badword"`, `"grep:bad.+word"`)
-  - **`allow_list`** (optional) [only when using sni,http-header]:
-    List of hostnames/patterns to allow. If specified, only listed hosts are allowed.
+  - **`allow_list`** (optional) [sni, http-header, ssh-server]:
+    List of hostnames/patterns to allow. If specified, only listed hosts are allowed (ssh-server matches destination host or host:port).
     - Supports wildcards (e.g., `"*.example.com"`)
     - Supports Regular Expression (e.g. `"regexp:allowed"`, `"grep:.+google.com^"`)
     - Block rules are applied before allow rules
@@ -291,6 +308,7 @@ junction run --listen 8443 \
 - When using `allow_list`, unlisted hosts are implicitly blocked
 - When using `allow_from`, unlisted clients are implicitly blocked
 - Wildcard patterns (e.g., `*.example.com`) match subdomains only, not the base domain
+- `ssh-server` only supports `direct-tcpip` channels (no shell/exec)
 
 #### **Example: TOML Configuration**
 
@@ -320,6 +338,11 @@ listen = 8099
 to = "18.19.20.21:22" # Required for tcp-raw
 routing = "tcp-raw"  # TCP raw is old behavior where the target address must be specified (used for non-tls non-http requests that do not have any indications for server name nor address)
 proxy = "direct" # Do not handle using proxy just reverse proxy it directly
+
+[[entrypoints]]
+listen = "0.0.0.0:2222"
+routing = "ssh-server"
+params = { authorized_keys = "allow-all" }
 ```
 
 #### **Example: YAML Configuration**
@@ -335,6 +358,11 @@ entrypoints:
     listen: 8080
     to: "80" # Defaults to 80
     proxy: socks5://127.0.0.1:7890
+
+  - routing: ssh-server
+    listen: "0.0.0.0:2222"
+    params:
+      authorized_keys: allow-all
 ```
 
 JSON Schema for the configuration file is available at `config.schema.json`.

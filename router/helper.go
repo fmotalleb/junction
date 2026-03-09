@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/proxy"
 	"github.com/fmotalleb/junction/utils"
 )
@@ -92,4 +93,23 @@ var ErrFieldMissing = errors.New("a mandatory field is missing")
 
 func buildFieldMissing(service, field string) error {
 	return fmt.Errorf("%w, router: %s, field: %s", ErrFieldMissing, service, field)
+}
+
+func allowedTarget(entry config.EntryPoint, host, hostPort string) bool {
+	if len(entry.BlockList) != 0 {
+		for _, b := range entry.BlockList {
+			if b.Match(host) || b.Match(hostPort) {
+				return false
+			}
+		}
+	}
+	if len(entry.AllowList) != 0 {
+		for _, a := range entry.AllowList {
+			if a.Match(host) || a.Match(hostPort) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
 }

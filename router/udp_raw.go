@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"errors"
 	"net"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -39,6 +40,15 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Target == "" {
 		logger.Error("UDP proxy must have a target ip:port address")
 		return true, buildFieldMissing("udp-raw", "to")
+	}
+	host, _, err := net.SplitHostPort(entry.Target)
+	if err != nil || host == "" {
+		logger.Error("UDP proxy target must be ip:port", zap.String("target", entry.Target), zap.Error(err))
+		return true, buildFieldMissing("udp-raw", "to")
+	}
+	if !allowedTarget(entry, host, entry.Target) {
+		logger.Warn("target blocked by allow/block list", zap.String("target", entry.Target))
+		return true, errors.New("target blocked by allow/block list")
 	}
 
 	logger.Info("raw UDP proxy booted")
