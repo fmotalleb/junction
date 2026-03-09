@@ -12,6 +12,7 @@ const (
 	RouterSNI        Router = "sni"
 	RouterTCPRaw     Router = "tcp-raw"
 	RouterUDPRaw     Router = "udp-raw"
+	RouterSSHServer  Router = "ssh-server"
 )
 
 func (r *Router) Decode(from reflect.Type, val interface{}) (any, error) {
@@ -37,7 +38,7 @@ func (r *Router) Decode(from reflect.Type, val interface{}) (any, error) {
 
 func (r *Router) IsValid() bool {
 	switch *r {
-	case RouterHTTPHeader, RouterSNI, RouterTCPRaw, RouterUDPRaw:
+	case RouterHTTPHeader, RouterSNI, RouterTCPRaw, RouterUDPRaw, RouterSSHServer:
 		return true
 	default:
 		return false

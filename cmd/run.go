@@ -4,8 +4,10 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"errors"
 	"net/netip"
 	"net/url"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -52,8 +54,16 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		if entry.Params, err = readParamsFlag(cmd); err != nil {
+			return err
+		}
+
 		if entry.Timeout, err = cmd.Flags().GetDuration("timeout"); err != nil {
 			return err
+		}
+
+		if entry.Routing != config.RouterSSHServer && entry.Target == "" {
+			return errors.New("target is required for this routing type")
 		}
 
 		var cfg config.Config
@@ -83,9 +93,9 @@ func init() {
 	runCmd.Flags().StringSliceP("proxy", "x", nil, "Proxy URLs (multiple or none allowed, e.g., socks5://127.0.0.1:7890)")
 	runCmd.Flags().StringP("routing", "r", "", "Routing method (e.g., sni, http-header, tcp-raw)")
 	runCmd.Flags().StringP("target", "t", "", "Target (based on routing method)")
+	runCmd.Flags().StringSliceP("params", "p", nil, "Extra params as key=value pairs (repeatable)")
 	runCmd.Flags().DurationP("timeout", "T", constants.Day, "Timeout for requests")
 
-	requireOrPanic("target")
 	requireOrPanic("routing")
 }
 
@@ -93,4 +103,24 @@ func requireOrPanic(name string) {
 	if err := runCmd.MarkFlagRequired(name); err != nil {
 		panic(err)
 	}
+}
+
+func readParamsFlag(cmd *cobra.Command) (map[string]string, error) {
+	raw, err := cmd.Flags().GetStringSlice("params")
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	params := make(map[string]string, len(raw))
+	for _, item := range raw {
+		key, val, ok := strings.Cut(item, "=")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" {
+			return nil, errors.New("params must be key=value pairs")
+		}
+		params[key] = strings.TrimSpace(val)
+	}
+	return params, nil
 }

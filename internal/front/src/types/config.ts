@@ -1,4 +1,4 @@
-export type RoutingType = 'sni' | 'http-header' | 'tcp-raw' | 'udp-raw';
+export type RoutingType = 'sni' | 'http-header' | 'tcp-raw' | 'udp-raw' | 'ssh-server';
 export type ProxyProtocol = 'socks5' | 'ssh';
 
 export interface EntryPoint {
@@ -10,6 +10,7 @@ export interface EntryPoint {
   proxy?: string[];
   to: string;
   timeout?: string;
+  params?: Record<string, string>;
 }
 
 export interface NetworkConfig {

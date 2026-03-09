@@ -11,16 +11,18 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   }
 
   // Validate routing type
-  const validRoutingTypes: RoutingType[] = ['sni', 'http-header', 'tcp-raw', 'udp-raw'];
+  const validRoutingTypes: RoutingType[] = ['sni', 'http-header', 'tcp-raw', 'udp-raw', 'ssh-server'];
   if (!validRoutingTypes.includes(entryPoint.routing)) {
     errors.push({ field: 'routing', message: 'Invalid routing type' });
   }
 
-  // Validate destination
-  if (!entryPoint.to.trim()) {
-    errors.push({ field: 'to', message: 'Destination is required' });
-  } else if (!isValidDestination(entryPoint.to)) {
-    errors.push({ field: 'to', message: 'Invalid destination format (e.g., 443 or example.com:443)' });
+  // Validate destination (not required for ssh-server)
+  if (entryPoint.routing !== 'ssh-server') {
+    if (!entryPoint.to.trim()) {
+      errors.push({ field: 'to', message: 'Destination is required' });
+    } else if (!isValidDestination(entryPoint.to)) {
+      errors.push({ field: 'to', message: 'Invalid destination format (e.g., 443 or example.com:443)' });
+    }
   }
 
   // Validate timeout format
