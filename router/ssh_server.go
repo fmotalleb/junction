@@ -2,6 +2,8 @@ package router
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +23,7 @@ import (
 const (
 	sshParamHostKeyPath       = "host_key"
 	sshParamAuthorizedKeys    = "authorized_keys"
+	sshParamAuthorizedKeysAny = "allow-all"
 	sshParamPassword          = "password"
 	sshParamUser              = "user"
 	sshParamUsers             = "users"
@@ -183,18 +186,9 @@ func relaySSH(ctx context.Context, ch gossh.Channel, target net.Conn, logger *za
 
 func buildSSHServerConfig(params map[string]string, logger *zap.Logger) (*gossh.ServerConfig, error) {
 	hostKeyPath := strings.TrimSpace(params[sshParamHostKeyPath])
-	if hostKeyPath == "" {
-		logger.Error("missing host key for ssh-server")
-		return nil, buildFieldMissing("ssh-server", sshParamHostKeyPath)
-	}
-
-	key, err := os.ReadFile(hostKeyPath)
+	signer, err := loadHostKey(hostKeyPath)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to read host key: %s", hostKeyPath), err)
-	}
-	signer, err := gossh.ParsePrivateKey(key)
-	if err != nil {
-		return nil, errors.Join(errors.New("failed to parse host key"), err)
+		return nil, err
 	}
 
 	allowedUsers := parseUsers(params)
@@ -204,12 +198,15 @@ func buildSSHServerConfig(params map[string]string, logger *zap.Logger) (*gossh.
 	}
 
 	authorizedKeysPath := strings.TrimSpace(params[sshParamAuthorizedKeys])
-	authorizedKeys, err := loadAuthorizedKeys(authorizedKeysPath)
+	allowAnyPublicKey := parseBool(params[sshParamAllowAnyPublicKey])
+	authorizedKeys, allowAllFromKeys, err := loadAuthorizedKeys(authorizedKeysPath)
 	if err != nil {
 		return nil, err
 	}
 
-	allowAnyPublicKey := parseBool(params[sshParamAllowAnyPublicKey])
+	if allowAllFromKeys {
+		allowAnyPublicKey = true
+	}
 	password := params[sshParamPassword]
 
 	if len(authorizedKeys) == 0 && password == "" && !allowAnyPublicKey {
@@ -281,24 +278,50 @@ func userAllowed(user string, allowed map[string]struct{}) bool {
 	return ok
 }
 
-func loadAuthorizedKeys(path string) (map[string]struct{}, error) {
+func loadAuthorizedKeys(path string) (map[string]struct{}, bool, error) {
 	if path == "" {
-		return map[string]struct{}{}, nil
+		return map[string]struct{}{}, false, nil
+	}
+	if strings.EqualFold(strings.TrimSpace(path), sshParamAuthorizedKeysAny) {
+		return map[string]struct{}{}, true, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to read authorized_keys: %s", path), err)
+		return nil, false, errors.Join(fmt.Errorf("failed to read authorized_keys: %s", path), err)
 	}
 	keys := make(map[string]struct{})
 	for len(data) > 0 {
 		pub, _, _, rest, err := gossh.ParseAuthorizedKey(data)
 		if err != nil {
-			return nil, errors.Join(errors.New("failed to parse authorized_keys"), err)
+			return nil, false, errors.Join(errors.New("failed to parse authorized_keys"), err)
 		}
 		keys[string(pub.Marshal())] = struct{}{}
 		data = rest
 	}
-	return keys, nil
+	return keys, false, nil
+}
+
+func loadHostKey(path string) (gossh.Signer, error) {
+	if strings.TrimSpace(path) == "" {
+		_, priv, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return nil, errors.Join(errors.New("failed to generate host key"), err)
+		}
+		signer, err := gossh.NewSignerFromKey(priv)
+		if err != nil {
+			return nil, errors.Join(errors.New("failed to create host key signer"), err)
+		}
+		return signer, nil
+	}
+	key, err := os.ReadFile(path)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("failed to read host key: %s", path), err)
+	}
+	signer, err := gossh.ParsePrivateKey(key)
+	if err != nil {
+		return nil, errors.Join(errors.New("failed to parse host key"), err)
+	}
+	return signer, nil
 }
 
 func parseBool(raw string) bool {
