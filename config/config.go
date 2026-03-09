@@ -21,8 +21,7 @@ type Config struct {
 }
 
 type CoreCfg struct {
-	FakeDNS    *FakeDNS       `mapstructure:"fake_dns" toml:"fake_dns,omitempty" yaml:"fake_dns,omitempty" json:"fake_dns,omitempty"`
-	SingboxCfg map[string]any `mapstructure:"singbox,omitempty" toml:"singbox,omitempty" yaml:"singbox,omitempty" json:"singbox,omitempty"`
+	FakeDNS *FakeDNS `mapstructure:"fake_dns" toml:"fake_dns,omitempty" yaml:"fake_dns,omitempty" json:"fake_dns,omitempty"`
 }
 
 type EntryPoint struct {

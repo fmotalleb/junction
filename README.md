@@ -12,7 +12,7 @@
    No certificate required, reroutes tls packets using sni header.
 
 - 🧦 **SOCKS5 Proxy Support**  
-   Routes traffic using SOCKS5 proxies, with built-in support for VLESS proxies via Docker image.
+   Routes traffic using SOCKS5 proxies.
 
 - 🔀 **SSH Proxy Support**  
    Routes traffic using SSH connection as proxy.
@@ -86,20 +86,6 @@ Using:
 ---
 
 ### ❗️ **Docker Image Details (Must Read)**
-
-#### Vless support
-
-every build of this application contains singbox internally, but only start singbox if `core.singbox` is non-empty value.
-
-The Docker image `ghcr.io/fmotalleb/junction:latest-vless` contains a simple bash script entrypoint and basic configuration for sing-box service.
-This script is able to parse `VLESS_PROXY` to outbound config or receive each field of VLESS proxy as env parameters (see .env.example).
-
-- Remember: this image requires those env vars to be set.
-
-- `latest-vless`
-- `{{ .Version }}-vless`
-
-#### Basic image
 
 contains junction itself based on distroless images by [google](gcr.io/distroless/base-debian12:nonroot)
 
@@ -355,21 +341,6 @@ JSON Schema for the configuration file is available at `config.schema.json`.
 
 > You can specify config file path using `--config (-c)` flag (detects config file)
 > Default behavior is to read config from `stdin` using `toml` format
-
----
-
-## 💡 **Docker Environment Variables**
-
-Use environment variables for dynamic runtime configuration. Below is an example `.env` file:
-
-```env
-VLESS_PROXY=
-HTTP_PORT=80
-SNI_PORT=443
-UDP_BUFFER=65507 # don't change unless you faced buffer size issue
-```
-
-These variables help configure VLESS proxies and expose specific endpoints for HTTP/HTTPS traffic.
 
 ---
 

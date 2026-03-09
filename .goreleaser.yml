@@ -19,35 +19,10 @@ builds:
       - darwin
       - linux
       - windows
-    tags:
-      - with_utls
     goarch:
       - amd64
 
 dockers_v2:
-  - id: junction-vless
-    sbom: false
-    platforms:
-      - linux/amd64
-    images:
-      - ghcr.io/fmotalleb/junction
-    tags:
-      - "{{ .Version }}-vless"
-      - latest-vless
-    labels:
-      "org.opencontainers.image.description": "Junction (VLESS Support)"
-      "org.opencontainers.image.created": "{{.Date}}"
-      "org.opencontainers.image.name": "{{.ProjectName}}"
-      "org.opencontainers.image.revision": "{{.FullCommit}}"
-      "org.opencontainers.image.version": "{{.Version}}"
-      "org.opencontainers.image.source": "{{.GitURL}}"
-    ids:
-      - default
-    flags:
-      - --target=slim
-    extra_files:
-      - docker
-
   - id: junction
     sbom: false
     platforms:

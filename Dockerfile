@@ -1,40 +1,10 @@
-FROM library/debian:trixie-slim AS slim
-
-COPY /docker/root/ /
-
-ARG TARGETPLATFORM
-COPY $TARGETPLATFORM/junction /usr/bin
-
-
-ENV HTTP_PORT=80 \
-  SNI_PORT=443 \
-  VLESS_PROXY= \
-  VLESS_PACKET_ENCODING= \
-  VLESS_ADDRESS= \
-  VLESS_PORT= \
-  VLESS_UUID= \
-  VLESS_TLS_ENABLED= \
-  VLESS_TLS_INSECURE= \
-  VLESS_SNI= \
-  VLESS_UTLS_ENABLED= \
-  VLESS_UTLS_FINGERPRINT= \
-  VLESS_TRANSPORT_PATH= \
-  VLESS_TRANSPORT_TYPE= \
-  VLESS_HOSTNAME_HEADER= \
-  UDP_BUFFER=65507 
-
-
-ENTRYPOINT [ "/docker-entrypoint.sh" ]
-CMD [ "junction", "--config=/etc/junction/config.toml" ]
-
 FROM gcr.io/distroless/base-debian12:nonroot AS distroless
 
-ARG TARGETPLATFORM
+ARG TARGETPLATFORM=""
 COPY $TARGETPLATFORM/junction /usr/bin
 
 ENTRYPOINT [ "/usr/bin/junction" ]
 CMD [ "--help" ]
-
 
 FROM golang:latest AS builder
 RUN mkdir /app
@@ -43,7 +13,7 @@ COPY go.sum /app/
 WORKDIR /app
 RUN go mod download
 COPY ./ /app
-RUN CGO_ENABLED=0 go build -o junction -tags with_utls
+RUN CGO_ENABLED=0 go build -o junction
 RUN chmod +x junction
 
 
@@ -54,21 +24,7 @@ COPY --from=builder /app/junction /usr/bin/junction
 
 ENV HTTP_PORT=80 \
   SNI_PORT=443 \
-  VLESS_PROXY= \
-  VLESS_PACKET_ENCODING= \
-  VLESS_ADDRESS= \
-  VLESS_PORT= \
-  VLESS_UUID= \
-  VLESS_TLS_ENABLED= \
-  VLESS_TLS_INSECURE= \
-  VLESS_SNI= \
-  VLESS_UTLS_ENABLED= \
-  VLESS_UTLS_FINGERPRINT= \
-  VLESS_TRANSPORT_PATH= \
-  VLESS_TRANSPORT_TYPE= \
-  VLESS_HOSTNAME_HEADER= \
   UDP_BUFFER=65507 
-
 
 ENTRYPOINT [ "/docker-entrypoint.sh" ]
 CMD [ "junction", "--config=/etc/junction/config.toml" ]

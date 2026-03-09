@@ -13,7 +13,6 @@ import (
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/dns"
 	"github.com/fmotalleb/junction/router"
-	"github.com/fmotalleb/junction/services/singbox"
 )
 
 var ErrServerDiedBeforeContext = errors.New("context is not canceled but listeners are dead")
@@ -24,13 +23,6 @@ var ErrServerDiedBeforeContext = errors.New("context is not canceled but listene
 func Serve(ctx context.Context, c config.Config) error {
 	wg := new(sync.WaitGroup)
 	defer router.Reset()
-	if len(c.Core.SingboxCfg) != 0 {
-		wg.Go(
-			func() {
-				runSingbox(ctx, c.Core.SingboxCfg)
-			},
-		)
-	}
 	if c.Core.FakeDNS != nil {
 		wg.Go(
 			func() {
@@ -51,24 +43,6 @@ func Serve(ctx context.Context, c config.Config) error {
 		return nil
 	default: // If wait group is done without context cancellation its an error in configuration
 		return ErrServerDiedBeforeContext
-	}
-}
-
-// runSingbox starts the Singbox service with the provided configuration and context.
-// runSingbox starts and supervises the Singbox service using the provided context and configuration.
-// It retries on failures with an exponential backoff, logs each crash, and panics if the service has an unrecoverable crash.
-func runSingbox(ctx context.Context, cfg map[string]any) {
-	l := log.Of(ctx)
-	b := BuildBackoff()
-	err := retry.Do(ctx, b, func(ctx context.Context) error {
-		err := singbox.Start(ctx, cfg)
-		if err != nil {
-			l.Error("singbox crashed", zap.Error(err))
-		}
-		return err
-	})
-	if err != nil {
-		l.Panic("singbox had unrecoverable crash", zap.Error(err))
 	}
 }
 
