@@ -45,8 +45,6 @@ dockers_v2:
       - default
     flags:
       - --target=distroless
-    extra_files:
-      - docker
 
 release:
   github:
