@@ -54,14 +54,12 @@ func skipClientHelloHeaders(handshake []byte) (int, bool) {
 }
 
 func extractSNIFromExtensions(handshake []byte, pos int) []byte {
-	if pos+2 > len(handshake) {
-		return nil
-	}
+	// already happens in skipClientHelloHeaders
+	// if pos+2 > len(handshake) {
+	// 	return nil
+	// }
 	extLen := int(binary.BigEndian.Uint16(handshake[pos:]))
 	pos += 2
-	if pos > len(handshake) {
-		return nil
-	}
 	end := pos + extLen
 	if end > len(handshake) {
 		return nil
