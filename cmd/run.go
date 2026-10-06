@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"errors"
 	"net/netip"
 	"net/url"
 
@@ -15,12 +16,19 @@ import (
 	"github.com/fmotalleb/junction/server"
 )
 
+// errFlagWiring holds the outcome of marking mandatory flags during init, where an
+// error cannot be returned. It is reported by RunE instead of panicking.
+var errFlagWiring error
+
 // runCmd represents the run command.
 var runCmd = &cobra.Command{
 	Use:     "run",
 	Short:   "Run a simple server instead of reading a full config file",
 	Example: "junction run --routing sni --listen 8443 -x socks5://127.0.0.1:7890 --target 443",
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if errFlagWiring != nil {
+			return errFlagWiring
+		}
 		entry := new(config.EntryPoint)
 		var err error
 		var listen string
@@ -85,12 +93,8 @@ func init() {
 	runCmd.Flags().StringP("target", "t", "", "Target (based on routing method)")
 	runCmd.Flags().DurationP("timeout", "T", constants.Day, "Timeout for requests")
 
-	requireOrPanic("target")
-	requireOrPanic("routing")
-}
-
-func requireOrPanic(name string) {
-	if err := runCmd.MarkFlagRequired(name); err != nil {
-		panic(err)
-	}
+	errFlagWiring = errors.Join(
+		runCmd.MarkFlagRequired("target"),
+		runCmd.MarkFlagRequired("routing"),
+	)
 }
