@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -31,7 +32,24 @@ func dialTarget(ctx context.Context, proxyAddr []*url.URL, target string, logger
 		logger.Debug("failed to connect to target", zap.Error(err))
 		return nil, err
 	}
+	setKeepAlive(conn)
 	return conn, nil
+}
+
+type keepAliveConn interface {
+	SetKeepAlive(bool) error
+	SetKeepAlivePeriod(time.Duration) error
+}
+
+const keepAlivePeriod = 30 * time.Second
+
+// setKeepAlive lets the OS detect peers that vanished without a FIN/RST. Such
+// peers otherwise leave the relay blocked until the entry timeout expires.
+func setKeepAlive(conn net.Conn) {
+	if c, ok := conn.(keepAliveConn); ok {
+		_ = c.SetKeepAlive(true)
+		_ = c.SetKeepAlivePeriod(keepAlivePeriod)
+	}
 }
 
 // relayTraffic concurrently relays data between two network connections in both directions until either connection is closed or an error occurs.

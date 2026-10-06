@@ -66,6 +66,7 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 			continue
 		}
 
+		setKeepAlive(conn)
 		go handleTCPConnection(ctx, logger, conn, entry)
 	}
 }

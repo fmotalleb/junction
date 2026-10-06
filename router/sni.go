@@ -95,6 +95,7 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 			continue
 		}
 
+		setKeepAlive(conn)
 		go handleClient(ctx, conn, entry, logger)
 	}
 }
