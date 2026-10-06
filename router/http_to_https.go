@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -239,7 +240,7 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstreamURL.RawQuery = r.URL.RawQuery
 
 	// Rewrite request body if it has replaceable content
-	var reqBody io.ReadCloser = r.Body
+	reqBody := r.Body
 	if r.Body != nil && reqReplacer != nil {
 		if isTextContentType(r.Header.Get("Content-Type")) {
 			bodyBytes, _ := io.ReadAll(r.Body)
@@ -329,7 +330,7 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body = []byte(respReplacer.Replace(string(body)))
 	}
 
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
 }
