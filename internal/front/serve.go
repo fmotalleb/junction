@@ -12,11 +12,13 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate npm i
+//go:generate npm ci
 //go:generate npm run build
 
-//go:embed dist/*
+//go:embed all:dist
 var distFS embed.FS
+
+const shutdownGrace = 5 * time.Second
 
 // getDist returns a filesystem rooted at the embedded "dist" directory.
 // It enables access to static files embedded at compile time.
@@ -32,22 +34,40 @@ func Serve(ctx context.Context, listen string) error {
 	if err != nil {
 		return err
 	}
-	log := log.Of(ctx)
-	http.Handle("/", http.FileServer(http.FS(dist)))
+	logger := log.Of(ctx)
 
-	log.Sugar().Infof("Server started on http://%s", listen)
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.FS(dist)))
+
+	logger.Sugar().Infof("Server started on http://%s", listen)
 
 	server := &http.Server{
-		Addr: listen,
+		Addr:    listen,
+		Handler: mux,
 		ConnState: func(nc net.Conn, s http.ConnState) {
-			log.Info("connection state update",
+			logger.Debug("connection state update",
 				zap.String("state", s.String()),
 				zap.String("client", nc.RemoteAddr().String()),
 			)
 		},
-		ReadTimeout:  time.Minute,
-		WriteTimeout: time.Minute,
-		IdleTimeout:  time.Minute,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       time.Minute,
+		WriteTimeout:      time.Minute,
+		IdleTimeout:       time.Minute,
 	}
-	return server.ListenAndServe()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- server.ListenAndServe() }()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+		return nil
+	}
 }
