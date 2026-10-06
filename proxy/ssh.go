@@ -63,6 +63,7 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 }
 
 func readKeyFile(keyPath string) (gossh.Signer, error) {
+	//nolint:gosec // The key path is operator configuration, not request input.
 	key, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("read private key: %w", err)

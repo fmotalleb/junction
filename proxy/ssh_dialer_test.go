@@ -112,7 +112,8 @@ func TestSSHProxyDialerLeaksConnections(t *testing.T) {
 	}()
 
 	d := &sshProxyDialer{
-		addr:   srv.l.Addr().String(),
+		addr: srv.l.Addr().String(),
+		//nolint:gosec // Fixture: the in-process SSH server has no real host key.
 		config: &gossh.ClientConfig{User: "u", HostKeyCallback: gossh.InsecureIgnoreHostKey(), Timeout: 5 * time.Second},
 		dialer: proxy.Direct,
 	}

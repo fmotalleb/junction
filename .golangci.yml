@@ -2,7 +2,6 @@ version: "2"
 linters:
   default: none
   disable:
-    - gosec
     - mnd
   enable:
     - asasalint
@@ -19,11 +18,10 @@ linters:
     - gocyclo
     - godot
     - goprintffuncname
-    # - gosec
+    - gosec
     - govet
     - ineffassign
     - misspell
-    # - mnd
     - nakedret
     - noctx
     - nolintlint
