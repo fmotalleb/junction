@@ -116,13 +116,17 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 		logger.Error("failed to start server", zap.Error(err))
 		return err
 	}
-	// go func() {
-	// 	<-ctx.Done()
-	// 	logger.Info("context deadline reached")
-	// 	if err := l.Close(); err != nil {
-	// 		logger.Info("failed to close listener", zap.Error(err))
-	// 	}
-	// }()
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		select {
+		case <-ctx.Done():
+			if err := l.Close(); err != nil {
+				logger.Debug("failed to close listener", zap.Error(err))
+			}
+		case <-stop:
+		}
+	}()
 	logger.Info("dns server started")
 	if serverErr := dns.ActivateAndServe(nil, l, h); serverErr != nil {
 		select {
