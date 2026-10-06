@@ -76,6 +76,11 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 			continue
 		}
 
-		go clientManager.HandlePacket(clientAddr, buffer[:n], conn)
+		// buffer is reused by the next ReadFromUDP, so hand the goroutine its
+		// own copy: sharing it raced and could forward a corrupted packet.
+		packet := make([]byte, n)
+		copy(packet, buffer[:n])
+
+		go clientManager.HandlePacket(clientAddr, packet, conn)
 	}
 }
