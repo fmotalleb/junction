@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fmotalleb/go-tools/env"
@@ -25,7 +26,7 @@ type UDPClientManager struct {
 type UDPClientConn struct {
 	clientAddr *net.UDPAddr
 	targetConn *net.UDPConn
-	lastSeen   time.Time
+	lastSeen   atomic.Int64 // unix nanos, updated concurrently by reader/writer
 	cancel     context.CancelFunc
 }
 
@@ -46,7 +47,7 @@ func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, se
 		return
 	}
 
-	client.lastSeen = time.Now()
+	client.lastSeen.Store(time.Now().UnixNano())
 
 	// Forward packet to target
 	_, err := client.targetConn.Write(data)
@@ -108,7 +109,7 @@ func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serve
 		targetConn: targetConn,
 		cancel:     cancel,
 	}
-	client.lastSeen = time.Now()
+	client.lastSeen.Store(time.Now().UnixNano())
 
 	m.clientsMux.Lock()
 	m.clients[clientKey] = client
@@ -197,7 +198,7 @@ func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UD
 			break
 		}
 
-		client.lastSeen = time.Now()
+		client.lastSeen.Store(time.Now().UnixNano())
 	}
 
 	m.removeClient(clientKey)
@@ -225,7 +226,7 @@ func (m *UDPClientManager) clientCleanupTimer(ctx context.Context, clientKey str
 				return
 			}
 
-			if time.Since(client.lastSeen) > timeout {
+			if time.Since(time.Unix(0, client.lastSeen.Load())) > timeout {
 				m.logger.Debug("cleaning up idle UDP client", zap.String("client", clientKey))
 				m.removeClient(clientKey)
 				return
