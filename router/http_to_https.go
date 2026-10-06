@@ -266,18 +266,20 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("X-Forwarded-Proto", "http")
 
 	// Transport with optional SOCKS5 dialer
-	dialer, err := proxy.NewDialer(entry.Proxy)
+	chain, err := proxy.NewChain(entry.Proxy)
 	if err != nil {
 		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
 		return
 	}
-	transport := &http.Transport{
-		Dial: dialer.Dial,
-	}
+	transport := newProxyTransport(chain)
+	// This transport only lives for the current request; without closing its
+	// pooled connection here it kept a socket and two goroutines alive until
+	// the origin happened to hang up.
+	defer transport.CloseIdleConnections()
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   entry.Timeout,
+		Timeout:   entry.GetTimeout(),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
