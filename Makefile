@@ -1,5 +1,7 @@
 SHELL := /bin/bash
 
+GORELEASER_VERSION ?= v2.18.2
+
 .DEFAULT_GOAL := all
 
 .PHONY: all
@@ -46,12 +48,12 @@ compile:
 	
 .PHONY: install
 install: ## install goreleaser 
-	go install github.com/goreleaser/goreleaser/v2@latest
+	go install github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
 
 .PHONY: spell
 spell: ## misspell
 
-	go tool misspell -error -locale=US -w **.md
+	go tool misspell -error -locale=US -w $$(git ls-files --cached --others --exclude-standard "*.md")
 
 .PHONY: lint
 lint: ## golangci-lint

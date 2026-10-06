@@ -37,7 +37,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: |
-          go install github.com/goreleaser/goreleaser/v2@latest 
+          go install github.com/goreleaser/goreleaser/v2@v2.18.2
           goreleaser release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
