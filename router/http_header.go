@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -254,11 +255,28 @@ func prepareTargetHost(hostHeader, targetPort string) (string, error) {
 		return host, nil
 	}
 
+	if err := isValidPort(targetPort); err != nil {
+		return "", err
+	}
+
 	buf := make([]byte, 0, len(host)+1+len(targetPort))
 	buf = append(buf, host...)
 	buf = append(buf, ':')
 	buf = append(buf, targetPort...)
 	return string(buf), nil
+}
+
+// isValidPort rejects anything that would later fail as an unresolvable
+// service name or as an out of range port when dialing the target.
+func isValidPort(port string) error {
+	n, err := strconv.Atoi(port)
+	if err != nil {
+		return fmt.Errorf("target port %q is not numeric", port)
+	}
+	if n < 1 || n > 65535 {
+		return fmt.Errorf("target port %d is out of range", n)
+	}
+	return nil
 }
 
 // ValidHostname determines whether the passed string is a valid hostname.
