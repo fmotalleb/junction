@@ -141,13 +141,13 @@ func (e *EntryPoint) Decode(from reflect.Type, val interface{}) (any, error) {
 		result["timeout"] = split[4]
 		fallthrough
 	case 4:
-		r := make([]string, 0)
+		r := make([]string, 0, strings.Count(split[3], ",")+1)
 		p := strings.Split(split[3], ",")
 		for _, proxy := range p {
 			if proxy == "" {
 				continue
 			}
-			result["proxy"] = append(r, proxy)
+			r = append(r, proxy)
 		}
 		result["proxy"] = r
 		fallthrough
