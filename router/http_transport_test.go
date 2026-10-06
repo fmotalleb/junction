@@ -7,26 +7,40 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 // startHTTPTarget deliberately keeps idle connections open: an origin that
 // never hangs up is exactly the case a leaked transport can not recover from.
-func startHTTPTarget(t *testing.T) (addr string, stop func()) {
+// It reports how many connections were accepted, which is what a shared,
+// pooled transport should keep low no matter how many requests are made.
+func startHTTPTarget(t *testing.T) (addr string, accepted func() int, stop func()) {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, "ok")
 	})
 	l := listenTCP(t)
-	srv := &http.Server{Handler: mux}
+	var conns atomic.Int64
+	srv := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ConnState: func(_ net.Conn, s http.ConnState) {
+			if s == http.StateNew {
+				conns.Add(1)
+			}
+		},
+	}
 	go func() { _ = srv.Serve(l) }()
-	return l.Addr().String(), func() { _ = srv.Close() }
+	return l.Addr().String(),
+		func() int { return int(conns.Load()) },
+		func() { _ = srv.Close() }
 }
 
 func TestHTTPHeaderReusesTransport(t *testing.T) {
-	target, stopTarget := startHTTPTarget(t)
+	target, targetAccepted, stopTarget := startHTTPTarget(t)
 	defer stopTarget()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -61,10 +75,14 @@ func TestHTTPHeaderReusesTransport(t *testing.T) {
 	}
 	client.CloseIdleConnections()
 
-	after := waitGoroutines(t, base, 5, 5*time.Second)
-	t.Logf("goroutines base=%d after=%d", base, after)
-	if after > base+10 {
-		t.Errorf("http-header leaked goroutines: base=%d after=%d for %d requests\n%s",
+	// The resource that matters: a per-request transport would open one
+	// upstream connection per request, a pooled one opens a handful at most.
+	if got := targetAccepted(); got > 3 {
+		t.Errorf("http-header opened %d upstream connection(s) for %d requests, expected pooling\n%s",
+			got, n, dumpGoroutines())
+	}
+	if after := waitGoroutines(t, base, 5, 5*time.Second); after > base+10 {
+		t.Logf("goroutine count (diagnostic): base=%d after=%d for %d requests\n%s",
 			base, after, n, dumpGoroutines())
 	}
 }
