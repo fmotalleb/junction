@@ -19,6 +19,7 @@ type UDPClientManager struct {
 	entry      config.EntryPoint
 	clients    map[string]*UDPClientConn
 	clientsMux sync.RWMutex
+	createMu   sync.Mutex
 }
 
 type UDPClientConn struct {
@@ -40,15 +41,9 @@ func NewUDPClientManager(ctx context.Context, logger *zap.Logger, entry config.E
 func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, serverConn *net.UDPConn) {
 	clientKey := clientAddr.String()
 
-	m.clientsMux.RLock()
-	client, exists := m.clients[clientKey]
-	m.clientsMux.RUnlock()
-
-	if !exists {
-		client = m.createClientConnection(clientAddr, serverConn)
-		if client == nil {
-			return
-		}
+	client := m.lookupOrCreate(clientKey, clientAddr, serverConn)
+	if client == nil {
+		return
 	}
 
 	client.lastSeen = time.Now()
@@ -61,6 +56,31 @@ func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, se
 			zap.Error(err))
 		m.removeClient(clientKey)
 	}
+}
+
+// lookupOrCreate returns the client connection for clientKey, dialing a new one
+// when needed. Creation is serialized: two packets from an unseen client used
+// to both dial, and the loser of the map write was orphaned together with its
+// socket and reader goroutine.
+func (m *UDPClientManager) lookupOrCreate(clientKey string, clientAddr *net.UDPAddr, serverConn *net.UDPConn) *UDPClientConn {
+	m.clientsMux.RLock()
+	client, exists := m.clients[clientKey]
+	m.clientsMux.RUnlock()
+	if exists {
+		return client
+	}
+
+	m.createMu.Lock()
+	defer m.createMu.Unlock()
+
+	m.clientsMux.RLock()
+	client, exists = m.clients[clientKey]
+	m.clientsMux.RUnlock()
+	if exists {
+		return client
+	}
+
+	return m.createClientConnection(clientAddr, serverConn)
 }
 
 func (m *UDPClientManager) Cleanup() {
@@ -86,9 +106,9 @@ func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serve
 	client := &UDPClientConn{
 		clientAddr: clientAddr,
 		targetConn: targetConn,
-		lastSeen:   time.Now(),
 		cancel:     cancel,
 	}
+	client.lastSeen = time.Now()
 
 	m.clientsMux.Lock()
 	m.clients[clientKey] = client
