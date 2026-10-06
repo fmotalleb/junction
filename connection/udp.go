@@ -30,13 +30,19 @@ type UDPClientConn struct {
 	cancel     context.CancelFunc
 }
 
+// NewUDPClientManager builds the per-entrypoint client table and starts the
+// single sweeper goroutine that retires idle clients. Idle detection is done
+// centrally instead of with one timer goroutine per client, so a busy entrypoint
+// does not grow a timer for every address it has ever seen.
 func NewUDPClientManager(ctx context.Context, logger *zap.Logger, entry config.EntryPoint) *UDPClientManager {
-	return &UDPClientManager{
+	m := &UDPClientManager{
 		ctx:     ctx,
 		logger:  logger,
 		entry:   entry,
 		clients: make(map[string]*UDPClientConn),
 	}
+	go m.sweepIdleClients(ctx)
+	return m
 }
 
 func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, serverConn *net.UDPConn) {
@@ -117,11 +123,8 @@ func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serve
 
 	m.logger.Debug("created new UDP client connection", zap.String("client", clientKey))
 
-	// Start goroutine to handle responses from target
+	// One reader per socket; idle retirement is handled by the manager's sweeper.
 	go m.handleTargetResponses(ctx, client, serverConn)
-
-	// Start cleanup timer for this client
-	go m.clientCleanupTimer(ctx, clientKey)
 
 	return client
 }
@@ -204,13 +207,25 @@ func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UD
 	m.removeClient(clientKey)
 }
 
-func (m *UDPClientManager) clientCleanupTimer(ctx context.Context, clientKey string) {
+// idleTimeout is how long a client may stay silent before it is retired.
+func (m *UDPClientManager) idleTimeout() time.Duration {
 	timeout := m.entry.GetTimeout()
 	if timeout == 0 {
 		timeout = 5 * time.Minute // Default timeout
 	}
+	return timeout
+}
 
-	ticker := time.NewTicker(timeout / 2)
+// sweepIdleClients is the single timer for the whole manager: it wakes up twice
+// per idle timeout and retires every client that has been silent that long.
+func (m *UDPClientManager) sweepIdleClients(ctx context.Context) {
+	timeout := m.idleTimeout()
+	interval := timeout / 2
+	if interval <= 0 {
+		interval = time.Millisecond
+	}
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -218,20 +233,27 @@ func (m *UDPClientManager) clientCleanupTimer(ctx context.Context, clientKey str
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			m.clientsMux.RLock()
-			client, exists := m.clients[clientKey]
-			m.clientsMux.RUnlock()
-
-			if !exists {
-				return
-			}
-
-			if time.Since(time.Unix(0, client.lastSeen.Load())) > timeout {
-				m.logger.Debug("cleaning up idle UDP client", zap.String("client", clientKey))
-				m.removeClient(clientKey)
-				return
-			}
+			m.sweep(timeout)
 		}
+	}
+}
+
+// sweep retires every client whose last packet is older than timeout.
+func (m *UDPClientManager) sweep(timeout time.Duration) {
+	cutoff := time.Now().Add(-timeout).UnixNano()
+
+	m.clientsMux.RLock()
+	var idle []string
+	for clientKey, client := range m.clients {
+		if client.lastSeen.Load() < cutoff {
+			idle = append(idle, clientKey)
+		}
+	}
+	m.clientsMux.RUnlock()
+
+	for _, clientKey := range idle {
+		m.logger.Debug("cleaning up idle UDP client", zap.String("client", clientKey))
+		m.removeClient(clientKey)
 	}
 }
 
