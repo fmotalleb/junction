@@ -30,12 +30,26 @@ func dialTarget(proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Co
 }
 
 // relayTraffic concurrently relays data between two network connections in both directions until either connection is closed or an error occurs.
+// It also enforces ctx: without the watcher below a tunnel whose peers went
+// silent was held open until the process was restarted.
 // Logs connection closure and errors for diagnostic purposes.
 func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
 	defer func() {
 		_ = src.Close()
 		_ = dst.Close()
 	}()
+
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = src.Close()
+			_ = dst.Close()
+		case <-stop:
+		}
+	}()
+
 	errs, _ := errgroup.WithContext(ctx)
 	errs.Go(
 		func() error {
