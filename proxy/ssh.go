@@ -1,12 +1,14 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	gossh "golang.org/x/crypto/ssh"
@@ -75,28 +77,64 @@ type sshProxyDialer struct {
 }
 
 func (s *sshProxyDialer) Dial(network, address string) (net.Conn, error) {
+	return s.DialContext(context.Background(), network, address)
+}
+
+func (s *sshProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// Establish TCP connection via parent proxy dialer
-	rawConn, err := s.dialer.Dial("tcp", s.addr)
+	rawConn, err := DialWith(ctx, s.dialer, "tcp", s.addr)
 	if err != nil {
 		return nil, fmt.Errorf("proxy dial to %s failed: %w", s.addr, err)
 	}
 
-	// Perform SSH handshake over rawConn
+	// NewClientConn takes no context, so bound the handshake with a deadline
+	// instead of letting a silent peer pin this goroutine forever.
+	deadline := time.Now().Add(DefaultDialTimeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+	_ = rawConn.SetDeadline(deadline)
+
 	conn, chans, reqs, err := gossh.NewClientConn(rawConn, s.addr, s.config)
 	if err != nil {
-		rawConn.Close()
+		_ = rawConn.Close()
 		return nil, fmt.Errorf("SSH handshake failed: %w", err)
 	}
+	_ = rawConn.SetDeadline(time.Time{})
 
 	sshClient := gossh.NewClient(conn, chans, reqs)
 
 	// Use SSH client to open a remote connection
-	remoteConn, err := sshClient.Dial(network, address)
+	remoteConn, err := sshClient.DialContext(ctx, network, address)
 	if err != nil {
-		sshClient.Close()
+		_ = sshClient.Close()
 		return nil, fmt.Errorf("SSH remote dial failed: %w", err)
 	}
-	return remoteConn, nil
+	return &sshTunnelConn{Conn: remoteConn, client: sshClient}, nil
+}
+
+// sshTunnelConn binds the lifetime of the whole SSH session to the tunnel
+// connection returned to the caller. Without it the session, its mux goroutines
+// and the socket underneath them stayed alive after the caller closed the
+// tunnel, which is what made long runs exhaust memory and socket buffers.
+type sshTunnelConn struct {
+	net.Conn
+	client *gossh.Client
+	once   sync.Once
+}
+
+func (c *sshTunnelConn) Close() error {
+	err := c.Conn.Close()
+	c.once.Do(func() {
+		// Closing the client closes the mux, which closes the transport socket
+		// and lets every session goroutine exit.
+		_ = c.client.Close()
+	})
+	return err
 }
 
 func ignoreHostKey(_ string, _ net.Addr, _ gossh.PublicKey) error {
