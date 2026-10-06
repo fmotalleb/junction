@@ -23,9 +23,9 @@ vendor/
 
 # Visual Studio Code files
 .vscode/*
+.vscode/launch.json
 !.vscode/settings.json
 !.vscode/tasks.json
-!.vscode/launch.json
 !.vscode/extensions.json
 *.code-workspace
 
@@ -44,3 +44,6 @@ __*
 *.tmp
 *.secret*
 *.local.*
+
+# Editor and agent scratch directories
+.bolt/
