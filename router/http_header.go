@@ -76,6 +76,12 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		)
 	features := slices.Clone(entry.Features)
 
+	chain, err := proxy.NewChain(entry.Proxy)
+	if err != nil {
+		logger.Error("failed to create proxy dialer", zap.Error(err))
+		return true, err
+	}
+
 	server := &http.Server{
 		ReadHeaderTimeout: time.Second * 30,
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
@@ -83,7 +89,8 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		Handler: &httpProxyHandler{
 			ctx:          ctx,
 			logger:       logger,
-			proxyAddr:    entry.Proxy,
+			chain:        chain,
+			transport:    newProxyTransport(chain),
 			targetPort:   entry.GetTargetOr(DefaultHTTPPort),
 			entry:        entry,
 			tag:          entry.Tag, // NEW FIELD
@@ -124,11 +131,27 @@ func registerHTTPTaggedEntry(tag string, entry config.EntryPoint) bool {
 type httpProxyHandler struct {
 	ctx          context.Context
 	logger       *zap.Logger
-	proxyAddr    []*url.URL
+	chain        *proxy.Chain
+	transport    *http.Transport
 	targetPort   string
 	entry        config.EntryPoint
 	tag          *string // NEW
 	flexiblePort bool
+}
+
+// newProxyTransport builds one transport per entry point. Building it per
+// request leaked the pooled idle connection and the two goroutines serving it:
+// a discarded Transport never runs IdleConnTimeout, so the sockets stayed open
+// until the origin closed them, or until the process was restarted.
+func newProxyTransport(chain *proxy.Chain) *http.Transport {
+	return &http.Transport{
+		DialContext:           chain.DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
 }
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -268,15 +291,14 @@ func isLocal(name string) bool {
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
-	ctx, cancel := context.WithTimeout(h.ctx, h.entry.Timeout)
+	ctx, cancel := context.WithTimeout(h.ctx, h.entry.GetTimeout())
 	defer cancel()
-	dialer, err := proxy.NewDialer(h.proxyAddr)
-	if err != nil {
-		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
-		return
-	}
 
-	targetConn, err := dialer.Dial("tcp", targetHost)
+	// Bound the dial: a SOCKS upstream that accepts the socket but never
+	// answers the CONNECT request parked this handler goroutine forever.
+	dialCtx, cancelDial := context.WithTimeout(ctx, proxy.DefaultDialTimeout)
+	targetConn, err := h.chain.DialContext(dialCtx, "tcp", targetHost)
+	cancelDial()
 	if err != nil {
 		h.logger.Debug("CONNECT failed", zap.String("target", targetHost), zap.Error(err))
 		http.Error(w, "Failed to connect to target", http.StatusBadGateway)
@@ -305,12 +327,6 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request,
 }
 
 func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Request, targetHost string) {
-	dialer, err := proxy.NewDialer(h.proxyAddr)
-	if err != nil {
-		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
-		return
-	}
-
 	targetURL := &url.URL{
 		Scheme:   "http",
 		Host:     targetHost,
@@ -332,7 +348,7 @@ func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	resp, err := (&http.Client{Transport: &http.Transport{Dial: dialer.Dial}}).Do(req)
+	resp, err := (&http.Client{Transport: h.transport}).Do(req)
 	if err != nil {
 		h.logger.Error("Request to target failed", zap.String("url", targetURL.String()), zap.Error(err))
 		http.Error(w, "Request failed", http.StatusBadGateway)
