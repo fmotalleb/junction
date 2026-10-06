@@ -52,6 +52,7 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	defer clientManager.Cleanup()
 
 	buffer := make([]byte, 65507) // Max UDP payload size
+	var retry acceptRetry
 	for {
 		n, clientAddr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
@@ -60,8 +61,13 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 				return true, nil
 			}
 			logger.Error("failed to read UDP packet", zap.Error(err))
+			if !retry.wait(ctx) {
+				logger.Info("listener closed due to context cancellation")
+				return true, nil
+			}
 			continue
 		}
+		retry.reset()
 
 		if !entry.AllowedFrom(clientAddr) {
 			logger.Warn("packet rejected",

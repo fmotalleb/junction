@@ -84,6 +84,7 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 		_ = listener.Close()
 	}()
 
+	var retry acceptRetry
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -92,8 +93,13 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 				return nil
 			}
 			logger.Warn("accept failed", zap.Error(err))
+			if !retry.wait(ctx) {
+				logger.Info("router exit due to context cancellation")
+				return nil
+			}
 			continue
 		}
+		retry.reset()
 
 		setKeepAlive(conn)
 		go handleClient(ctx, conn, entry, logger)

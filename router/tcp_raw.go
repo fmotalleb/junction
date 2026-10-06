@@ -47,6 +47,7 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		_ = listener.Close()
 	}()
 
+	var retry acceptRetry
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -55,8 +56,13 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 				return true, nil
 			}
 			logger.Error("failed to accept connection", zap.Error(err))
+			if !retry.wait(ctx) {
+				logger.Info("listener closed due to context cancellation")
+				return true, nil
+			}
 			continue
 		}
+		retry.reset()
 
 		if !entry.AllowedFrom(conn.RemoteAddr()) {
 			logger.Debug("connection rejected",

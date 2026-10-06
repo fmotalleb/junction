@@ -52,6 +52,37 @@ func setKeepAlive(conn net.Conn) {
 	}
 }
 
+// acceptRetry backs off after failed accepts. When the process runs out of
+// sockets every Accept fails at once; retrying in a tight loop pins a CPU,
+// floods the log and makes recovery less likely.
+type acceptRetry struct {
+	delay time.Duration
+}
+
+// wait sleeps before the next attempt and reports whether the accept loop
+// should continue.
+func (a *acceptRetry) wait(ctx context.Context) bool {
+	switch {
+	case a.delay == 0:
+		a.delay = 10 * time.Millisecond
+	case a.delay < time.Second:
+		a.delay *= 2
+	default:
+		a.delay = time.Second
+	}
+
+	timer := time.NewTimer(a.delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func (a *acceptRetry) reset() { a.delay = 0 }
+
 // relayTraffic concurrently relays data between two network connections in both directions until either connection is closed or an error occurs.
 // It also enforces ctx: without the watcher below a tunnel whose peers went
 // silent was held open until the process was restarted.
