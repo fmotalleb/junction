@@ -187,7 +187,7 @@ junction run --listen 8443 \
       - `forwarder`: Upstream DNS server for unresolvable/not-allowed queries, (e.g. `8.8.8.8:53`), if omitted will return empty response
       - `allowed`: Allowed list matcher
         - Supports wildcards (e.g., `"*.example.com"`)
-        - Supports Regular Expression (e.g. `"regexp:allowed"`, `"grep:.+google.com^"`)
+        - Supports Regular Expression (e.g. `"regex:allowed"`, `"grep:.+google.com^"`)
   - singbox: object of singbox config
     [singbox](https://github.com/SagerNet/sing-box/) is a successor to xray
     Its config is complex you can see an example of how to provide a simple config in [example](https://github.com/fmotalleb/junction/blob/main/example) directory
@@ -268,11 +268,11 @@ junction run --listen 8443 \
   - **`block_list`** (optional) [only when using sni,http-header]:
     List of hostnames/patterns to block.
     - Supports wildcards (e.g., `"*.example.com"`, `"glob:*.example.com"`)
-    - Supports Regular Expression (contain check) (e.g. `"regexp:badword"`, `"grep:bad.+word"`)
+    - Supports Regular Expression (contain check) (e.g. `"regex:badword"`, `"grep:bad.+word"`)
   - **`allow_list`** (optional) [only when using sni,http-header]:
     List of hostnames/patterns to allow. If specified, only listed hosts are allowed.
     - Supports wildcards (e.g., `"*.example.com"`)
-    - Supports Regular Expression (e.g. `"regexp:allowed"`, `"grep:.+google.com^"`)
+    - Supports Regular Expression (e.g. `"regex:allowed"`, `"grep:.+google.com^"`)
     - Block rules are applied before allow rules
   - **`block_from`** (optional):
     List of client address patterns to block (applies to all routers).
@@ -307,7 +307,7 @@ routing = "http-header"
 to = "80" # Defaults from `Host`
 proxy = "socks5://127.0.0.1:7890"
 features = ["flexible-port"] # Allow per-request port override via Junction-Port header
-allow_from = ["127.0.0.1", "10.0.*", "regexp:^192\\.168\\.1\\."]
+allow_from = ["127.0.0.1", "10.0.*", "regex:^192\\.168\\.1\\."]
 
 [[entrypoints]]
 listen = 8090 # Listen on 127.0.0.1:8090
@@ -378,10 +378,12 @@ Once running, the application will be accessible on the configured ports.
 
 ### Debugging with VS Code
 
-A pre-configured `.vscode/launch.json` is included for debugging purposes. To debug:
+Create a local `.vscode/launch.json` (it is git-ignored) with a **"Launch Package"**
+configuration, or start under Delve directly:
 
-1. Open the project in Visual Studio Code.
-2. Use the **"Launch Package"** configuration to start debugging.
+```bash
+dlv debug ./main.go -- --config=config.toml
+```
 
 ---
 
@@ -391,13 +393,20 @@ Junction's project structure is organized as follows:
 
 ```
 .
-├── cmd/ # CLI entry point
-├── config/ # Configuration parsing and helpers
-├── docker/ # Docker-related files
-├── router/ # Routers (sni,http,...) logic
-├── server/ # Core server logic
-├── main.go # Main entry point
-└── docker-compose.yml # Docker Compose configuration
+├── cmd/               # CLI entry point
+├── config/            # Configuration parsing and helpers
+├── connection/        # TCP/UDP connection and idle-cleanup helpers
+├── crypto/            # ClientHello parser used for SNI routing
+├── dns/               # FakeDNS server and request forwarding
+├── example/           # Example configuration files
+├── internal/          # Embedded configuration UI (Vite/React)
+├── proxy/             # SOCKS5 and SSH dialers
+├── router/            # Routers (sni, http-header, tcp-raw, udp, ...)
+├── server/            # Server lifecycle and entrypoint wiring
+├── utils/             # Shared helpers (copy, ...)
+├── Dockerfile         # Container image build
+├── docker-compose.yml # Docker Compose configuration
+└── main.go            # Main entry point
 ```
 
 ---

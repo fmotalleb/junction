@@ -30,7 +30,7 @@
 * [ ] Metrics collection
 * [ ] Access logging
 * [ ] Monitoring support (for raw protocols)
-* [ ] Hot reload configuration
+* [x] Hot reload configuration (OS-signal triggered, 1-minute debounce)
 * [ ] Interception
 
 ## Performance Enhancements
