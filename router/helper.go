@@ -14,14 +14,19 @@ import (
 	"github.com/fmotalleb/junction/utils"
 )
 
-func dialTarget(proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Conn, error) {
-	dialer, err := proxy.NewDialer(proxyAddr)
+func dialTarget(ctx context.Context, proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Conn, error) {
+	chain, err := proxy.NewChain(proxyAddr)
 	if err != nil {
 		logger.Error("failed to create SOCKS5 dialer", zap.Error(err))
 		return nil, err
 	}
 
-	conn, err := dialer.Dial("tcp", target)
+	// The context bounds the connect and the proxy handshake; a silent upstream
+	// otherwise left this goroutine and both sockets parked indefinitely.
+	dialCtx, cancel := context.WithTimeout(ctx, proxy.DefaultDialTimeout)
+	defer cancel()
+
+	conn, err := chain.DialContext(dialCtx, "tcp", target)
 	if err != nil {
 		logger.Debug("failed to connect to target", zap.Error(err))
 		return nil, err

@@ -73,13 +73,9 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 func handleTCPConnection(parentCtx context.Context, logger *zap.Logger, conn net.Conn, entry config.EntryPoint) {
 	ctx, cancel := context.WithTimeout(parentCtx, entry.GetTimeout())
 	defer cancel()
+	defer conn.Close()
 
-	go func() {
-		<-ctx.Done()
-		_ = conn.Close()
-	}()
-
-	targetConn, err := dialTarget(entry.Proxy, entry.Target, logger)
+	targetConn, err := dialTarget(ctx, entry.Proxy, entry.Target, logger)
 	if err != nil {
 		return
 	}

@@ -5,12 +5,14 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/fmotalleb/go-tools/log"
 	"go.uber.org/zap"
 
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/crypto/tls"
+	"github.com/fmotalleb/junction/proxy"
 )
 
 const DefaultSNIPort = "443"
@@ -142,30 +144,35 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf []byte, n int, logger *zap.Logger, entry config.EntryPoint) {
 	ctx, cancel := context.WithTimeout(parentCtx, entry.GetTimeout())
 	defer cancel()
-
-	go func() {
-		<-ctx.Done()
-		_ = client.Close()
-	}()
+	defer client.Close()
 
 	target := net.JoinHostPort(sni, entry.GetTargetOr(DefaultSNIPort))
-	server, err := dialTarget(entry.Proxy, target, logger)
+	server, err := dialTarget(ctx, entry.Proxy, target, logger)
 	if err != nil {
-		_ = client.Close()
 		return
 	}
 	defer server.Close()
 
+	// Bound the buffered ClientHello replay: relayTraffic only takes over
+	// afterwards, so an unbounded write here would outlive every timeout.
+	_ = server.SetWriteDeadline(time.Now().Add(proxy.DefaultDialTimeout))
 	if _, err := server.Write(buf[:n]); err != nil {
 		logger.Error("initial write failed", zap.Error(err))
-		_ = client.Close()
 		return
 	}
+	_ = server.SetWriteDeadline(time.Time{})
 
 	relayTraffic(ctx, client, server, logger)
 }
 
+const sniReadTimeout = 15 * time.Second
+
 func readSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
+	// A client that connects and never sends its hello would otherwise park
+	// this goroutine and its socket forever: no timeout applies this early.
+	_ = conn.SetReadDeadline(time.Now().Add(sniReadTimeout))
+	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
+
 	buf := make([]byte, 4096)
 	n, err := conn.Read(buf)
 	if err != nil {
