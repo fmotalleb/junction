@@ -23,15 +23,6 @@ var (
 	errSNIMissing = errors.New("SNI missing in ClientHello")
 )
 
-func init() {
-	registerHandler(sniRouter)
-	registerReset(func() {
-		groupMu.Lock()
-		sniGroups = make(map[string][]config.EntryPoint)
-		groupMu.Unlock()
-	})
-}
-
 func sniRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterSNI {
 		return false, nil

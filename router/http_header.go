@@ -43,15 +43,6 @@ var (
 	}
 )
 
-func init() {
-	registerHandler(httpHandler)
-	registerReset(func() {
-		httpGroupMu.Lock()
-		httpGroups = make(map[string][]config.EntryPoint)
-		httpGroupMu.Unlock()
-	})
-}
-
 // httpHandler starts an HTTP proxy server for entry points configured with RouterHTTPHeader routing.
 // It initializes the server with a proxy handler that forwards requests through a SOCKS5 proxy chain as specified by the entry configuration.
 // Returns an error if the server fails to start.
@@ -366,6 +357,8 @@ func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	//nolint:gosec // Forwarding to a client-chosen destination is this router's
+	// job; allow_list/block_list and allow_from gate who may ask for what.
 	resp, err := (&http.Client{Transport: h.transport}).Do(req)
 	if err != nil {
 		h.logger.Error("Request to target failed", zap.String("url", targetURL.String()), zap.Error(err))

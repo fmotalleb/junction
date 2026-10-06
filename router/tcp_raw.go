@@ -10,10 +10,6 @@ import (
 	"github.com/fmotalleb/junction/config"
 )
 
-func init() {
-	registerHandler(tcpRouter)
-}
-
 func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterTCPRaw {
 		return false, nil

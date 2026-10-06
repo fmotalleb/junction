@@ -11,10 +11,6 @@ import (
 	"github.com/fmotalleb/junction/connection"
 )
 
-func init() {
-	registerHandler(udpRouter)
-}
-
 func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterUDPRaw {
 		return false, nil

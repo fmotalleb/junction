@@ -2,6 +2,8 @@ package router
 
 import "testing"
 
+const exampleHost = "example.com"
+
 func TestPrepareTargetHost(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -12,14 +14,14 @@ func TestPrepareTargetHost(t *testing.T) {
 	}{
 		{
 			name:       "simple hostname no port",
-			hostHeader: "example.com",
+			hostHeader: exampleHost,
 			targetPort: "",
-			want:       "example.com",
+			want:       exampleHost,
 			wantErr:    false,
 		},
 		{
 			name:       "hostname with target port",
-			hostHeader: "example.com",
+			hostHeader: exampleHost,
 			targetPort: "8080",
 			want:       "example.com:8080",
 			wantErr:    false,
@@ -28,21 +30,21 @@ func TestPrepareTargetHost(t *testing.T) {
 			name:       "host header contains scheme",
 			hostHeader: "http://example.com",
 			targetPort: "",
-			want:       "example.com",
+			want:       exampleHost,
 			wantErr:    false,
 		},
 		{
 			name:       "host header contains scheme and port",
 			hostHeader: "https://example.com:8443",
 			targetPort: "",
-			want:       "example.com",
+			want:       exampleHost,
 			wantErr:    false,
 		},
 		{
 			name:       "host header contains host:port",
 			hostHeader: "example.com:1234",
 			targetPort: "",
-			want:       "example.com",
+			want:       exampleHost,
 			wantErr:    false,
 		},
 		{
@@ -61,14 +63,14 @@ func TestPrepareTargetHost(t *testing.T) {
 		},
 		{
 			name:       "invalid target port non-numeric",
-			hostHeader: "example.com",
+			hostHeader: exampleHost,
 			targetPort: "abc",
 			want:       "",
 			wantErr:    true,
 		},
 		{
 			name:       "invalid target port out of range",
-			hostHeader: "example.com",
+			hostHeader: exampleHost,
 			targetPort: "70000",
 			want:       "",
 			wantErr:    true,
@@ -106,8 +108,8 @@ func BenchmarkPrepareTargetHost(b *testing.B) {
 	}
 
 	cases := []benchCase{
-		{"example.com", ""},
-		{"example.com", "8080"},
+		{exampleHost, ""},
+		{exampleHost, "8080"},
 		{"http://example.com", ""},
 		{"https://example.com:443", ""},
 		{"example.com:1234", ""},

@@ -27,15 +27,6 @@ var (
 	httpsGroups  = map[string][]config.EntryPoint{}
 )
 
-func init() {
-	registerHandler(httpToHTTPSHandler)
-	registerReset(func() {
-		httpsGroupMu.Lock()
-		httpsGroups = make(map[string][]config.EntryPoint)
-		httpsGroupMu.Unlock()
-	})
-}
-
 // httpToHTTPSHandler starts an HTTP server that reverse-proxies to an HTTPS backend.
 // Routing: config.RouterHTTPToHTTPS
 //
@@ -169,105 +160,124 @@ type httpToHTTPSProxy struct {
 	respReplacer *strings.Replacer
 }
 
+type httpsRoute struct {
+	entry        config.EntryPoint
+	targetURL    *url.URL
+	reqReplacer  *strings.Replacer
+	respReplacer *strings.Replacer
+}
+
 func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	remoteAddr := addrFromRemote(r.RemoteAddr)
-
-	// Resolve the effective entry, targetURL, and replacers.
-	entry := h.entry
-	targetURL := h.targetURL
-	reqReplacer := h.reqReplacer
-	respReplacer := h.respReplacer
-
-	if h.tag == nil {
-		// No tag: single-entry path, check AllowedFrom directly.
-		if !entry.AllowedFrom(remoteAddr) {
-			h.logger.Debug("connection rejected", zap.String("client", r.RemoteAddr))
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-	} else {
-		// Tag group: find the first entry that matches both host and client.
-		// The target URL and replacers come from the matched entry, not the
-		// handler's boot-time entry (which may be a different backend).
-		httpsGroupMu.Lock()
-		group := httpsGroups[*h.tag]
-		httpsGroupMu.Unlock()
-
-		matched := false
-		// targetHost is the Host header the client sent; for HTTPS reverse-proxy
-		// we match on the incoming Host (what the client thinks it's talking to).
-		incomingHost := strings.TrimSpace(r.Host)
-		if incomingHost == "" {
-			incomingHost = r.Header.Get("Host")
-		}
-
-		for _, ep := range group {
-			if ep.Allowed(incomingHost) && ep.AllowedFrom(remoteAddr) {
-				// Rebuild per-entry config so each tagged entry can point at a
-				// distinct HTTPS backend with its own replacers.
-				var err error
-				targetURL, reqReplacer, respReplacer, err = buildHTTPSEntryConfig(ep)
-				if err != nil {
-					h.logger.Error("failed to build config for matched tag entry", zap.Error(err))
-					http.Error(w, "internal configuration error", http.StatusInternalServerError)
-					return
-				}
-				entry = ep
-				matched = true
-				break
-			}
-		}
-
-		if !matched {
-			h.logger.Warn("no matching entry for https request",
-				zap.String("host", incomingHost),
-				zap.String("client", r.RemoteAddr),
-			)
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
+	route, ok := h.resolveRoute(w, r)
+	if !ok {
+		return
 	}
-
-	if targetURL == nil {
+	if route.targetURL == nil {
 		h.logger.Error("no target URL resolved for request")
 		http.Error(w, "no target configured", http.StatusInternalServerError)
 		return
 	}
 
-	// Build upstream URL
-	upstreamURL := *targetURL
-	upstreamURL.Path = singleJoiningSlash(targetURL.Path, r.URL.Path)
+	upstreamURL := *route.targetURL
+	upstreamURL.Path = singleJoiningSlash(route.targetURL.Path, r.URL.Path)
 	upstreamURL.RawQuery = r.URL.RawQuery
 
-	// Rewrite request body if it has replaceable content
-	reqBody := r.Body
-	if r.Body != nil && reqReplacer != nil {
-		if isTextContentType(r.Header.Get("Content-Type")) {
-			bodyBytes, _ := io.ReadAll(r.Body)
-			if len(bodyBytes) > 0 {
-				replaced := reqReplacer.Replace(string(bodyBytes))
-				reqBody = io.NopCloser(strings.NewReader(replaced))
-				r.ContentLength = int64(len(replaced))
-			}
-		}
-	}
-
-	req, err := http.NewRequestWithContext(h.ctx, r.Method, upstreamURL.String(), reqBody)
+	req, err := http.NewRequestWithContext(h.ctx, r.Method, upstreamURL.String(), rewriteRequestBody(r, route.reqReplacer))
 	if err != nil {
 		h.logger.Error("Request creation failed", zap.Error(err))
 		http.Error(w, "Request creation failed", http.StatusInternalServerError)
 		return
 	}
-
-	// Copy headers, with Host rewriting
-	copyHeadersWithReplace(req.Header, r.Header, reqReplacer)
-	req.Host = targetURL.Host
-	req.Header.Set("Host", targetURL.Host)
+	copyHeadersWithReplace(req.Header, r.Header, route.reqReplacer)
+	req.Host = route.targetURL.Host
+	req.Header.Set("Host", route.targetURL.Host)
 	req.Header.Set("X-Forwarded-Host", r.Host)
 	req.Header.Set("X-Forwarded-Proto", "http")
 
-	// Transport with optional SOCKS5 dialer
-	chain, err := proxy.NewChain(entry.Proxy)
+	h.forward(w, route, upstreamURL, req)
+}
+
+// resolveRoute picks the entrypoint that serves this request: the single
+// untagged entry, or the first entry of the tagged group whose Host and client
+// address both match. It writes the rejection response itself and reports
+// ok=false when the request must not be forwarded.
+func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) (httpsRoute, bool) {
+	remoteAddr := addrFromRemote(r.RemoteAddr)
+	route := httpsRoute{
+		entry:        h.entry,
+		targetURL:    h.targetURL,
+		reqReplacer:  h.reqReplacer,
+		respReplacer: h.respReplacer,
+	}
+
+	if h.tag == nil {
+		if !route.entry.AllowedFrom(remoteAddr) {
+			h.logger.Debug("connection rejected", zap.String("client", r.RemoteAddr))
+			w.WriteHeader(http.StatusForbidden)
+			return route, false
+		}
+		return route, true
+	}
+
+	httpsGroupMu.Lock()
+	group := httpsGroups[*h.tag]
+	httpsGroupMu.Unlock()
+
+	// targetHost is the Host header the client sent; for HTTPS reverse-proxy
+	// we match on the incoming Host (what the client thinks it's talking to).
+	incomingHost := strings.TrimSpace(r.Host)
+	if incomingHost == "" {
+		incomingHost = r.Header.Get("Host")
+	}
+
+	for _, ep := range group {
+		if !ep.Allowed(incomingHost) || !ep.AllowedFrom(remoteAddr) {
+			continue
+		}
+		// Rebuild per-entry config so each tagged entry can point at a
+		// distinct HTTPS backend with its own replacers.
+		targetURL, reqReplacer, respReplacer, err := buildHTTPSEntryConfig(ep)
+		if err != nil {
+			h.logger.Error("failed to build config for matched tag entry", zap.Error(err))
+			http.Error(w, "internal configuration error", http.StatusInternalServerError)
+			return route, false
+		}
+		route = httpsRoute{
+			entry:        ep,
+			targetURL:    targetURL,
+			reqReplacer:  reqReplacer,
+			respReplacer: respReplacer,
+		}
+		return route, true
+	}
+
+	h.logger.Warn("no matching entry for https request",
+		zap.String("host", incomingHost),
+		zap.String("client", r.RemoteAddr),
+	)
+	w.WriteHeader(http.StatusForbidden)
+	return route, false
+}
+
+// rewriteRequestBody returns the body to forward, replacing text payloads in
+// flight and keeping ContentLength in sync with the rewritten size.
+func rewriteRequestBody(r *http.Request, reqReplacer *strings.Replacer) io.ReadCloser {
+	if r.Body == nil || reqReplacer == nil || !isTextContentType(r.Header.Get("Content-Type")) {
+		return r.Body
+	}
+	bodyBytes, _ := io.ReadAll(r.Body)
+	if len(bodyBytes) == 0 {
+		return r.Body
+	}
+	replaced := reqReplacer.Replace(string(bodyBytes))
+	r.ContentLength = int64(len(replaced))
+	return io.NopCloser(strings.NewReader(replaced))
+}
+
+// forward sends the upstream request and mirrors the response back to the
+// client, applying the response replacers on the way.
+func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upstreamURL url.URL, req *http.Request) {
+	chain, err := proxy.NewChain(route.entry.Proxy)
 	if err != nil {
 		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
 		return
@@ -280,12 +290,14 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   entry.GetTimeout(),
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		Timeout:   route.entry.GetTimeout(),
+		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
 
+	//nolint:gosec // The upstream host comes from the entrypoint config, only
+	// the path and query are client supplied.
 	resp, err := client.Do(req)
 	if err != nil {
 		h.logger.Error("Request to target failed", zap.String("url", upstreamURL.String()), zap.Error(err))
@@ -294,45 +306,52 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Copy response headers with replacement
-	for k, vv := range resp.Header {
-		if strings.EqualFold(k, "Content-Length") || strings.EqualFold(k, "Content-Encoding") {
-			continue
-		}
-		for _, v := range vv {
-			w.Header().Add(k, respReplacer.Replace(v))
-		}
-	}
-
-	// Handle Location redirects
-	if loc := resp.Header.Get("Location"); loc != "" {
-		w.Header().Set("Location", respReplacer.Replace(loc))
-	}
-
-	// Read body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		h.logger.Error("Response read failed", zap.Error(err))
 		http.Error(w, "Upstream read failed", http.StatusBadGateway)
 		return
 	}
-
-	// Decompress if gzipped, then rewrite
-	if strings.Contains(resp.Header.Get("Content-Encoding"), "gzip") {
-		if gr, err := gzip.NewReader(bytes.NewReader(body)); err == nil {
-			uncompressed, _ := io.ReadAll(gr)
-			gr.Close()
-			body = uncompressed
-		}
-	}
-
-	if isTextContentType(resp.Header.Get("Content-Type")) && respReplacer != nil {
-		body = []byte(respReplacer.Replace(string(body)))
-	}
-
+	body = decodeBody(resp.Header.Get("Content-Encoding"), body)
+	body = replaceTextBody(resp.Header.Get("Content-Type"), body, route.respReplacer)
+	copyResponseHeaders(w, resp.Header, route.respReplacer)
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
+}
+
+func decodeBody(contentEncoding string, body []byte) []byte {
+	if !strings.Contains(contentEncoding, "gzip") {
+		return body
+	}
+	gr, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		return body
+	}
+	defer gr.Close()
+	uncompressed, _ := io.ReadAll(gr)
+	return uncompressed
+}
+
+func replaceTextBody(contentType string, body []byte, replacer *strings.Replacer) []byte {
+	if replacer == nil || !isTextContentType(contentType) {
+		return body
+	}
+	return []byte(replacer.Replace(string(body)))
+}
+
+func copyResponseHeaders(w http.ResponseWriter, headers http.Header, replacer *strings.Replacer) {
+	for k, vv := range headers {
+		if strings.EqualFold(k, "Content-Length") || strings.EqualFold(k, "Content-Encoding") {
+			continue
+		}
+		for _, v := range vv {
+			w.Header().Add(k, replacer.Replace(v))
+		}
+	}
+	if loc := headers.Get("Location"); loc != "" {
+		w.Header().Set("Location", replacer.Replace(loc))
+	}
 }
 
 func copyHeadersWithReplace(dst, src http.Header, replacer *strings.Replacer) {
