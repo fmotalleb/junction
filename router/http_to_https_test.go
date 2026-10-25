@@ -5,8 +5,15 @@ import (
 	"compress/gzip"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/fmotalleb/junction/config"
 )
 
 func TestRewriteRequestBodyStreamsUnchangedBodies(t *testing.T) {
@@ -66,4 +73,48 @@ func TestDecodeBodyRejectsMalformedAndExpandedGzip(t *testing.T) {
 	if _, err := decodeBody("gzip", compressed.Bytes(), 32); err == nil {
 		t.Fatal("gzip body expanded beyond the configured limit but was accepted")
 	}
+}
+
+func TestHTTPSProxyStreamsUnsupportedEncodedTextResponse(t *testing.T) {
+	const size = maxRewrittenBodyBytes + 1024
+	payload := strings.Repeat("x", size)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Encoding", "br")
+		_, _ = io.WriteString(w, payload)
+	}))
+	defer upstream.Close()
+	targetURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := proxyTransportForTest(t)
+	h := &httpToHTTPSProxy{logger: zap.NewNop()}
+	route := httpsRoute{
+		entry:        config.EntryPoint{Timeout: 10 * time.Second},
+		transport:    transport,
+		respReplacer: strings.NewReplacer("origin", "replacement"),
+	}
+	request, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	h.forward(recorder, route, *targetURL, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("response status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if got := recorder.Header().Get("Content-Encoding"); got != "br" {
+		t.Fatalf("Content-Encoding = %q, want br", got)
+	}
+	if got := recorder.Body.Len(); got != size {
+		t.Fatalf("streamed response size = %d, want %d", got, size)
+	}
+}
+
+func proxyTransportForTest(t *testing.T) *http.Transport {
+	t.Helper()
+	transport := &http.Transport{}
+	t.Cleanup(transport.CloseIdleConnections)
+	return transport
 }
