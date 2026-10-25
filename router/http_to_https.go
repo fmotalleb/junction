@@ -66,13 +66,16 @@ func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, err
 	if entry.Target == "" && entry.Tag == nil {
 		return true, errors.New("http_to_https: entry.Target is required (or use Tag to group entries), e.g. https://google.com")
 	}
+	if _, err := proxy.NewChain(entry.Proxy); err != nil {
+		return true, fmt.Errorf("invalid http_to_https proxy chain: %w", err)
+	}
 
 	targetURL, reqReplacer, respReplacer, err := buildHTTPSEntryConfig(entry)
 	if err != nil {
 		return true, err
 	}
-	if targetURL != nil && targetURL.Scheme != "https" {
-		logger.Warn("target scheme is not https", zap.String("scheme", targetURL.Scheme))
+	if targetURL != nil && (targetURL.Scheme != "https" || targetURL.Host == "" || targetURL.User != nil) {
+		return true, errors.New("http_to_https target must be an HTTPS URL with a host and no userinfo")
 	}
 
 	server := &http.Server{
@@ -91,7 +94,7 @@ func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, err
 	}
 
 	logger.Info("HTTP->HTTPS proxy booted", zap.Any("target", targetURL))
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := serveHTTPServer(ctx, server); err != nil {
 		logger.Error("HTTP server error", zap.Error(err))
 		return true, errors.Join(
 			errors.New("failed to start listener for http_to_https proxy"),
@@ -147,6 +150,9 @@ func buildHTTPSEntryConfig(entry config.EntryPoint) (*url.URL, *strings.Replacer
 		}
 	}
 
+	if len(reqReplacements) == 0 {
+		return targetURL, nil, nil, nil
+	}
 	return targetURL, strings.NewReplacer(reqReplacements...), strings.NewReplacer(respReplacements...), nil
 }
 
@@ -182,7 +188,12 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstreamURL.Path = singleJoiningSlash(route.targetURL.Path, r.URL.Path)
 	upstreamURL.RawQuery = r.URL.RawQuery
 
-	req, err := http.NewRequestWithContext(h.ctx, r.Method, upstreamURL.String(), rewriteRequestBody(r, route.reqReplacer))
+	body, err := rewriteRequestBody(r, route.reqReplacer, maxRewrittenBodyBytes)
+	if err != nil {
+		http.Error(w, "request body too large or unreadable", http.StatusRequestEntityTooLarge)
+		return
+	}
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL.String(), body)
 	if err != nil {
 		h.logger.Error("Request creation failed", zap.Error(err))
 		http.Error(w, "Request creation failed", http.StatusInternalServerError)
@@ -261,17 +272,25 @@ func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) 
 
 // rewriteRequestBody returns the body to forward, replacing text payloads in
 // flight and keeping ContentLength in sync with the rewritten size.
-func rewriteRequestBody(r *http.Request, reqReplacer *strings.Replacer) io.ReadCloser {
-	if r.Body == nil || reqReplacer == nil || !isTextContentType(r.Header.Get("Content-Type")) {
-		return r.Body
+const maxRewrittenBodyBytes = 8 << 20
+
+func rewriteRequestBody(r *http.Request, reqReplacer *strings.Replacer, limit int64) (io.ReadCloser, error) {
+	if r.Body == nil || reqReplacer == nil || r.Header.Get("Content-Encoding") != "" || !isTextContentType(r.Header.Get("Content-Type")) {
+		return r.Body, nil
 	}
-	bodyBytes, _ := io.ReadAll(r.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(bodyBytes)) > limit {
+		return nil, fmt.Errorf("request body exceeds rewrite limit of %d bytes", limit)
+	}
 	if len(bodyBytes) == 0 {
-		return r.Body
+		return r.Body, nil
 	}
 	replaced := reqReplacer.Replace(string(bodyBytes))
 	r.ContentLength = int64(len(replaced))
-	return io.NopCloser(strings.NewReader(replaced))
+	return io.NopCloser(strings.NewReader(replaced)), nil
 }
 
 // forward sends the upstream request and mirrors the response back to the
@@ -306,31 +325,61 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	if route.respReplacer == nil || !isTextContentType(resp.Header.Get("Content-Type")) {
+		copyResponseHeaders(w, resp.Header, nil, false)
+		w.WriteHeader(resp.StatusCode)
+		if _, err := io.Copy(w, resp.Body); err != nil {
+			h.logger.Error("Response copy failed", zap.Error(err))
+		}
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRewrittenBodyBytes+1))
 	if err != nil {
 		h.logger.Error("Response read failed", zap.Error(err))
 		http.Error(w, "Upstream read failed", http.StatusBadGateway)
 		return
 	}
-	body = decodeBody(resp.Header.Get("Content-Encoding"), body)
+	if int64(len(body)) > maxRewrittenBodyBytes {
+		http.Error(w, "upstream response too large to rewrite", http.StatusBadGateway)
+		return
+	}
+	contentEncoding := resp.Header.Get("Content-Encoding")
+	if strings.EqualFold(contentEncoding, "gzip") {
+		body, err = decodeBody(contentEncoding, body, maxRewrittenBodyBytes)
+		if err != nil {
+			http.Error(w, "upstream response could not be decoded", http.StatusBadGateway)
+			return
+		}
+	} else if contentEncoding != "" {
+		copyResponseHeaders(w, resp.Header, nil, false)
+		w.WriteHeader(resp.StatusCode)
+		_, _ = w.Write(body)
+		return
+	}
 	body = replaceTextBody(resp.Header.Get("Content-Type"), body, route.respReplacer)
-	copyResponseHeaders(w, resp.Header, route.respReplacer)
+	copyResponseHeaders(w, resp.Header, route.respReplacer, true)
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
 }
 
-func decodeBody(contentEncoding string, body []byte) []byte {
-	if !strings.Contains(contentEncoding, "gzip") {
-		return body
+func decodeBody(contentEncoding string, body []byte, limit int64) ([]byte, error) {
+	if !strings.EqualFold(contentEncoding, "gzip") {
+		return body, nil
 	}
 	gr, err := gzip.NewReader(bytes.NewReader(body))
 	if err != nil {
-		return body
+		return nil, err
 	}
 	defer gr.Close()
-	uncompressed, _ := io.ReadAll(gr)
-	return uncompressed
+	uncompressed, err := io.ReadAll(io.LimitReader(gr, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(uncompressed)) > limit {
+		return nil, fmt.Errorf("decompressed response exceeds %d bytes", limit)
+	}
+	return uncompressed, nil
 }
 
 func replaceTextBody(contentType string, body []byte, replacer *strings.Replacer) []byte {
@@ -340,24 +389,32 @@ func replaceTextBody(contentType string, body []byte, replacer *strings.Replacer
 	return []byte(replacer.Replace(string(body)))
 }
 
-func copyResponseHeaders(w http.ResponseWriter, headers http.Header, replacer *strings.Replacer) {
+func copyResponseHeaders(w http.ResponseWriter, headers http.Header, replacer *strings.Replacer, transformed bool) {
+	connectionHeaders := connectionHeaderNames(headers)
 	for k, vv := range headers {
-		if strings.EqualFold(k, "Content-Length") || strings.EqualFold(k, "Content-Encoding") {
+		if isHopHeader(k) || connectionHeaders[strings.ToLower(k)] || (transformed && strings.EqualFold(k, "Content-Length")) || (transformed && strings.EqualFold(k, "Content-Encoding")) {
 			continue
 		}
 		for _, v := range vv {
-			w.Header().Add(k, replacer.Replace(v))
+			if replacer != nil {
+				v = replacer.Replace(v)
+			}
+			w.Header().Add(k, v)
 		}
 	}
 	if loc := headers.Get("Location"); loc != "" {
-		w.Header().Set("Location", replacer.Replace(loc))
+		if replacer != nil {
+			loc = replacer.Replace(loc)
+		}
+		w.Header().Set("Location", loc)
 	}
 }
 
 func copyHeadersWithReplace(dst, src http.Header, replacer *strings.Replacer) {
+	connectionHeaders := connectionHeaderNames(src)
 	for k, vv := range src {
 		// skip hop-by-hop headers
-		if isHopHeader(k) {
+		if isHopHeader(k) || connectionHeaders[strings.ToLower(k)] {
 			continue
 		}
 		for _, v := range vv {
@@ -372,18 +429,27 @@ func copyHeadersWithReplace(dst, src http.Header, replacer *strings.Replacer) {
 func isHopHeader(k string) bool {
 	switch strings.ToLower(k) {
 	case "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
-		"te", "trailers", "transfer-encoding", "upgrade", "accept-encoding":
+		"te", "trailer", "transfer-encoding", "upgrade":
 		return true
 	default:
 		return false
 	}
 }
 
+func connectionHeaderNames(headers http.Header) map[string]bool {
+	result := make(map[string]bool)
+	for _, value := range headers.Values("Connection") {
+		for _, name := range strings.Split(value, ",") {
+			if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+				result[name] = true
+			}
+		}
+	}
+	return result
+}
+
 func isTextContentType(ct string) bool {
 	ct = strings.ToLower(ct)
-	if ct == "" {
-		return true // be permissive for unknown
-	}
 	textTypes := []string{
 		"text/", "application/json", "application/javascript",
 		"application/xml", "application/x-www-form-urlencoded",

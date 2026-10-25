@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"net/url"
 
 	"golang.org/x/net/proxy"
@@ -13,6 +14,11 @@ func init() {
 func socks5Dialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 	if url.Scheme != "socks5" && url.Scheme != "socks5h" {
 		return nil, nil
+	}
+	if url.User != nil {
+		if _, ok := url.User.Password(); !ok {
+			return nil, errors.New("SOCKS5 credentials must include a password")
+		}
 	}
 	return proxy.FromURL(url, dialer)
 }

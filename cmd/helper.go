@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/fmotalleb/go-tools/log"
 	"github.com/pelletier/go-toml"
@@ -53,10 +54,12 @@ func dumpConf(cfg *config.Config, form ...string) error {
 func buildAppContext() (context.Context, context.CancelFunc, error) {
 	ctx, cancel := signal.NotifyContext(
 		context.Background(),
-		os.Kill,
+		os.Interrupt,
+		syscall.SIGTERM,
 	)
 	ctx, err := log.WithNewEnvLogger(ctx)
 	if err != nil {
+		cancel()
 		return nil, nil, err
 	}
 	return ctx, cancel, nil

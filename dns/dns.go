@@ -34,11 +34,20 @@ type resolver struct {
 func newResolvers(returnAddr []*config.DNSResult) ([]resolver, error) {
 	resolvers := make([]resolver, len(returnAddr))
 	for index, e := range returnAddr {
+		if e == nil {
+			return nil, fmt.Errorf("fake DNS answer entry %d is nil", index)
+		}
 		if e.Result == nil {
 			return nil, fmt.Errorf("fake DNS answer entry %d has no result IP configured", index)
 		}
+		if e.Result.To4() == nil {
+			return nil, fmt.Errorf("fake DNS answer entry %d must contain an IPv4 address", index)
+		}
 		ranger := cidranger.NewPCTrieRanger()
 		for _, r := range e.From {
+			if r == nil {
+				return nil, fmt.Errorf("fake DNS answer entry %d has a nil source range", index)
+			}
 			err := ranger.Insert(
 				cidranger.NewBasicRangerEntry(*r),
 			)
@@ -107,7 +116,7 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	}
 
 	h := newHandler(sCtx, resolvers, forwarder, cfg.Allowed)
-	listenAddr := "0.0.0.0:53"
+	listenAddr := "127.0.0.1:53"
 	if cfg.Listen != nil {
 		listenAddr = cfg.Listen.String()
 	}
@@ -174,6 +183,11 @@ func (h *handler) findAnswer(a net.Addr) net.IP {
 }
 
 func (h *handler) handleARecord(w dns.ResponseWriter, r *dns.Msg, q dns.Question) {
+	answer := h.findAnswer(w.RemoteAddr())
+	if answer == nil {
+		h.sendRefusedResponse(w, r, h.logger())
+		return
+	}
 	msg := new(dns.Msg)
 	msg.SetReply(r)
 	rr := &dns.A{
@@ -183,7 +197,7 @@ func (h *handler) handleARecord(w dns.ResponseWriter, r *dns.Msg, q dns.Question
 			Class:  dns.ClassINET,
 			Ttl:    10,
 		},
-		A: h.findAnswer(w.RemoteAddr()),
+		A: answer.To4(),
 	}
 	msg.Answer = append(msg.Answer, rr)
 	if err := w.WriteMsg(msg); err != nil {
@@ -199,9 +213,10 @@ func (h *handler) forwardRequest(w dns.ResponseWriter, r *dns.Msg, logger *zap.L
 	resp, exchangeErr := dns.ExchangeContext(ctx, r, h.forwarder)
 	if exchangeErr != nil {
 		logger.Debug("failed to read result from forwarder", zap.Error(exchangeErr))
-		// If forward failed, still return NXDOMAIN instead of crashing
+		// Upstream failures are temporary server failures, not authoritative
+		// statements that the requested name does not exist.
 		fallback := new(dns.Msg)
-		fallback.SetRcode(r, dns.RcodeNameError)
+		fallback.SetRcode(r, dns.RcodeServerFailure)
 		if err := w.WriteMsg(fallback); err != nil {
 			logger.Warn("failed to write fallback answer", zap.Error(err))
 		}

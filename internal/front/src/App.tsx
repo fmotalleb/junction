@@ -52,10 +52,10 @@ function App() {
         // Update existing
         const newEntrypoints = [...prevConfig.entrypoints];
         newEntrypoints[existingIndex] = entryPoint;
-        return { entrypoints: newEntrypoints };
+        return { ...prevConfig, entrypoints: newEntrypoints };
       } else {
         // Add new
-        return { entrypoints: [...prevConfig.entrypoints, entryPoint] };
+        return { ...prevConfig, entrypoints: [...prevConfig.entrypoints, entryPoint] };
       }
     });
 
@@ -66,6 +66,7 @@ function App() {
   const handleDeleteEntryPoint = useCallback((id: string) => {
     if (window.confirm('Are you sure you want to delete this entry point?')) {
       setConfig(prevConfig => ({
+        ...prevConfig,
         entrypoints: prevConfig.entrypoints.filter(ep => ep.id !== id)
       }));
     }
@@ -77,7 +78,7 @@ function App() {
   }, []);
 
   const handleReorderEntryPoints = useCallback((reorderedEntryPoints: EntryPoint[]) => {
-    setConfig({ entrypoints: reorderedEntryPoints });
+    setConfig(prevConfig => ({ ...prevConfig, entrypoints: reorderedEntryPoints }));
   }, []);
 
   const handleImportConfig = useCallback((importedConfig: NetworkConfig) => {

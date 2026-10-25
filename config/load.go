@@ -1,0 +1,256 @@
+package config
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/spf13/viper"
+)
+
+const (
+	maxConfigBytes    = 4 << 20
+	maxConfigIncludes = 128
+	maxIncludeDepth   = 16
+)
+
+type configLoader struct {
+	ctx     context.Context
+	visited map[string]struct{}
+	count   int
+}
+
+func loadConfig(ctx context.Context, path string) (map[string]any, error) {
+	l := &configLoader{ctx: ctx, visited: make(map[string]struct{})}
+	return l.read(path, "", 0)
+}
+
+func (l *configLoader) read(path, parent string, depth int) (map[string]any, error) {
+	if err := l.ctx.Err(); err != nil {
+		return nil, err
+	}
+	if depth > maxIncludeDepth {
+		return nil, fmt.Errorf("configuration includes exceed maximum depth %d", maxIncludeDepth)
+	}
+	if path == "" && parent == "" {
+		data, err := io.ReadAll(io.LimitReader(os.Stdin, maxConfigBytes+1))
+		if err != nil {
+			return nil, fmt.Errorf("read configuration from stdin: %w", err)
+		}
+		return l.parse(data, ".toml", "")
+	}
+
+	key, err := canonicalConfigPath(path, parent)
+	if err != nil {
+		return nil, err
+	}
+	if _, seen := l.visited[key]; seen {
+		return nil, fmt.Errorf("configuration include cycle at %q", safeConfigPath(key))
+	}
+	l.count++
+	if l.count > maxConfigIncludes {
+		return nil, fmt.Errorf("configuration includes exceed maximum count %d", maxConfigIncludes)
+	}
+	l.visited[key] = struct{}{}
+	defer delete(l.visited, key)
+
+	data, ext, err := l.readBytes(key)
+	if err != nil {
+		return nil, err
+	}
+	current, err := l.parse(data, ext, key)
+	if err != nil {
+		return nil, err
+	}
+	includes, err := includePatterns(current["include"])
+	if err != nil {
+		return nil, fmt.Errorf("configuration %q: %w", safeConfigPath(key), err)
+	}
+	delete(current, "include")
+
+	merged := make(map[string]any)
+	for _, pattern := range includes {
+		paths, err := l.expand(pattern, key)
+		if err != nil {
+			return nil, fmt.Errorf("resolve include %q from %q: %w", redactURL(pattern), safeConfigPath(key), err)
+		}
+		if len(paths) == 0 {
+			return nil, fmt.Errorf("include %q from %q matched no files", redactURL(pattern), safeConfigPath(key))
+		}
+		for _, include := range paths {
+			child, err := l.read(include, key, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			mergeConfig(merged, child)
+		}
+	}
+	mergeConfig(merged, current)
+	return merged, nil
+}
+
+func (l *configLoader) parse(data []byte, ext, path string) (map[string]any, error) {
+	if len(data) > maxConfigBytes {
+		return nil, fmt.Errorf("configuration %q exceeds %d bytes", safeConfigPath(path), maxConfigBytes)
+	}
+	v := viper.New()
+	v.SetConfigType(strings.TrimPrefix(ext, "."))
+	if err := v.ReadConfig(strings.NewReader(string(data))); err != nil {
+		return nil, fmt.Errorf("parse configuration %q: %w", safeConfigPath(path), err)
+	}
+	return v.AllSettings(), nil
+}
+
+func (l *configLoader) readBytes(path string) ([]byte, string, error) {
+	u, err := url.Parse(path)
+	if err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+		if u.Scheme == "http" && os.Getenv("JUNCTION_ALLOW_INSECURE_CONFIG_HTTP") != "1" {
+			return nil, "", errors.New("remote configuration requires HTTPS (set JUNCTION_ALLOW_INSECURE_CONFIG_HTTP=1 to allow HTTP temporarily)")
+		}
+		ctx, cancel := context.WithTimeout(l.ctx, 15*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+		if err != nil {
+			return nil, "", fmt.Errorf("create remote configuration request: %w", err)
+		}
+		if u.User != nil {
+			password, _ := u.User.Password()
+			req.SetBasicAuth(u.User.Username(), password)
+		}
+		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, "", fmt.Errorf("fetch remote configuration %q: request failed", redactURL(path))
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, "", fmt.Errorf("fetch remote configuration %q: HTTP %s", redactURL(path), resp.Status)
+		}
+		data, err := io.ReadAll(io.LimitReader(resp.Body, maxConfigBytes+1))
+		if err != nil {
+			return nil, "", fmt.Errorf("read remote configuration %q: %w", redactURL(path), err)
+		}
+		return data, filepath.Ext(u.Path), nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("read configuration %q: %w", safeConfigPath(path), err)
+	}
+	return data, filepath.Ext(path), nil
+}
+
+func (l *configLoader) expand(pattern, parent string) ([]string, error) {
+	if u, err := url.Parse(pattern); err == nil && u.Scheme != "" {
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return nil, fmt.Errorf("unsupported include scheme %q", u.Scheme)
+		}
+		if base, err := url.Parse(parent); err == nil && (base.Scheme == "http" || base.Scheme == "https") {
+			resolved := base.ResolveReference(u)
+			return []string{resolved.String()}, nil
+		}
+		return []string{u.String()}, nil
+	}
+	if !filepath.IsAbs(pattern) {
+		if parentURL, err := url.Parse(parent); err == nil && (parentURL.Scheme == "http" || parentURL.Scheme == "https") {
+			resolved := parentURL.ResolveReference(&url.URL{Path: pattern})
+			return []string{resolved.String()}, nil
+		}
+		pattern = filepath.Join(filepath.Dir(parent), pattern)
+	}
+	return filepath.Glob(pattern)
+}
+
+func canonicalConfigPath(path, parent string) (string, error) {
+	u, err := url.Parse(path)
+	if err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+		return u.String(), nil
+	}
+	if !filepath.IsAbs(path) {
+		if parentURL, parseErr := url.Parse(parent); parseErr == nil && (parentURL.Scheme == "http" || parentURL.Scheme == "https") {
+			return parentURL.ResolveReference(&url.URL{Path: path}).String(), nil
+		}
+		if parent == "" {
+			parent = "."
+		}
+		path = filepath.Join(filepath.Dir(parent), path)
+	}
+	return filepath.Abs(path)
+}
+
+func includePatterns(value any) ([]string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	items, ok := value.([]any)
+	if !ok {
+		if strings, stringOK := value.([]string); stringOK {
+			items = make([]any, len(strings))
+			for i := range strings {
+				items[i] = strings[i]
+			}
+		} else {
+			return nil, errors.New("include must be an array of strings")
+		}
+	}
+	patterns := make([]string, 0, len(items))
+	for _, item := range items {
+		pattern, ok := item.(string)
+		if !ok || strings.TrimSpace(pattern) == "" {
+			return nil, errors.New("include entries must be non-empty strings")
+		}
+		patterns = append(patterns, pattern)
+	}
+	return patterns, nil
+}
+
+func mergeConfig(dst, src map[string]any) {
+	for key, value := range src {
+		if existing, ok := dst[key]; ok {
+			existingMap, existingOK := existing.(map[string]any)
+			valueMap, valueOK := value.(map[string]any)
+			if existingOK && valueOK {
+				mergeConfig(existingMap, valueMap)
+				continue
+			}
+			if existingSlice, existingOK := existing.([]any); existingOK {
+				if valueSlice, valueOK := value.([]any); valueOK {
+					dst[key] = append(existingSlice, valueSlice...)
+					continue
+				}
+			}
+			dst[key] = value
+			continue
+		}
+		dst[key] = value
+	}
+}
+
+func safeConfigPath(path string) string {
+	return redactURL(path)
+}
+
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "[invalid configuration URL]"
+	}
+	if u.User != nil {
+		u.User = url.UserPassword(u.User.Username(), "REDACTED")
+	}
+	query := u.Query()
+	for key := range query {
+		lower := strings.ToLower(key)
+		if strings.Contains(lower, "token") || strings.Contains(lower, "secret") || strings.Contains(lower, "password") || strings.Contains(lower, "passwd") || strings.Contains(lower, "key") || strings.Contains(lower, "credential") || strings.Contains(lower, "auth") {
+			query.Set(key, "REDACTED")
+		}
+	}
+	u.RawQuery = query.Encode()
+	return u.String()
+}

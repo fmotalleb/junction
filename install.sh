@@ -43,15 +43,22 @@ ASSET_URL="${BASE_ASSET_PATH}/${TARBALL}"
 CHECKSUM_URL="${BASE_ASSET_PATH}/${CHECKSUM_FILE}"
 
 TMPDIR=$(mktemp -d)
+cleanup() { rm -rf "$TMPDIR"; }
+trap cleanup EXIT
 pushd "$TMPDIR" >/dev/null
 echo -e "${BLUE}Using temporary directory: $TMPDIR${NC}"
 
 echo -e "${CYAN}Downloading files...${NC}"
-curl --fail -LO "$ASSET_URL"
-curl --fail -LO "$CHECKSUM_URL"
+curl --fail --location --connect-timeout 10 --max-time 120 --output "$TARBALL" "$ASSET_URL"
+curl --fail --location --connect-timeout 10 --max-time 120 --output "$CHECKSUM_FILE" "$CHECKSUM_URL"
 
 echo -e "${CYAN}Verifying checksum...${NC}"
-EXPECTED_SUM=$(grep "$TARBALL" "$CHECKSUM_FILE" | awk '{print $1}')
+EXPECTED_LINES=$(awk -v file="$TARBALL" '$2 == file { print $1 }' "$CHECKSUM_FILE")
+if [[ "$(printf '%s\n' "$EXPECTED_LINES" | sed '/^$/d' | wc -l | tr -d ' ')" != 1 ]] || [[ ! "$EXPECTED_LINES" =~ ^[[:xdigit:]]{64}$ ]]; then
+  echo -e "${RED}No unique, valid SHA-256 entry for $TARBALL${NC}" >&2
+  exit 1
+fi
+EXPECTED_SUM="$(printf '%s' "$EXPECTED_LINES" | tr '[:upper:]' '[:lower:]')"
 
 if command -v sha256sum &>/dev/null; then
   ACTUAL_SUM=$(sha256sum "$TARBALL" | awk '{print $1}')
@@ -59,22 +66,34 @@ elif command -v shasum &>/dev/null; then
   ACTUAL_SUM=$(shasum -a 256 "$TARBALL" | awk '{print $1}')
 else
   echo -e "${RED}No checksum utility found (sha256sum or shasum)${NC}" >&2
-  input -p "Press Enter to continue without checksum verification (not recommended)..." || true
-  ACTUAL_SUM="${EXPECTED_SUM}"
+  exit 1
 fi
+ACTUAL_SUM="$(printf '%s' "$ACTUAL_SUM" | tr '[:upper:]' '[:lower:]')"
 
 if [[ "$EXPECTED_SUM" != "$ACTUAL_SUM" ]]; then
   echo -e "${RED}Checksum verification failed!${NC}" >&2
   exit 1
 fi
 echo -e "${GREEN}Checksum OK. Extracting...${NC}"
-tar -xzf "$TARBALL"
+if tar -tzf "$TARBALL" | awk 'BEGIN { bad=0; binary=0 } /^\// || /(^|\/)\.\.($|\/)/ { bad=1 } $0 == "junction" { binary++ } END { exit bad || binary != 1 }' \
+  && tar -tvzf "$TARBALL" | awk 'substr($0, 1, 1) != "-" { bad=1 } END { exit bad }'; then
+  tar -xzf "$TARBALL" --no-same-owner --no-same-permissions
+else
+  echo -e "${RED}Archive contains an unsafe path${NC}" >&2
+  exit 1
+fi
+if [[ ! -f junction || -L junction ]]; then
+  echo -e "${RED}Archive does not contain a regular junction binary${NC}" >&2
+  exit 1
+fi
 
 echo -e "${CYAN}Moving binary to current working directory...${NC}"
-mv junction "$WORKING_DIR/junction"
+chmod +x junction
+install_tmp="$(mktemp "$WORKING_DIR/.junction.XXXXXX")"
+cp junction "$install_tmp"
+chmod +x "$install_tmp"
+mv -f "$install_tmp" "$WORKING_DIR/junction"
 popd >/dev/null
-
-chmod +x "$WORKING_DIR/junction"
 
 echo -e "${GREEN}Installation complete.${NC}"
 echo -e "${BOLD}Run: ${NC}${YELLOW}./junction --help${NC}"
@@ -82,6 +101,5 @@ echo
 echo -e "${BOLD}To see example config:${NC} ${YELLOW}./junction example${NC}"
 echo -e "${BOLD}To install globally:${NC} ${YELLOW}sudo mv ./junction /usr/local/bin/junction${NC}"
 echo
-echo -e "${BLUE}Temporary files are in:${NC} ${TMPDIR}"
-echo -e "${RED}Remember: Clean it up manually if needed: rm -rf \"$TMPDIR\"${NC} ${GREEN}# (not mandatory since it will be wiped after reboot)${NC}"
+echo -e "${BLUE}Temporary files were removed.${NC}"
 echo -e "${CYAN}Thank you for using Junction!${NC}"

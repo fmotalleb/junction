@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -42,6 +43,8 @@ type keepAliveConn interface {
 }
 
 const keepAlivePeriod = 30 * time.Second
+
+const maxConcurrentTunnels = 1024
 
 // setKeepAlive lets the OS detect peers that vanished without a FIN/RST. Such
 // peers otherwise leave the relay blocked until the entry timeout expires.
@@ -93,34 +96,38 @@ func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
 		_ = dst.Close()
 	}()
 
+	errs, relayCtx := errgroup.WithContext(ctx)
 	stop := make(chan struct{})
 	defer close(stop)
 	go func() {
 		select {
-		case <-ctx.Done():
+		case <-relayCtx.Done():
 			_ = src.Close()
 			_ = dst.Close()
 		case <-stop:
 		}
 	}()
 
-	errs, _ := errgroup.WithContext(ctx)
 	errs.Go(
 		func() error {
 			if err := utils.Copy(dst, src); err != nil {
 				return errors.Join(errors.New("failed to write to dst"), err)
-			} else {
-				return nil
 			}
+			if halfCloser, ok := dst.(interface{ CloseWrite() error }); ok {
+				return halfCloser.CloseWrite()
+			}
+			return nil
 		},
 	)
 	errs.Go(
 		func() error {
 			if err := utils.Copy(src, dst); err != nil {
 				return errors.Join(errors.New("failed to write to dst"), err)
-			} else {
-				return nil
 			}
+			if halfCloser, ok := src.(interface{ CloseWrite() error }); ok {
+				return halfCloser.CloseWrite()
+			}
+			return nil
 		},
 	)
 	// Wait for the first error or closure
@@ -160,4 +167,28 @@ var ErrFieldMissing = errors.New("a mandatory field is missing")
 
 func buildFieldMissing(service, field string) error {
 	return fmt.Errorf("%w, router: %s, field: %s", ErrFieldMissing, service, field)
+}
+
+func serveHTTPServer(ctx context.Context, server *http.Server) error {
+	errCh := make(chan error, 1)
+	go func() { errCh <- server.ListenAndServe() }()
+	select {
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			_ = server.Close()
+			return err
+		}
+		err := <-errCh
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
 }
