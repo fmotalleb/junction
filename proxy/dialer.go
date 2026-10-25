@@ -29,7 +29,24 @@ func registerGenerator(g generator) {
 // Supported schemes include socks5:// and ssh://.
 // The chain is built in order, with each proxy connecting through the previous one.
 func NewDialer(chain []*url.URL) (proxy.Dialer, error) {
+	return NewDialerWithDestinationPolicy(chain, nil, nil)
+}
+
+// NewDialerWithDestinationPolicy builds a proxy chain and enforces CIDR policy
+// at the final direct dial. Since chained proxies may resolve destinations
+// remotely, destination policy cannot be guaranteed through a proxy chain.
+func NewDialerWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []string) (proxy.Dialer, error) {
+	policy, err := parseDestinationPolicy(allowCIDRs, blockCIDRs)
+	if err != nil {
+		return nil, err
+	}
+	if policy != nil && len(chain) != 0 {
+		return nil, errors.New("destination CIDR policy cannot be enforced through a proxy chain that resolves destinations remotely")
+	}
 	var dialer proxy.Dialer = proxy.Direct
+	if policy != nil {
+		dialer = destinationPolicyDialer{policy: policy}
+	}
 	// Build the proxy chain from last to first
 	for _, addr := range chain {
 		if addr == nil {
@@ -81,6 +98,16 @@ var _ proxy.Dialer = (*Chain)(nil)
 // NewChain builds the dialer chain for the given proxy URLs.
 func NewChain(chain []*url.URL) (*Chain, error) {
 	d, err := NewDialer(chain)
+	if err != nil {
+		return nil, err
+	}
+	return &Chain{dialer: d}, nil
+}
+
+// NewChainWithDestinationPolicy builds a reusable chain with optional direct
+// destination CIDR restrictions.
+func NewChainWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []string) (*Chain, error) {
+	d, err := NewDialerWithDestinationPolicy(chain, allowCIDRs, blockCIDRs)
 	if err != nil {
 		return nil, err
 	}

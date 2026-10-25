@@ -156,10 +156,10 @@ without a comparable destination-address policy.
 - [ ] Separate normalized hostname matching from destination-port policy.
   Define case, trailing-dot, IDNA, and IP-literal behavior consistently for HTTP
   and SNI. Restrict `Junction-Port` to the route's allowed port policy.
-- [ ] Add an explicit destination CIDR policy for deployments that must exclude
+- [x] Add an explicit destination CIDR policy for deployments that must exclude
   loopback, private, link-local, metadata, multicast, or unspecified addresses.
   Preserve intentional private backends through explicit configuration.
-- [ ] For direct connections, validate resolved addresses and dial an approved
+- [x] For direct connections, validate resolved addresses and dial an approved
   address without resolving it again. For remotely resolving SOCKS/SSH hops,
   document the trust boundary and enforce address policy at the egress hop or
   refuse modes whose promised restriction cannot be enforced locally.

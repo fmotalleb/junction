@@ -65,7 +65,7 @@ func (r *Registry) Prepare(entries []config.EntryPoint) error {
 	r.primary = make(map[int]bool)
 	r.routes = make(map[int]compiledEntry)
 	for index, entry := range entries {
-		chain, err := proxy.NewChain(entry.Proxy)
+		chain, err := proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
 		if err != nil {
 			return fmt.Errorf("entry point %d has an invalid proxy chain: %w", index, err)
 		}

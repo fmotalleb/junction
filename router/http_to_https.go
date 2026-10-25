@@ -56,7 +56,7 @@ func httpToHTTPSHandler(ctx context.Context, registry *Registry, index int, entr
 	if !prepared {
 		compiled.entry = entry
 		var err error
-		compiled.chain, err = proxy.NewChain(entry.Proxy)
+		compiled.chain, err = proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
 		if err != nil {
 			return true, err
 		}
@@ -270,7 +270,7 @@ func rewriteRequestBody(r *http.Request, reqReplacer *strings.Replacer, limit in
 func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upstreamURL url.URL, req *http.Request) {
 	transport := route.transport
 	if transport == nil {
-		chain, err := proxy.NewChain(route.entry.Proxy)
+		chain, err := proxy.NewChainWithDestinationPolicy(route.entry.Proxy, route.entry.DestinationAllow, route.entry.DestinationBlock)
 		if err != nil {
 			http.Error(w, "proxy route unavailable", http.StatusInternalServerError)
 			return

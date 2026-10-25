@@ -10,6 +10,8 @@ export interface EntryPoint {
   proxy?: string[];
   allow_from?: string[];
   block_from?: string[];
+  destination_allow?: string[];
+  destination_block?: string[];
   tag?: string;
   features?: string[];
   extra?: Record<string, unknown>;
