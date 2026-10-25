@@ -89,6 +89,19 @@ func TestEntryPointAllowed(t *testing.T) {
 	}
 }
 
+func TestEntryPointAllowedHostNormalizesAuthorities(t *testing.T) {
+	entry := entryWith(t, nil, []string{"example.com"}, nil, nil)
+	assert.True(t, entry.AllowedHost("EXAMPLE.COM.:443"))
+	assert.False(t, entry.AllowedHost("other.example.com:443"))
+
+	idnEntry := entryWith(t, nil, []string{"bücher.example"}, nil, nil)
+	assert.True(t, idnEntry.AllowedHost("XN--BCHER-KVA.EXAMPLE.:8443"))
+	assert.True(t, idnEntry.AllowedHost("bücher.example"))
+
+	ipEntry := entryWith(t, nil, []string{"regex:^::1$"}, nil, nil)
+	assert.True(t, ipEntry.AllowedHost("[::1]:443"))
+}
+
 func TestEntryPointAllowedFrom(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

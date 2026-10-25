@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/fmotalleb/junction/config"
@@ -124,6 +125,14 @@ func validateEntryPoint(entry config.EntryPoint) error {
 	}
 	if entry.Timeout < 0 {
 		return errors.New("timeout cannot be negative")
+	}
+	if slices.Contains(entry.Features, flexiblePortFeature) && len(entry.AllowedPorts) == 0 {
+		return errors.New("flexible-port requires an explicit allowed_ports list")
+	}
+	for _, port := range entry.AllowedPorts {
+		if err := isValidPort(port); err != nil {
+			return fmt.Errorf("invalid allowed_ports entry: %w", err)
+		}
 	}
 	switch routing {
 	case config.RouterSNI:

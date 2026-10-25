@@ -20,7 +20,6 @@ import (
 
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/proxy"
-	"github.com/fmotalleb/junction/utils"
 )
 
 const (
@@ -55,6 +54,7 @@ func httpHandler(ctx context.Context, registry *Registry, index int, entry confi
 			zap.String("listen", entry.Listen.String()),
 		)
 	features := slices.Clone(entry.Features)
+	features = slices.DeleteFunc(features, func(feature string) bool { return feature == flexiblePortFeature })
 
 	route, _ := registry.Route(index)
 	chain := route.chain
@@ -76,19 +76,17 @@ func httpHandler(ctx context.Context, registry *Registry, index int, entry confi
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		Addr:              entry.Listen.String(),
 		Handler: &httpProxyHandler{
-			ctx:          ctx,
-			logger:       logger,
-			chain:        chain,
-			transport:    transport,
-			targetPort:   entry.GetTargetOr(DefaultHTTPPort),
-			entry:        entry,
-			registry:     registry,
-			tag:          entry.Tag, // NEW FIELD
-			flexiblePort: utils.PopInPlace(&features, flexiblePortFeature),
+			ctx:        ctx,
+			logger:     logger,
+			chain:      chain,
+			transport:  transport,
+			targetPort: entry.GetTargetOr(DefaultHTTPPort),
+			entry:      entry,
+			registry:   registry,
+			tag:        entry.Tag,
 		},
 	}
-	//nolint:gocritic // utils.PopInPlace removes the items from array so if the list of features is normal it will be empty here
-	if len(features) >= 0 {
+	if len(features) > 0 {
 		logger.Warn("unused features in entrypoint", zap.Strings("features", features))
 	}
 	logger.Info("HTTP proxy booted")
@@ -105,15 +103,14 @@ func httpHandler(ctx context.Context, registry *Registry, index int, entry confi
 }
 
 type httpProxyHandler struct {
-	ctx          context.Context
-	logger       *zap.Logger
-	chain        *proxy.Chain
-	transport    *http.Transport
-	targetPort   string
-	entry        config.EntryPoint
-	registry     *Registry
-	tag          *string // NEW
-	flexiblePort bool
+	ctx        context.Context
+	logger     *zap.Logger
+	chain      *proxy.Chain
+	transport  *http.Transport
+	targetPort string
+	entry      config.EntryPoint
+	registry   *Registry
+	tag        *string // NEW
 }
 
 // newProxyTransport builds one transport per entry point. Building it per
@@ -135,13 +132,9 @@ func newProxyTransport(chain *proxy.Chain) *http.Transport {
 
 func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	remoteAddr := addrFromRemote(r.RemoteAddr)
-	port := h.targetPort
-	if h.flexiblePort {
-		port = cmp.Or(r.Header.Get("Junction-Port"), port)
-	}
 	targetHost, err := prepareTargetHost(
 		cmp.Or(r.Host, r.Header.Get("Host")),
-		port,
+		"",
 	)
 	if err != nil {
 		h.logger.Warn("failed to prepare target host", zap.Error(err))
@@ -199,7 +192,14 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	selectedPort := entry.GetTargetOr(h.targetPort, DefaultHTTPPort)
 	if slices.Contains(entry.Features, flexiblePortFeature) {
-		selectedPort = cmp.Or(r.Header.Get("Junction-Port"), selectedPort)
+		if requestedPort := r.Header.Get("Junction-Port"); requestedPort != "" {
+			if !slices.Contains(entry.AllowedPorts, requestedPort) {
+				h.logger.Warn("requested target port is not allowed", zap.String("port", requestedPort))
+				http.Error(w, "requested target port is not allowed", http.StatusForbidden)
+				return
+			}
+			selectedPort = requestedPort
+		}
 	}
 	targetHost, err = prepareTargetHost(cmp.Or(r.Host, r.Header.Get("Host")), selectedPort)
 	if err != nil {
@@ -243,12 +243,16 @@ func prepareTargetHost(hostHeader, targetPort string) (string, error) {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
+	host = strings.Trim(host, "[]")
 
 	if err := isValidHostname(host); err != nil {
 		return "", err
 	}
 
 	if targetPort == "" {
+		if net.ParseIP(host) != nil && strings.Contains(host, ":") {
+			return "[" + host + "]", nil
+		}
 		return host, nil
 	}
 
@@ -256,11 +260,7 @@ func prepareTargetHost(hostHeader, targetPort string) (string, error) {
 		return "", err
 	}
 
-	buf := make([]byte, 0, len(host)+1+len(targetPort))
-	buf = append(buf, host...)
-	buf = append(buf, ':')
-	buf = append(buf, targetPort...)
-	return string(buf), nil
+	return net.JoinHostPort(host, targetPort), nil
 }
 
 // isValidPort rejects anything that would later fail as an unresolvable
@@ -287,6 +287,8 @@ func isValidHostname(hostname string) error {
 		return fmt.Errorf("%s is a local hostname", hostname)
 	case len(hostname) > maxHostnameLength:
 		return fmt.Errorf("name exceeded the maximum length of %d characters", maxHostnameLength)
+	case net.ParseIP(hostname) != nil:
+		return nil
 	case !validHostnameRfc1123.MatchString(hostname):
 		return fmt.Errorf("%s is not RFC1123 compliant", hostname)
 	default:

@@ -304,7 +304,7 @@ junction run --listen 8443 \
     List of feature flags that enable routing-specific behavior.
 
     - `http-header`:
-      - `flexible-port`: Allows per-request port override using the `Junction-Port` HTTP header.
+      - `flexible-port`: Allows per-request port override using the `Junction-Port` HTTP header. Requires `allowed_ports`; requests for other ports are rejected.
         If the header is missing or empty, the `to` value (or the router default) is used.
     - Other routers currently ignore feature flags (unknown features are ignored with a warning).
 
@@ -358,6 +358,7 @@ routing = "http-header"
 to = "80" # Defaults from `Host`
 proxy = "socks5://127.0.0.1:7890"
 features = ["flexible-port"] # Allow per-request port override via Junction-Port header
+allowed_ports = ["80", "443"] # Required; Junction-Port must match one of these
 allow_from = ["127.0.0.1", "10.0.*", "regex:^192\\.168\\.1\\."]
 
 [[entrypoints]]

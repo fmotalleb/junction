@@ -153,9 +153,10 @@ without a comparable destination-address policy.
 - [x] Return upstream redirects to the client by default, as `http-to-https`
   already does. If redirect following is configurable, reapply all relevant
   host, port, address, and proxy-route restrictions on every hop.
-- [ ] Separate normalized hostname matching from destination-port policy.
+- [x] Separate normalized hostname matching from destination-port policy.
   Define case, trailing-dot, IDNA, and IP-literal behavior consistently for HTTP
-  and SNI. Restrict `Junction-Port` to the route's allowed port policy.
+  and SNI. `flexible-port` now requires `allowed_ports`, and `Junction-Port`
+  overrides are rejected unless the selected route lists the requested port.
 - [x] Add an explicit destination CIDR policy for deployments that must exclude
   loopback, private, link-local, metadata, multicast, or unspecified addresses.
   Preserve intentional private backends through explicit configuration.

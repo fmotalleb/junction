@@ -200,6 +200,7 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
           <ArrayInput label="Allowed Destination CIDRs" values={formData.destination_allow || []} onChange={(values) => handleFieldChange('destination_allow', values)} placeholder="203.0.113.0/24" />
           <ArrayInput label="Blocked Destination CIDRs" values={formData.destination_block || []} onChange={(values) => handleFieldChange('destination_block', values)} placeholder="127.0.0.0/8, 10.0.0.0/8" />
           <ArrayInput label="Features" values={formData.features || []} onChange={(values) => handleFieldChange('features', values)} placeholder="flexible-port" />
+          <ArrayInput label="Allowed Target Ports" values={formData.allowed_ports || []} onChange={(values) => handleFieldChange('allowed_ports', values)} placeholder="80, 443" />
 
           {/* Proxy URLs */}
 
