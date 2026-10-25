@@ -12,7 +12,7 @@ import (
 	"github.com/fmotalleb/junction/connection"
 )
 
-func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
+func udpRouter(ctx context.Context, _ *Registry, _ int, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterUDPRaw {
 		return false, nil
 	}

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -29,13 +30,17 @@ func Serve(ctx context.Context, c config.Config) error {
 	}
 	reg := router.NewRegistry()
 	defer reg.Reset()
+	if err := reg.Prepare(c.EntryPoints); err != nil {
+		return fmt.Errorf("validate route groups: %w", err)
+	}
 	group, serviceCtx := errgroup.WithContext(ctx)
 	if c.Core.FakeDNS != nil {
 		group.Go(func() error { return runDNS(serviceCtx, c.Core.FakeDNS) })
 	}
-	for _, e := range c.EntryPoints {
+	for index, e := range c.EntryPoints {
+		entryIndex := index
 		entry := e
-		group.Go(func() error { return handleEntry(serviceCtx, reg, entry) })
+		group.Go(func() error { return handleEntry(serviceCtx, reg, entryIndex, entry) })
 	}
 	if err := group.Wait(); err != nil {
 		return err
@@ -72,9 +77,9 @@ func runDNS(ctx context.Context, cfg *config.FakeDNS) error {
 // handleEntry starts handling the specified entry point within the given context and marks the wait group as done when finished.
 // handleEntry starts handling the given entry point and marks the wait group as done when it returns.
 // If starting the handler fails, it logs a warning that includes the entry and the error.
-func handleEntry(ctx context.Context, reg *router.Registry, e config.EntryPoint) error {
+func handleEntry(ctx context.Context, reg *router.Registry, index int, e config.EntryPoint) error {
 	warnOpenListener(ctx, e)
-	if err := reg.Handle(ctx, e); err != nil {
+	if err := reg.HandleAt(ctx, index, e); err != nil {
 		log.
 			FromContext(ctx).
 			Named("handleEntry").

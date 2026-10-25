@@ -10,9 +10,9 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -20,11 +20,6 @@ import (
 
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/proxy"
-)
-
-var (
-	httpsGroupMu sync.Mutex
-	httpsGroups  = map[string][]config.EntryPoint{}
 )
 
 // httpToHTTPSHandler starts an HTTP server that reverse-proxies to an HTTPS backend.
@@ -41,18 +36,9 @@ var (
 //	Entry.Proxy         - optional SOCKS5 chain, same as http_header.go
 //	Entry.Timeout       - upstream timeout
 //	Entry.Tag           - optional tag to group multiple entries under one listener
-func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
+func httpToHTTPSHandler(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterHTTPToHTTPS {
 		return false, nil
-	}
-
-	// --- Tag registration ---
-	if entry.Tag != nil {
-		isFirst := registerHTTPSTaggedEntry(*entry.Tag, entry)
-		if !isFirst {
-			// Not the first entry → do not start another listener.
-			return true, nil
-		}
 	}
 
 	logger := log.FromContext(ctx).
@@ -66,15 +52,21 @@ func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, err
 	if entry.Target == "" && entry.Tag == nil {
 		return true, errors.New("http_to_https: entry.Target is required (or use Tag to group entries), e.g. https://google.com")
 	}
-	if _, err := proxy.NewChain(entry.Proxy); err != nil {
-		return true, fmt.Errorf("invalid http_to_https proxy chain: %w", err)
+	compiled, prepared := registry.Route(index)
+	if !prepared {
+		compiled.entry = entry
+		var err error
+		compiled.chain, err = proxy.NewChain(entry.Proxy)
+		if err != nil {
+			return true, err
+		}
+		compiled.targetURL, compiled.reqReplacer, compiled.respReplacer, err = buildHTTPSEntryConfig(entry)
+		if err != nil {
+			return true, err
+		}
+		compiled.transport = newProxyTransport(compiled.chain)
 	}
-
-	targetURL, reqReplacer, respReplacer, err := buildHTTPSEntryConfig(entry)
-	if err != nil {
-		return true, err
-	}
-	if targetURL != nil && (targetURL.Scheme != "https" || targetURL.Host == "" || targetURL.User != nil) {
+	if compiled.targetURL != nil && (compiled.targetURL.Scheme != "https" || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
 		return true, errors.New("http_to_https target must be an HTTPS URL with a host and no userinfo")
 	}
 
@@ -83,17 +75,16 @@ func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, err
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		Addr:              entry.Listen.String(),
 		Handler: &httpToHTTPSProxy{
-			ctx:          ctx,
-			logger:       logger,
-			entry:        entry,
-			tag:          entry.Tag,
-			targetURL:    targetURL,
-			reqReplacer:  reqReplacer,
-			respReplacer: respReplacer,
+			ctx:       ctx,
+			logger:    logger,
+			entry:     entry,
+			registry:  registry,
+			tag:       entry.Tag,
+			baseRoute: httpsRoute{entry: entry, targetURL: compiled.targetURL, reqReplacer: compiled.reqReplacer, respReplacer: compiled.respReplacer, chain: compiled.chain, transport: compiled.transport},
 		},
 	}
 
-	logger.Info("HTTP->HTTPS proxy booted", zap.Any("target", targetURL))
+	logger.Info("HTTP->HTTPS proxy booted", zap.Any("target", compiled.targetURL))
 	if err := serveHTTPServer(ctx, server); err != nil {
 		logger.Error("HTTP server error", zap.Error(err))
 		return true, errors.Join(
@@ -102,20 +93,6 @@ func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, err
 		)
 	}
 	return true, nil
-}
-
-func registerHTTPSTaggedEntry(tag string, entry config.EntryPoint) bool {
-	httpsGroupMu.Lock()
-	defer httpsGroupMu.Unlock()
-
-	group, ok := httpsGroups[tag]
-	if !ok {
-		httpsGroups[tag] = []config.EntryPoint{entry}
-		return true // first entry → should start server
-	}
-
-	httpsGroups[tag] = append(group, entry)
-	return false // listener already running
 }
 
 // buildHTTPSEntryConfig parses the target URL and host replacers from an EntryPoint.
@@ -137,7 +114,13 @@ func buildHTTPSEntryConfig(entry config.EntryPoint) (*url.URL, *strings.Replacer
 		if !ok {
 			return nil, nil, nil, errors.New("invalid replace map structure, expected string -> string map")
 		}
-		for upstream, localAddr := range replaceMap {
+		upstreams := make([]string, 0, len(replaceMap))
+		for upstream := range replaceMap {
+			upstreams = append(upstreams, upstream)
+		}
+		sort.Strings(upstreams)
+		for _, upstream := range upstreams {
+			localAddr := replaceMap[upstream]
 			local, ok := localAddr.(string)
 			if !ok {
 				return nil, nil, nil, errors.New("invalid replace map structure, expected string -> string map, right side does not look like a string")
@@ -157,13 +140,12 @@ func buildHTTPSEntryConfig(entry config.EntryPoint) (*url.URL, *strings.Replacer
 }
 
 type httpToHTTPSProxy struct {
-	ctx          context.Context
-	logger       *zap.Logger
-	entry        config.EntryPoint
-	tag          *string
-	targetURL    *url.URL
-	reqReplacer  *strings.Replacer
-	respReplacer *strings.Replacer
+	ctx       context.Context
+	logger    *zap.Logger
+	entry     config.EntryPoint
+	registry  *Registry
+	tag       *string
+	baseRoute httpsRoute
 }
 
 type httpsRoute struct {
@@ -171,6 +153,8 @@ type httpsRoute struct {
 	targetURL    *url.URL
 	reqReplacer  *strings.Replacer
 	respReplacer *strings.Replacer
+	chain        *proxy.Chain
+	transport    *http.Transport
 }
 
 func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -214,12 +198,7 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // ok=false when the request must not be forwarded.
 func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) (httpsRoute, bool) {
 	remoteAddr := addrFromRemote(r.RemoteAddr)
-	route := httpsRoute{
-		entry:        h.entry,
-		targetURL:    h.targetURL,
-		reqReplacer:  h.reqReplacer,
-		respReplacer: h.respReplacer,
-	}
+	route := h.baseRoute
 
 	if h.tag == nil {
 		if !route.entry.AllowedFrom(remoteAddr) {
@@ -230,9 +209,7 @@ func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) 
 		return route, true
 	}
 
-	httpsGroupMu.Lock()
-	group := httpsGroups[*h.tag]
-	httpsGroupMu.Unlock()
+	group := h.registry.GroupRoutes(*h.tag)
 
 	// targetHost is the Host header the client sent; for HTTPS reverse-proxy
 	// we match on the incoming Host (what the client thinks it's talking to).
@@ -241,23 +218,18 @@ func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) 
 		incomingHost = r.Header.Get("Host")
 	}
 
-	for _, ep := range group {
+	for _, compiled := range group {
+		ep := compiled.entry
 		if !ep.Allowed(incomingHost) || !ep.AllowedFrom(remoteAddr) {
 			continue
 		}
-		// Rebuild per-entry config so each tagged entry can point at a
-		// distinct HTTPS backend with its own replacers.
-		targetURL, reqReplacer, respReplacer, err := buildHTTPSEntryConfig(ep)
-		if err != nil {
-			h.logger.Error("failed to build config for matched tag entry", zap.Error(err))
-			http.Error(w, "internal configuration error", http.StatusInternalServerError)
-			return route, false
-		}
 		route = httpsRoute{
 			entry:        ep,
-			targetURL:    targetURL,
-			reqReplacer:  reqReplacer,
-			respReplacer: respReplacer,
+			targetURL:    compiled.targetURL,
+			reqReplacer:  compiled.reqReplacer,
+			respReplacer: compiled.respReplacer,
+			chain:        compiled.chain,
+			transport:    compiled.transport,
 		}
 		return route, true
 	}
@@ -296,16 +268,16 @@ func rewriteRequestBody(r *http.Request, reqReplacer *strings.Replacer, limit in
 // forward sends the upstream request and mirrors the response back to the
 // client, applying the response replacers on the way.
 func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upstreamURL url.URL, req *http.Request) {
-	chain, err := proxy.NewChain(route.entry.Proxy)
-	if err != nil {
-		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
-		return
+	transport := route.transport
+	if transport == nil {
+		chain, err := proxy.NewChain(route.entry.Proxy)
+		if err != nil {
+			http.Error(w, "proxy route unavailable", http.StatusInternalServerError)
+			return
+		}
+		transport = newProxyTransport(chain)
+		defer transport.CloseIdleConnections()
 	}
-	transport := newProxyTransport(chain)
-	// This transport only lives for the current request; without closing its
-	// pooled connection here it kept a socket and two goroutines alive until
-	// the origin happened to hang up.
-	defer transport.CloseIdleConnections()
 
 	client := &http.Client{
 		Transport: transport,

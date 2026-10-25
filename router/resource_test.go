@@ -150,7 +150,7 @@ func TestTCPRawReleasesConnections(t *testing.T) {
 	proxyPort := freePort(t)
 	entry := testEntry(t, "tcp-raw", fmt.Sprintf("127.0.0.1:%d", proxyPort), target)
 	go func() {
-		_, _ = tcpRouter(ctx, entry)
+		_, _ = tcpRouter(ctx, NewRegistry(), -1, entry)
 	}()
 	time.Sleep(300 * time.Millisecond)
 

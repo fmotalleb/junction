@@ -104,8 +104,22 @@ func TestIsAllowed(t *testing.T) {
 	}
 }
 
+func TestIsAllowedClient(t *testing.T) {
+	h := newHandler(context.Background(), nil, "", nil)
+	h.allowFrom = []matcher.Matcher{*mustMatcher(t, "glob:192.168.1.*")}
+	assert.True(t, h.IsAllowedClient(plainAddr("192.168.1.24:53000")))
+	assert.False(t, h.IsAllowedClient(plainAddr("192.168.2.24:53000")))
+	assert.False(t, h.IsAllowedClient(plainAddr("bad-address")))
+}
+
 func TestServeValidatesConfig(t *testing.T) {
 	assert.Error(t, Serve(context.Background(), config.FakeDNS{}))
+	publicListen := netip.MustParseAddrPort("0.0.0.0:0")
+	publicCfg := config.FakeDNS{
+		Listen:     &publicListen,
+		ReturnAddr: []*config.DNSResult{{From: []*net.IPNet{mustCIDR(t, "0.0.0.0/0")}, Result: ip("10.10.10.10")}},
+	}
+	assert.Error(t, Serve(context.Background(), publicCfg), "public DNS binding without allow_from must be rejected")
 
 	listen := netip.MustParseAddrPort("127.0.0.1:0")
 	cfg := config.FakeDNS{

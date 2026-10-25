@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -32,8 +31,6 @@ const (
 )
 
 var (
-	httpGroupMu          sync.Mutex
-	httpGroups           = map[string][]config.EntryPoint{} // tag → entry list
 	validHostnameRfc1123 = regexp.MustCompile(`^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$`)
 	localhostIdentifiers = []string{
 		"localhost",
@@ -46,18 +43,9 @@ var (
 // httpHandler starts an HTTP proxy server for entry points configured with RouterHTTPHeader routing.
 // It initializes the server with a proxy handler that forwards requests through a SOCKS5 proxy chain as specified by the entry configuration.
 // Returns an error if the server fails to start.
-func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
+func httpHandler(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterHTTPHeader {
 		return false, nil
-	}
-
-	// --- Tag registration ---
-	if entry.Tag != nil {
-		isFirst := registerHTTPTaggedEntry(*entry.Tag, entry)
-		if !isFirst {
-			// Not the first entry → do not start another listener.
-			return true, nil
-		}
 	}
 
 	logger := log.FromContext(ctx).
@@ -68,14 +56,21 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		)
 	features := slices.Clone(entry.Features)
 
-	chain, err := proxy.NewChain(entry.Proxy)
-	if err != nil {
-		logger.Error("failed to create proxy dialer", zap.Error(err))
-		return true, err
+	route, _ := registry.Route(index)
+	chain := route.chain
+	transport := route.transport
+	if chain == nil {
+		var err error
+		chain, err = proxy.NewChain(entry.Proxy)
+		if err != nil {
+			logger.Error("failed to create proxy dialer", zap.Error(err))
+			return true, err
+		}
 	}
-
-	transport := newProxyTransport(chain)
-	defer transport.CloseIdleConnections()
+	if transport == nil {
+		transport = newProxyTransport(chain)
+		defer transport.CloseIdleConnections()
+	}
 	server := &http.Server{
 		ReadHeaderTimeout: time.Second * 30,
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
@@ -87,6 +82,7 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 			transport:    transport,
 			targetPort:   entry.GetTargetOr(DefaultHTTPPort),
 			entry:        entry,
+			registry:     registry,
 			tag:          entry.Tag, // NEW FIELD
 			flexiblePort: utils.PopInPlace(&features, flexiblePortFeature),
 		},
@@ -108,20 +104,6 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	return true, nil
 }
 
-func registerHTTPTaggedEntry(tag string, entry config.EntryPoint) bool {
-	httpGroupMu.Lock()
-	defer httpGroupMu.Unlock()
-
-	group, ok := httpGroups[tag]
-	if !ok {
-		httpGroups[tag] = []config.EntryPoint{entry}
-		return true // first entry → should start server
-	}
-
-	httpGroups[tag] = append(group, entry)
-	return false // listener already running
-}
-
 type httpProxyHandler struct {
 	ctx          context.Context
 	logger       *zap.Logger
@@ -129,6 +111,7 @@ type httpProxyHandler struct {
 	transport    *http.Transport
 	targetPort   string
 	entry        config.EntryPoint
+	registry     *Registry
 	tag          *string // NEW
 	flexiblePort bool
 }
@@ -172,20 +155,23 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// --- Tag group selection logic ---
 	entry := h.entry
+	chain := h.chain
+	transport := h.transport
 	if h.tag == nil && !entry.AllowedFrom(remoteAddr) {
 		h.logger.Debug("connection rejected", zap.String("client", r.RemoteAddr))
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	if h.tag != nil {
-		httpGroupMu.Lock()
-		group := slices.Clone(httpGroups[*h.tag])
-		httpGroupMu.Unlock()
+		group := h.registry.GroupRoutes(*h.tag)
 		matched := false
 
-		for _, ep := range group {
+		for _, route := range group {
+			ep := route.entry
 			if ep.Allowed(targetHost) && ep.AllowedFrom(remoteAddr) {
 				entry = ep
+				chain = route.chain
+				transport = route.transport
 				matched = true
 				break
 			}
@@ -211,6 +197,20 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+	selectedPort := entry.GetTargetOr(h.targetPort, DefaultHTTPPort)
+	if slices.Contains(entry.Features, flexiblePortFeature) {
+		selectedPort = cmp.Or(r.Header.Get("Junction-Port"), selectedPort)
+	}
+	targetHost, err = prepareTargetHost(cmp.Or(r.Host, r.Header.Get("Host")), selectedPort)
+	if err != nil {
+		http.Error(w, "malformed host value, refusing to process request", http.StatusBadRequest)
+		return
+	}
+	if chain == nil || transport == nil {
+		h.logger.Error("selected route was not prepared")
+		http.Error(w, "proxy route unavailable", http.StatusInternalServerError)
+		return
+	}
 
 	h.logger.Debug("HTTP request received",
 		zap.String("method", r.Method),
@@ -219,9 +219,9 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if r.Method == http.MethodConnect {
-		h.handleConnect(w, r, targetHost)
+		h.handleConnect(w, r, targetHost, entry, chain)
 	} else {
-		h.handleHTTPRequest(w, r, targetHost)
+		h.handleHTTPRequest(w, r, targetHost, entry, transport)
 	}
 }
 
@@ -305,14 +305,14 @@ func isLocal(name string) bool {
 	return false
 }
 
-func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request, targetHost string) {
-	ctx, cancel := context.WithTimeout(h.ctx, h.entry.GetTimeout())
+func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, r *http.Request, targetHost string, entry config.EntryPoint, chain *proxy.Chain) {
+	ctx, cancel := context.WithTimeout(r.Context(), entry.GetTimeout())
 	defer cancel()
 
 	// Bound the dial: a SOCKS upstream that accepts the socket but never
 	// answers the CONNECT request parked this handler goroutine forever.
 	dialCtx, cancelDial := context.WithTimeout(ctx, proxy.DefaultDialTimeout)
-	targetConn, err := h.chain.DialContext(dialCtx, "tcp", targetHost)
+	targetConn, err := chain.DialContext(dialCtx, "tcp", targetHost)
 	cancelDial()
 	if err != nil {
 		h.logger.Debug("CONNECT failed", zap.String("target", targetHost), zap.Error(err))
@@ -359,7 +359,7 @@ func (c *bufferedReadConn) CloseWrite() error {
 	return nil
 }
 
-func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Request, targetHost string) {
+func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Request, targetHost string, entry config.EntryPoint, transport *http.Transport) {
 	targetURL := &url.URL{
 		Scheme:   "http",
 		Host:     targetHost,
@@ -367,7 +367,7 @@ func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Requ
 		RawQuery: r.URL.RawQuery,
 	}
 
-	req, err := http.NewRequestWithContext(h.ctx, r.Method, targetURL.String(), r.Body)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), r.Body)
 	if err != nil {
 		h.logger.Error("Request creation failed", zap.Error(err))
 		http.Error(w, "Request creation failed", http.StatusInternalServerError)
@@ -379,7 +379,8 @@ func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Requ
 	//nolint:gosec // Forwarding to a client-chosen destination is this router's
 	// job; allow_list/block_list and allow_from gate who may ask for what.
 	resp, err := (&http.Client{
-		Transport: h.transport,
+		Transport: transport,
+		Timeout:   entry.GetTimeout(),
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

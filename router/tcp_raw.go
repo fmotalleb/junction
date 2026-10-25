@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"sync"
 
@@ -13,7 +12,7 @@ import (
 	"github.com/fmotalleb/junction/proxy"
 )
 
-func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
+func tcpRouter(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterTCPRaw {
 		return false, nil
 	}
@@ -41,9 +40,7 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		logger.Error("TCP proxy must have a target ip:port address")
 		return true, buildFieldMissing("tcp-raw", "to")
 	}
-	if _, err := proxy.NewChain(entry.Proxy); err != nil {
-		return true, fmt.Errorf("invalid TCP proxy chain: %w", err)
-	}
+	route, _ := registry.Route(index)
 
 	logger.Info("raw TCP proxy booted")
 
@@ -84,7 +81,7 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 			go func() {
 				defer workers.Done()
 				defer func() { <-active }()
-				handleTCPConnection(ctx, logger, conn, entry)
+				handleTCPConnection(ctx, logger, conn, entry, route.chain)
 			}()
 		default:
 			logger.Warn("maximum concurrent TCP tunnels reached", zap.Int("limit", maxConcurrentTunnels))
@@ -93,12 +90,19 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	}
 }
 
-func handleTCPConnection(parentCtx context.Context, logger *zap.Logger, conn net.Conn, entry config.EntryPoint) {
+func handleTCPConnection(parentCtx context.Context, logger *zap.Logger, conn net.Conn, entry config.EntryPoint, chain *proxy.Chain) {
 	ctx, cancel := context.WithTimeout(parentCtx, entry.GetTimeout())
 	defer cancel()
 	defer conn.Close()
 
-	targetConn, err := dialTarget(ctx, entry.Proxy, entry.Target, logger)
+	if chain == nil {
+		var err error
+		chain, err = proxy.NewChain(entry.Proxy)
+		if err != nil {
+			return
+		}
+	}
+	targetConn, err := chain.DialContext(ctx, "tcp", entry.Target)
 	if err != nil {
 		return
 	}

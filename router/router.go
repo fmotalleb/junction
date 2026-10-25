@@ -3,46 +3,54 @@ package router
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"strings"
 
 	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/proxy"
 )
 
-type handler func(context.Context, config.EntryPoint) (bool, error) // Handled, error
+type handler func(context.Context, *Registry, int, config.EntryPoint) (bool, error) // Handled, error
+
+type routeGroup struct {
+	routing config.Router
+	listen  netip.AddrPort
+	entries []compiledEntry
+}
+
+type compiledEntry struct {
+	entry        config.EntryPoint
+	chain        *proxy.Chain
+	transport    *http.Transport
+	targetURL    *url.URL
+	reqReplacer  *strings.Replacer
+	respReplacer *strings.Replacer
+}
 
 // Registry holds the routers that can serve an entry point together with the
 // cleanup they need once the server stops. Building one per server keeps the
 // registration explicit instead of depending on package init() ordering.
 type Registry struct {
 	handlers []handler
-	reset    []func()
+	groups   map[string]routeGroup
+	primary  map[int]bool
+	routes   map[int]compiledEntry
 }
 
 // NewRegistry returns a registry with every built-in router registered.
 // The order of the handlers does not matter: each router only claims entry
 // points whose routing matches its own.
 func NewRegistry() *Registry {
-	r := &Registry{}
+	r := &Registry{groups: make(map[string]routeGroup), primary: make(map[int]bool), routes: make(map[int]compiledEntry)}
 	r.registerHandler(httpHandler)
 	r.registerHandler(httpToHTTPSHandler)
 	r.registerHandler(sniRouter)
 	r.registerHandler(tcpRouter)
 	r.registerHandler(udpRouter)
 
-	r.registerReset(func() {
-		httpGroupMu.Lock()
-		httpGroups = make(map[string][]config.EntryPoint)
-		httpGroupMu.Unlock()
-	})
-	r.registerReset(func() {
-		httpsGroupMu.Lock()
-		httpsGroups = make(map[string][]config.EntryPoint)
-		httpsGroupMu.Unlock()
-	})
-	r.registerReset(func() {
-		groupMu.Lock()
-		sniGroups = make(map[string][]config.EntryPoint)
-		groupMu.Unlock()
-	})
 	return r
 }
 
@@ -50,16 +58,103 @@ func (r *Registry) registerHandler(h handler) {
 	r.handlers = append(r.handlers, h)
 }
 
-func (r *Registry) registerReset(fn func()) {
-	r.reset = append(r.reset, fn)
+// Prepare validates tagged groups and records their members before any listener
+// starts. Entry order is retained, so overlapping rules always resolve the same way.
+func (r *Registry) Prepare(entries []config.EntryPoint) error {
+	r.groups = make(map[string]routeGroup)
+	r.primary = make(map[int]bool)
+	r.routes = make(map[int]compiledEntry)
+	for index, entry := range entries {
+		chain, err := proxy.NewChain(entry.Proxy)
+		if err != nil {
+			return fmt.Errorf("entry point %d has an invalid proxy chain: %w", index, err)
+		}
+		compiled := compiledEntry{entry: entry, chain: chain}
+		if entry.Routing == config.RouterHTTPToHTTPS {
+			compiled.targetURL, compiled.reqReplacer, compiled.respReplacer, err = buildHTTPSEntryConfig(entry)
+			if err != nil {
+				return fmt.Errorf("entry point %d has an invalid HTTPS route: %w", index, err)
+			}
+			if compiled.targetURL != nil && (compiled.targetURL.Scheme != "https" || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
+				return fmt.Errorf("entry point %d HTTPS target must have an HTTPS URL with a host and no userinfo", index)
+			}
+		}
+		r.routes[index] = compiled
+		if entry.Routing == config.RouterHTTPHeader || entry.Routing == config.RouterHTTPToHTTPS {
+			compiled.transport = newProxyTransport(chain)
+			r.routes[index] = compiled
+		}
+		if entry.Tag != nil && entry.Routing != config.RouterHTTPHeader && entry.Routing != config.RouterHTTPToHTTPS && entry.Routing != config.RouterSNI {
+			return fmt.Errorf("entry point %d uses a tag with a router that does not support grouped routes", index)
+		}
+		if entry.Tag == nil {
+			r.primary[index] = true
+			continue
+		}
+		key := *entry.Tag
+		if key == "" {
+			return fmt.Errorf("entry point %d has an empty tag", index)
+		}
+		group, exists := r.groups[key]
+		if exists && (group.routing != entry.Routing || group.listen != entry.Listen) {
+			return fmt.Errorf("tag %q must use one routing mode and listen address", key)
+		}
+		if !exists {
+			group = routeGroup{routing: entry.Routing, listen: entry.Listen}
+			r.primary[index] = true
+		}
+		group.entries = append(group.entries, compiled)
+		r.groups[key] = group
+	}
+	return nil
+}
+
+func (r *Registry) Group(tag string) []config.EntryPoint {
+	if r == nil {
+		return nil
+	}
+	group := r.groups[tag]
+	entries := make([]config.EntryPoint, 0, len(group.entries))
+	for _, route := range group.entries {
+		entries = append(entries, route.entry)
+	}
+	return entries
+}
+
+func (r *Registry) GroupRoutes(tag string) []compiledEntry {
+	if r == nil {
+		return nil
+	}
+	return append([]compiledEntry(nil), r.groups[tag].entries...)
+}
+
+func (r *Registry) Route(index int) (compiledEntry, bool) {
+	if r == nil {
+		return compiledEntry{}, false
+	}
+	route, ok := r.routes[index]
+	return route, ok
 }
 
 // Handle runs the registered routers against e and stops at the first one that
 // claims it. It returns an error when no router matches or a router rejects the
 // configuration.
 func (r *Registry) Handle(ctx context.Context, e config.EntryPoint) error {
+	return r.handle(ctx, -1, e)
+}
+
+// HandleAt serves one entry from a prepared configuration. Tagged entries
+// after the first are rules for the group's listener and do not bind again.
+func (r *Registry) HandleAt(ctx context.Context, index int, e config.EntryPoint) error {
+	if !r.primary[index] {
+		return nil
+	}
+	return r.handle(ctx, index, e)
+}
+
+func (r *Registry) handle(ctx context.Context, index int, e config.EntryPoint) error {
 	for _, h := range r.handlers {
-		if handled, err := h(ctx, e); err != nil {
+		if handled, err := h(ctx, r, index, e); err != nil {
 			return errors.Join(
 				errors.New("handler denied the configuration"),
 				err,
@@ -73,7 +168,12 @@ func (r *Registry) Handle(ctx context.Context, e config.EntryPoint) error {
 
 // Reset runs the cleanup registered by the routers, dropping their group state.
 func (r *Registry) Reset() {
-	for _, fn := range r.reset {
-		fn()
+	for _, route := range r.routes {
+		if route.transport != nil {
+			route.transport.CloseIdleConnections()
+		}
 	}
+	r.groups = make(map[string]routeGroup)
+	r.primary = make(map[int]bool)
+	r.routes = make(map[int]compiledEntry)
 }

@@ -47,6 +47,7 @@ type FakeDNS struct {
 	ReturnAddr []*DNSResult      `mapstructure:"answer,omitempty" toml:"answer,omitempty" yaml:"answer,omitempty" json:"answer,omitempty"`
 	Forwarder  *netip.AddrPort   `mapstructure:"forwarder,omitempty" toml:"forwarder,omitempty" yaml:"forwarder,omitempty" json:"forwarder,omitempty"`
 	Allowed    []matcher.Matcher `mapstructure:"allowed,omitempty" toml:"allowed,omitempty" yaml:"allowed,omitempty" json:"allowed,omitempty"`
+	AllowFrom  []matcher.Matcher `mapstructure:"allow_from,omitempty" toml:"allow_from,omitempty" yaml:"allow_from,omitempty" json:"allow_from,omitempty"`
 }
 
 type DNSResult struct {

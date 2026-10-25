@@ -112,7 +112,7 @@ send the private key, but still requires authentication of the SSH server.
   `knownhosts.New` or `ssh.FixedHostKey`; require verification by default.
 - [ ] If an insecure mode is retained, require an explicit setting with a clear
   warning. Provide a documented migration for existing SSH configurations.
-- [ ] Preload and validate trust/authentication material when compiling routes.
+- [x] Preload and validate trust/authentication material when compiling routes.
   Support bracketed IPv6 addresses using host/port parsing rather than a colon test.
 - [x] Close the underlying connection when the dial context is canceled during
   `ssh.NewClientConn`, including when its original deadline has not expired.
@@ -134,8 +134,7 @@ proxies were requested. Both behaviors can violate an operator's egress policy.
   and invalid SSH authentication before opening listeners.
 - [x] Reject `udp-raw` with a proxy until UDP proxying is implemented and tested.
   Do not silently substitute a direct connection.
-- [ ] Build a chain once per compiled route and preserve its documented hop order;
-  TCP/SNI currently rebuild it for each connection, rereading SSH keys.
+- [x] Build a chain once per compiled route and preserve its documented hop order.
 
 **Acceptance:** malformed or unsupported chains prevent startup with a redacted,
 entry-specific error; a test verifies that no direct target connection occurs;
@@ -174,25 +173,21 @@ private targets and supported remote-resolution modes remain usable.
 
 ## R5 — Deterministic and isolated route groups
 
-**Evidence: source inspection; existing tests do not exercise this race.**
-`server/server.go:35` starts entries concurrently. Group registration order
-therefore determines both listener ownership and matching precedence.
-`router/sni.go:130` and `router/http_header.go:177` read maps while registration
-writes them under a mutex, without taking the same lock on those reads. This can
-race or fail with concurrent map access. `router/router.go:34` resets global maps,
-so creating a registry does not isolate separate server instances.
+**Evidence: source inspection; now covered by registry tests and the race suite.**
+The original global group maps allowed concurrent registration order to control
+listener ownership, had unsynchronized reads, and let one registry reset another.
+Grouped HTTP forwarding also reused the listener owner's proxy and settings.
+Groups are now prepared in config order, owned by each registry, and validated
+before listeners start. Each route keeps its own compiled proxy chain and HTTP
+transport; HTTPS targets and replacement rules are prepared once per route.
 
-For HTTP groups, `ServeHTTP` selects `entry = ep`, but forwarding still uses
-`h.chain`, `h.transport`, `h.entry`, and the port/features of the listener owner.
-The selected rule's proxy, timeout, and target port are not applied consistently.
-
-- [ ] Compile all groups in configuration order before starting any listeners.
+- [x] Compile all groups in configuration order before starting any listeners.
   Validate that a group's entries agree on routing mode and listen address.
-- [ ] Move groups into the server/registry instance and publish immutable route
+- [x] Move groups into the server/registry instance and publish immutable route
   tables; remove global registration/reset state.
-- [ ] Make selection return a complete compiled route, including target, proxy
+- [x] Make selection return a complete compiled route, including target, proxy
   chain, transport, timeout, features, and access policy. Use that route throughout.
-- [ ] Precompile HTTPS target URLs and replacers rather than rebuilding per request;
+- [x] Precompile HTTPS target URLs and replacers rather than rebuilding per request;
   ensure any rewrite ordering is deterministic.
 
 **Acceptance:** repeated runs choose the same overlapping rule; a non-first HTTP
@@ -377,7 +372,7 @@ can act as a public UDP DNS forwarder. Forwarder failures become NXDOMAIN at lin
 `newResolvers` also dereferences answer/CIDR pointers without validating all cases.
 
 - [x] Default new configurations to loopback and document the public-listener migration.
-- [ ] Add explicit allowed-client policy plus rate/concurrency limits.
+- [x] Add explicit allowed-client policy plus a bounded concurrency limit.
 - [x] Return SERVFAIL for temporary upstream failures; reserve NXDOMAIN for an
   authoritative negative result. Define REFUSED or empty-answer behavior when
   no source range matches; do not emit an invalid A record.
