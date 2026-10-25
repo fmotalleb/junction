@@ -26,6 +26,7 @@ type UDPClientManager struct {
 }
 
 const maxUDPClientSessions = 4096
+const maxUDPClientSessionsPerSource = 64
 
 type UDPClientConn struct {
 	clientAddr *net.UDPAddr
@@ -115,9 +116,19 @@ func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serve
 	clientKey := clientAddr.String()
 	m.clientsMux.RLock()
 	full := len(m.clients) >= maxUDPClientSessions
+	sourceSessions := 0
+	for _, client := range m.clients {
+		if client.clientAddr.IP.Equal(clientAddr.IP) {
+			sourceSessions++
+		}
+	}
 	m.clientsMux.RUnlock()
 	if full {
-		m.logger.Warn("UDP client session limit reached", zap.Int("limit", maxUDPClientSessions))
+		m.logger.Debug("UDP client session limit reached", zap.Int("limit", maxUDPClientSessions))
+		return nil
+	}
+	if sourceSessions >= maxUDPClientSessionsPerSource {
+		m.logger.Debug("UDP per-source session limit reached", zap.Int("limit", maxUDPClientSessionsPerSource))
 		return nil
 	}
 

@@ -87,6 +87,25 @@ func TestSweepKeepsActiveClients(t *testing.T) {
 	assert.Equal(t, 0, clientCount(m))
 }
 
+func TestUDPClientSessionLimitPerSource(t *testing.T) {
+	m, serverConn, cancel := newTestManager(t, time.Hour)
+	defer cancel()
+
+	m.clientsMux.Lock()
+	for port := 1; port <= maxUDPClientSessionsPerSource; port++ {
+		addr := &net.UDPAddr{IP: append(net.IP(nil), testClient.IP...), Port: port}
+		m.clients[addr.String()] = &UDPClientConn{clientAddr: addr}
+	}
+	m.clientsMux.Unlock()
+
+	if client := m.createClientConnection(&net.UDPAddr{IP: testClient.IP, Port: 65000}, serverConn); client != nil {
+		t.Fatal("session from a source at its cap was created")
+	}
+	if got := clientCount(m); got != maxUDPClientSessionsPerSource {
+		t.Fatalf("source sessions = %d, want %d", got, maxUDPClientSessionsPerSource)
+	}
+}
+
 // TestSweeperRetiresIdleClientsOnItsOwn replaces the per-client timer goroutines:
 // one manager level ticker has to notice the silence without any per-client help.
 func TestSweeperRetiresIdleClientsOnItsOwn(t *testing.T) {

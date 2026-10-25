@@ -239,6 +239,8 @@ incoming request context, and ordinary HTTP requests have no client timeout.
   client sessions with rejection behavior.
 - [ ] Add per-source limits, bound pending dials and UDP queues/workers, and
   preserve packet order within each UDP flow under load.
+  - [x] Cap UDP client sessions per source address as well as per listener.
+  - [ ] Bound pending dials/queues and preserve per-flow packet ordering.
 - [ ] Split connect, handshake/header, body-idle, tunnel-idle, and maximum-lifetime
   settings. Apply a dial deadline to HTTP as well as raw TCP/SNI paths.
 - [x] Derive outgoing requests from `r.Context()` and the selected route's limits;
