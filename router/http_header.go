@@ -76,14 +76,13 @@ func httpHandler(ctx context.Context, registry *Registry, index int, entry confi
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		Addr:              entry.Listen.String(),
 		Handler: &httpProxyHandler{
-			ctx:        ctx,
-			logger:     logger,
-			chain:      chain,
-			transport:  transport,
-			targetPort: entry.GetTargetOr(DefaultHTTPPort),
-			entry:      entry,
-			registry:   registry,
-			tag:        entry.Tag,
+			ctx:       ctx,
+			logger:    logger,
+			chain:     chain,
+			transport: transport,
+			entry:     entry,
+			registry:  registry,
+			tag:       entry.Tag,
 		},
 	}
 	if len(features) > 0 {
@@ -103,14 +102,13 @@ func httpHandler(ctx context.Context, registry *Registry, index int, entry confi
 }
 
 type httpProxyHandler struct {
-	ctx        context.Context
-	logger     *zap.Logger
-	chain      *proxy.Chain
-	transport  *http.Transport
-	targetPort string
-	entry      config.EntryPoint
-	registry   *Registry
-	tag        *string // NEW
+	ctx       context.Context
+	logger    *zap.Logger
+	chain     *proxy.Chain
+	transport *http.Transport
+	entry     config.EntryPoint
+	registry  *Registry
+	tag       *string // NEW
 }
 
 // newProxyTransport builds one transport per entry point. Building it per
@@ -190,7 +188,11 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	selectedPort := entry.GetTargetOr(h.targetPort, DefaultHTTPPort)
+	selectedPort, err := targetPortForRequest(r, entry)
+	if err != nil {
+		http.Error(w, "CONNECT requests require a valid host:port authority", http.StatusBadRequest)
+		return
+	}
 	if slices.Contains(entry.Features, flexiblePortFeature) {
 		if requestedPort := r.Header.Get("Junction-Port"); requestedPort != "" {
 			if !slices.Contains(entry.AllowedPorts, requestedPort) {
@@ -223,6 +225,22 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.handleHTTPRequest(w, r, targetHost, entry, transport)
 	}
+}
+
+func targetPortForRequest(r *http.Request, entry config.EntryPoint) (string, error) {
+	port := entry.GetTargetOr("", DefaultHTTPPort)
+	if port != "" || r.Method != http.MethodConnect {
+		return port, nil
+	}
+	authority := cmp.Or(r.Host, r.Header.Get("Host"))
+	_, authorityPort, err := net.SplitHostPort(authority)
+	if err != nil {
+		return "", errors.New("CONNECT authority must include a port")
+	}
+	if err := isValidPort(authorityPort); err != nil {
+		return "", err
+	}
+	return authorityPort, nil
 }
 
 func prepareTargetHost(hostHeader, targetPort string) (string, error) {

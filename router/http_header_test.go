@@ -116,6 +116,36 @@ func TestPrepareTargetHost(t *testing.T) {
 	}
 }
 
+func TestTargetPortForRequestUsesCONNECTAuthorityOnlyWithoutFixedTarget(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		host   string
+		target string
+		want   string
+		bad    bool
+	}{
+		{name: "connect authority port", host: "example.com:9443", want: "9443"},
+		{name: "bracketed ipv6 authority port", host: "[2001:db8::1]:9443", want: "9443"},
+		{name: "fixed route target takes precedence", host: "example.com:9443", target: "443", want: "443"},
+		{name: "missing connect port", host: "example.com", bad: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &http.Request{Method: http.MethodConnect, Host: tc.host}
+			entry := config.EntryPoint{Target: tc.target}
+			got, err := targetPortForRequest(req, entry)
+			if tc.bad {
+				if err == nil {
+					t.Fatalf("targetPortForRequest accepted host %q", tc.host)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("targetPortForRequest() = %q, %v; want %q, nil", got, err, tc.want)
+			}
+		})
+	}
+}
+
 func TestCopyHeadersWithReplaceDropsUntrustedForwardingAndHopHeaders(t *testing.T) {
 	src := http.Header{
 		"Forwarded":           {"for=198.51.100.8"},
@@ -168,12 +198,11 @@ func TestHTTPProxyDoesNotFollowRedirectOutsideAllowList(t *testing.T) {
 	transport := newProxyTransport(chain)
 	defer transport.CloseIdleConnections()
 	handler := &httpProxyHandler{
-		ctx:        context.Background(),
-		logger:     zap.NewNop(),
-		chain:      chain,
-		transport:  transport,
-		targetPort: port,
-		entry:      config.EntryPoint{AllowList: []*matcher.Matcher{allow}},
+		ctx:       context.Background(),
+		logger:    zap.NewNop(),
+		chain:     chain,
+		transport: transport,
+		entry:     config.EntryPoint{Target: port, AllowList: []*matcher.Matcher{allow}},
 	}
 	request := httptest.NewRequest(http.MethodGet, allowed.URL, nil)
 	request.RemoteAddr = "127.0.0.1:55555"

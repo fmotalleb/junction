@@ -340,7 +340,7 @@ stale entity metadata.
 - [x] Strip untrusted forwarded identity headers at the shared outbound header
   boundary; the HTTPS router adds its own host/protocol values from the request.
   Hop-by-hop `Proxy-Authorization` is dropped by the same copier.
-- [ ] Define default HTTP port and CONNECT authority behavior explicitly, including
+- [x] Define default HTTP port and CONNECT authority behavior explicitly, including
   interaction with fixed route ports and `flexible-port`. Preserve escaped paths,
   target base queries, status semantics, trailers, HEAD, and no-body responses.
 - [ ] Check hijack support before committing success, preserve and forward buffered
