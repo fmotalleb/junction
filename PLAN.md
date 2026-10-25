@@ -483,9 +483,13 @@ without a checksum utility after calling nonexistent `input` and ignoring failur
 - [ ] Add explicit frontend lint, type-check, and targeted tests; retain Go vet,
   race tests, gosec, govulncheck, and clean-diff checks. Run bounded parser fuzzing
   on changes and longer fuzz/load/leak jobs on a scheduled CI job.
-- [ ] Separate validation from formatting/dependency updates: current `make ci`
-  runs `go mod tidy`, lint fixes, spelling rewrites, generation, and installation.
-  Make check-only commands report failures without rewriting the checkout.
+  - [x] Add a check-only `make ci` path with Go lint, vet, tests, module/spelling
+    checks, frontend lint/type-check, vulnerability scan, and clean-diff checks.
+  - [ ] Add targeted frontend tests and bounded/scheduled fuzz, load, and leak jobs.
+- [x] Separate validation from formatting/dependency updates. `make ci` now uses
+  check-only module, lint, and spelling commands and does not run generation,
+  installation, or builds. Keep source-updating tasks under the explicit build
+  pipeline targets.
 - [ ] Add npm dependency updates and advisory scanning alongside Go scanning.
   Pin Actions to reviewed commit SHAs, maintain least-privilege permissions, and
   test security-sensitive release changes before publishing. Select a supported
