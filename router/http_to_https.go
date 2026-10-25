@@ -305,6 +305,17 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 		}
 		return
 	}
+	contentEncoding := strings.TrimSpace(resp.Header.Get("Content-Encoding"))
+	if contentEncoding != "" && !strings.EqualFold(contentEncoding, "gzip") {
+		// Encodings we do not decode cannot be safely rewritten. Pass them
+		// through untouched and stream without consuming the rewrite buffer.
+		copyResponseHeaders(w, resp.Header, nil, false)
+		w.WriteHeader(resp.StatusCode)
+		if _, err := io.Copy(w, resp.Body); err != nil {
+			h.logger.Error("Response copy failed", zap.Error(err))
+		}
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRewrittenBodyBytes+1))
 	if err != nil {
 		h.logger.Error("Response read failed", zap.Error(err))
@@ -315,18 +326,12 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 		http.Error(w, "upstream response too large to rewrite", http.StatusBadGateway)
 		return
 	}
-	contentEncoding := resp.Header.Get("Content-Encoding")
 	if strings.EqualFold(contentEncoding, "gzip") {
 		body, err = decodeBody(contentEncoding, body, maxRewrittenBodyBytes)
 		if err != nil {
 			http.Error(w, "upstream response could not be decoded", http.StatusBadGateway)
 			return
 		}
-	} else if contentEncoding != "" {
-		copyResponseHeaders(w, resp.Header, nil, false)
-		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write(body)
-		return
 	}
 	body = replaceTextBody(resp.Header.Get("Content-Type"), body, route.respReplacer)
 	copyResponseHeaders(w, resp.Header, route.respReplacer, true)
