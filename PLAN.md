@@ -253,6 +253,7 @@ incoming request context, and ordinary HTTP requests have no client timeout.
 - [ ] Validate `UDP_BUFFER` and all capacity/duration settings; reject negative,
   zero where invalid, or excessive values before allocating or serving.
   - [x] Validate `UDP_BUFFER` as an integer from 1 through 65507 before binding.
+  - [x] Validate the effective entry or `TIMEOUT` environment duration before listeners start.
 - [ ] Count active connections/sessions, rejected work, dial/handshake failures,
   timeout reasons, and queued work without client/hostname metric labels that
   create unbounded cardinality. Rate-limit repetitive rejection/error logs.

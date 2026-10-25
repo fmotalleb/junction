@@ -129,6 +129,9 @@ func validateEntryPoint(entry config.EntryPoint) error {
 	if entry.Timeout < 0 {
 		return errors.New("timeout cannot be negative")
 	}
+	if entry.GetTimeout() <= 0 {
+		return errors.New("effective timeout must be positive; check TIMEOUT and the entry timeout")
+	}
 	if slices.Contains(entry.Features, flexiblePortFeature) && len(entry.AllowedPorts) == 0 {
 		return errors.New("flexible-port requires an explicit allowed_ports list")
 	}
