@@ -266,6 +266,26 @@ func TestRedactURLRemovesCredentials(t *testing.T) {
 	}
 }
 
+func TestParseDoesNotExposeInvalidDecodedValue(t *testing.T) {
+	const sentinel = "decoder-secret-sentinel"
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[[entrypoints]]\nrouting = \""+sentinel+"\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var cfg config.Config
+	err := config.Parse(context.Background(), &cfg, path)
+	if err == nil {
+		t.Fatal("Parse accepted an invalid router value")
+	}
+	if strings.Contains(err.Error(), sentinel) {
+		t.Fatalf("parse error leaked rejected configuration value %q: %v", sentinel, err)
+	}
+	if !strings.Contains(err.Error(), "decode configuration: invalid field value") {
+		t.Fatalf("parse error lost its safe diagnostic: %v", err)
+	}
+}
+
 func TestParseReloadClearsRemovedFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	first := `{"core":{"fake_dns":{"answer":"127.0.0.1"}},"entrypoints":[{"routing":"sni","listen":"127.0.0.1:8443","to":"443"}]}`

@@ -424,8 +424,9 @@ Review those paths for credentials and sensitive extra configuration.
   partial source failures (R8).
 - [ ] Redact URL userinfo, sensitive query values, and secret-bearing config fields
   in logs/errors. HTTPS route logs now redact URL credentials and query secrets;
-  proxy-chain validation errors now use the same URL redactor; audit decoder
-  errors and other secret-bearing values.
+  proxy-chain validation errors now use the same URL redactor.
+  - [x] Omit raw rejected values from configuration decoder errors.
+  - [ ] Audit remaining runtime logs and errors for secret-bearing values.
 - [ ] Clearly distinguish diagnostic output from a full secret-bearing export;
   - [x] Document that `--dry-run` is a full export and recommend mode `0600`.
   - [x] Provide `--dry-run --redact-secrets` for a sanitized, non-replayable diagnostic.
