@@ -240,6 +240,7 @@ incoming request context, and ordinary HTTP requests have no client timeout.
 - [x] Add per-source limits, bound pending dials and UDP queues/workers, and
   preserve packet order within each UDP flow under load.
   - [x] Cap UDP client sessions per source address as well as per listener.
+  - [x] Cap concurrent HTTP, raw TCP, and SNI connections per source address.
   - [x] The read loop processes packets serially and session creation is
     serialized, so there is no unbounded application worker or packet queue.
 - [ ] Split connect, handshake/header, body-idle, tunnel-idle, and maximum-lifetime

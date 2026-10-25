@@ -148,6 +148,33 @@ func TestLimitedListenerReleasesPermitWhenConnectionCloses(t *testing.T) {
 	}
 }
 
+func TestSourceLimiterCapsEachSourceAndReleasesSlots(t *testing.T) {
+	limiter := newSourceLimiter(2)
+	first, ok := limiter.acquire(rawAddr("192.0.2.1:1000"))
+	if !ok {
+		t.Fatal("first source slot rejected")
+	}
+	second, ok := limiter.acquire(rawAddr("192.0.2.1:1001"))
+	if !ok {
+		t.Fatal("second source slot rejected")
+	}
+	if _, ok := limiter.acquire(rawAddr("192.0.2.1:1002")); ok {
+		t.Fatal("source exceeded its limit")
+	}
+	other, ok := limiter.acquire(rawAddr("192.0.2.2:1000"))
+	if !ok {
+		t.Fatal("a different source should have an independent limit")
+	}
+	first()
+	third, ok := limiter.acquire(rawAddr("192.0.2.1:1002"))
+	if !ok {
+		t.Fatal("released source slot was not reusable")
+	}
+	third()
+	second()
+	other()
+}
+
 func mustAddrPort(t *testing.T, value string) (addr netip.AddrPort) {
 	t.Helper()
 	addr, err := netip.ParseAddrPort(value)

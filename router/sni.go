@@ -42,6 +42,7 @@ func serveSNIRouter(ctx context.Context, registry *Registry, index int, entry co
 	}
 	defer listener.Close()
 	active := make(chan struct{}, maxConcurrentTunnels)
+	sources := newSourceLimiter(maxConcurrentTunnelsPerSource)
 	var workers sync.WaitGroup
 	defer func() { workers.Wait() }()
 
@@ -71,15 +72,23 @@ func serveSNIRouter(ctx context.Context, registry *Registry, index int, entry co
 		retry.reset()
 
 		setKeepAlive(conn)
+		releaseSource, ok := sources.acquire(conn.RemoteAddr())
+		if !ok {
+			logger.Debug("per-source SNI tunnel limit reached", zap.String("client", conn.RemoteAddr().String()))
+			_ = conn.Close()
+			continue
+		}
 		select {
 		case active <- struct{}{}:
 			workers.Add(1)
 			go func() {
 				defer workers.Done()
 				defer func() { <-active }()
+				defer releaseSource()
 				handleClient(ctx, registry, index, conn, entry, logger)
 			}()
 		default:
+			releaseSource()
 			logger.Warn("maximum concurrent SNI tunnels reached", zap.Int("limit", maxConcurrentTunnels))
 			_ = conn.Close()
 		}

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,8 +48,57 @@ type keepAliveConn interface {
 const keepAlivePeriod = 30 * time.Second
 
 const maxConcurrentTunnels = 1024
+const maxConcurrentTunnelsPerSource = 64
 
 const maxHTTPConnectionsPerListener = 1024
+const maxHTTPConnectionsPerSource = 64
+
+type sourceLimiter struct {
+	mu     sync.Mutex
+	active map[string]int
+	limit  int
+}
+
+func newSourceLimiter(limit int) *sourceLimiter {
+	return &sourceLimiter{active: make(map[string]int), limit: limit}
+}
+
+func (l *sourceLimiter) acquire(addr net.Addr) (func(), bool) {
+	key := sourceIPKey(addr)
+	l.mu.Lock()
+	if l.active[key] >= l.limit {
+		l.mu.Unlock()
+		return nil, false
+	}
+	l.active[key]++
+	l.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			l.mu.Lock()
+			if l.active[key] <= 1 {
+				delete(l.active, key)
+			} else {
+				l.active[key]--
+			}
+			l.mu.Unlock()
+		})
+	}, true
+}
+
+func sourceIPKey(addr net.Addr) string {
+	if addr == nil {
+		return "<unknown>"
+	}
+	host := addr.String()
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	if ip, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil {
+		return ip.Unmap().String()
+	}
+	return host
+}
 
 // setKeepAlive lets the OS detect peers that vanished without a FIN/RST. Such
 // peers otherwise leave the relay blocked until the entry timeout expires.
@@ -204,32 +255,50 @@ func serveHTTPServer(ctx context.Context, server *http.Server) error {
 type limitedListener struct {
 	net.Listener
 	permits chan struct{}
+	sources *sourceLimiter
 	done    chan struct{}
 	close   sync.Once
 }
 
 func newLimitedListener(listener net.Listener, limit int) *limitedListener {
-	return &limitedListener{Listener: listener, permits: make(chan struct{}, limit), done: make(chan struct{})}
+	return &limitedListener{
+		Listener: listener,
+		permits:  make(chan struct{}, limit),
+		sources:  newSourceLimiter(maxHTTPConnectionsPerSource),
+		done:     make(chan struct{}),
+	}
 }
 
 func (l *limitedListener) Accept() (net.Conn, error) {
-	conn, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	select {
-	case l.permits <- struct{}{}:
+	for {
+		conn, err := l.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		releaseSource, ok := l.sources.acquire(conn.RemoteAddr())
+		if !ok {
+			_ = conn.Close()
+			continue
+		}
 		select {
+		case l.permits <- struct{}{}:
+			select {
+			case <-l.done:
+				<-l.permits
+				releaseSource()
+				_ = conn.Close()
+				return nil, net.ErrClosed
+			default:
+				return &limitedConn{Conn: conn, release: func() {
+					<-l.permits
+					releaseSource()
+				}}, nil
+			}
 		case <-l.done:
-			<-l.permits
+			releaseSource()
 			_ = conn.Close()
 			return nil, net.ErrClosed
-		default:
-			return &limitedConn{Conn: conn, release: func() { <-l.permits }}, nil
 		}
-	case <-l.done:
-		_ = conn.Close()
-		return nil, net.ErrClosed
 	}
 }
 
