@@ -418,9 +418,11 @@ Review those paths for credentials and sensitive extra configuration.
 - [ ] Preserve existing cycle detection while testing aliases, relative includes,
   and deterministic precedence. Do not accept partial source failures (R8).
 - [ ] Redact URL userinfo, sensitive query values, and secret-bearing config fields
-  in logs/errors. Use structured safe summaries instead of full entry dumps.
+  in logs/errors. HTTPS route logs now redact URL credentials and query secrets;
+  audit decoder and proxy errors for other secret-bearing values.
 - [ ] Clearly distinguish diagnostic output from a full secret-bearing export;
-  document safe file permissions and provide a redacted diagnostic mode.
+  - [x] Document that `--dry-run` is a full export and recommend mode `0600`.
+  - [ ] Provide a redacted diagnostic mode.
 
 **Acceptance:** remote HTTPS includes actually load; stalled, oversized, redirected,
 or failed sources fail within limits; logs captured using sentinel credentials

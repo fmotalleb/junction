@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -249,6 +250,18 @@ func TestStringToNetAddrPortHookSupportsIPv6(t *testing.T) {
 		got, err := hookFn(reflect.TypeOf(""), portType, input)
 		assert.NoError(t, err)
 		assert.Equal(t, want, got.(netip.AddrPort).String())
+	}
+}
+
+func TestRedactURLRemovesCredentials(t *testing.T) {
+	got := config.RedactURL("https://user:pass@example.com/path?token=secret&known=visible&api_key=key-secret")
+	for _, secret := range []string{"pass", "secret", "key-secret"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("RedactURL leaked %q in %q", secret, got)
+		}
+	}
+	if !strings.Contains(got, "known=visible") || !strings.Contains(got, "REDACTED") {
+		t.Fatalf("RedactURL lost safe query values or redaction markers: %q", got)
 	}
 }
 

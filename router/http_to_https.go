@@ -46,7 +46,7 @@ func httpToHTTPSHandler(ctx context.Context, registry *Registry, index int, entr
 		With(
 			zap.String("router", string(entry.Routing)),
 			zap.String("listen", entry.Listen.String()),
-			zap.String("target", entry.Target),
+			zap.String("target", config.RedactURL(entry.Target)),
 		)
 
 	if entry.Target == "" && entry.Tag == nil {
@@ -84,7 +84,11 @@ func httpToHTTPSHandler(ctx context.Context, registry *Registry, index int, entr
 		},
 	}
 
-	logger.Info("HTTP->HTTPS proxy booted", zap.Any("target", compiled.targetURL))
+	targetSummary := ""
+	if compiled.targetURL != nil {
+		targetSummary = config.RedactURL(compiled.targetURL.String())
+	}
+	logger.Info("HTTP->HTTPS proxy booted", zap.String("target", targetSummary))
 	if err := serveHTTPServer(ctx, server); err != nil {
 		logger.Error("HTTP server error", zap.Error(err))
 		return true, errors.Join(
@@ -291,7 +295,10 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 	// the path and query are client supplied.
 	resp, err := client.Do(req)
 	if err != nil {
-		h.logger.Error("Request to target failed", zap.String("url", upstreamURL.String()), zap.Error(err))
+		h.logger.Error("Request to target failed",
+			zap.String("url", config.RedactURL(upstreamURL.String())),
+			zap.String("error", safeUpstreamError(err)),
+		)
 		http.Error(w, "Request failed", http.StatusBadGateway)
 		return
 	}
@@ -338,6 +345,14 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
+}
+
+func safeUpstreamError(err error) string {
+	var requestErr *url.Error
+	if errors.As(err, &requestErr) {
+		return requestErr.Err.Error()
+	}
+	return err.Error()
 }
 
 func decodeBody(contentEncoding string, body []byte, limit int64) ([]byte, error) {
