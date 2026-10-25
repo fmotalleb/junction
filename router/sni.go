@@ -3,7 +3,6 @@ package router
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -19,45 +18,16 @@ import (
 
 const DefaultSNIPort = "443"
 
-var (
-	sniGroups     = make(map[string][]config.EntryPoint, 0)
-	groupMu       sync.Mutex
-	errSNIMissing = errors.New("SNI missing in ClientHello")
-)
+var errSNIMissing = errors.New("SNI missing in ClientHello")
 
-func sniRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
+func sniRouter(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterSNI {
 		return false, nil
 	}
-	if _, err := proxy.NewChain(entry.Proxy); err != nil {
-		return true, fmt.Errorf("invalid SNI proxy chain: %w", err)
-	}
-
-	// Register entry by tag if available
-	if entry.Tag != nil {
-		if isFirst := registerTaggedEntry(*entry.Tag, entry); !isFirst {
-			return true, nil // listener already exists for this group
-		}
-	}
-
-	return true, serveSNIRouter(ctx, entry)
+	return true, serveSNIRouter(ctx, registry, index, entry)
 }
 
-func registerTaggedEntry(tag string, entry config.EntryPoint) bool {
-	groupMu.Lock()
-	defer groupMu.Unlock()
-
-	group, ok := sniGroups[tag]
-	if !ok {
-		group = make([]config.EntryPoint, 0)
-	}
-	first := len(group) == 0
-	group = append(group, entry)
-	sniGroups[tag] = group
-	return first
-}
-
-func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
+func serveSNIRouter(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) error {
 	logger := log.FromContext(ctx).Named("router.sni").
 		With(
 			zap.String("router", string(entry.Routing)),
@@ -118,7 +88,7 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 			go func() {
 				defer workers.Done()
 				defer func() { <-active }()
-				handleClient(ctx, conn, entry, logger)
+				handleClient(ctx, registry, index, conn, entry, logger)
 			}()
 		default:
 			logger.Warn("maximum concurrent SNI tunnels reached", zap.Int("limit", maxConcurrentTunnels))
@@ -127,7 +97,7 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 	}
 }
 
-func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, logger *zap.Logger) {
+func handleClient(ctx context.Context, registry *Registry, index int, conn net.Conn, entry config.EntryPoint, logger *zap.Logger) {
 	remote := conn.RemoteAddr()
 	if entry.Tag == nil {
 		if !entry.AllowedFrom(remote) {
@@ -152,17 +122,17 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 			_ = conn.Close()
 			return
 		}
-		proxyToTarget(ctx, conn, sni, buf, n, l, entry)
+		route, _ := registry.Route(index)
+		proxyToTarget(ctx, conn, sni, buf, n, l, entry, route.chain)
 		return
 	}
 
 	// Tagged routing
-	groupMu.Lock()
-	group := append([]config.EntryPoint(nil), sniGroups[*entry.Tag]...)
-	groupMu.Unlock()
-	for _, ep := range group {
+	group := registry.GroupRoutes(*entry.Tag)
+	for _, route := range group {
+		ep := route.entry
 		if ep.AllowedHost(sni) && ep.AllowedFrom(remote) {
-			proxyToTarget(ctx, conn, sni, buf, n, l, ep)
+			proxyToTarget(ctx, conn, sni, buf, n, l, ep, route.chain)
 			return
 		}
 	}
@@ -172,13 +142,22 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 }
 
 // PROXY HANDLER.
-func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf []byte, n int, logger *zap.Logger, entry config.EntryPoint) {
+func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf []byte, n int, logger *zap.Logger, entry config.EntryPoint, chain *proxy.Chain) {
 	ctx, cancel := context.WithTimeout(parentCtx, entry.GetTimeout())
 	defer cancel()
 	defer client.Close()
 
 	target := net.JoinHostPort(sni, entry.GetTargetOr(DefaultSNIPort))
-	server, err := dialTarget(ctx, entry.Proxy, target, logger)
+	if chain == nil {
+		var err error
+		chain, err = proxy.NewChain(entry.Proxy)
+		if err != nil {
+			return
+		}
+	}
+	dialCtx, cancelDial := context.WithTimeout(ctx, proxy.DefaultDialTimeout)
+	server, err := chain.DialContext(dialCtx, "tcp", target)
+	cancelDial()
 	if err != nil {
 		return
 	}

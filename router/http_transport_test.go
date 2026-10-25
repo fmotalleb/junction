@@ -49,8 +49,9 @@ func TestHTTPHeaderReusesTransport(t *testing.T) {
 	proxyPort := freePort(t)
 	entry := testEntry(t, "http-header", fmt.Sprintf("127.0.0.1:%d", proxyPort), "")
 	entry.Features = []string{"flexible-port"}
+	registry := NewRegistry()
 	go func() {
-		_, _ = httpHandler(ctx, entry)
+		_, _ = httpHandler(ctx, registry, -1, entry)
 	}()
 	time.Sleep(300 * time.Millisecond)
 
