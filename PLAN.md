@@ -301,13 +301,14 @@ Even unmodified binary responses are buffered. Read/decompression errors are
 ignored in some paths. A large upload or compressed upstream response can exhaust
 memory, and buffering prevents streaming behavior.
 
-- [ ] Stream unchanged content; only buffer content that actually requires a
+- [x] Stream unchanged content; only buffer content that actually requires a
   configured textual rewrite. Do not treat missing content type as automatic
   permission to rewrite arbitrary binary data.
-- [ ] Bound request bytes, upstream bytes, and decoded bytes independently. Reject
+- [x] Bound rewritten request bytes, upstream transformation bytes, and decoded
+  bytes independently. Reject
   oversized uploads with 413 and report upstream transformation failures as 502.
   Read at most limit plus one byte to distinguish truncation from valid input.
-- [ ] Reject malformed compression and propagate body read errors. Coordinate
+- [x] Reject malformed compression and propagate body read errors. Coordinate
   encoded-body handling with R10 so size checks and headers describe actual bytes.
 
 **Acceptance:** oversized requests, responses, gzip expansion, and corrupt gzip
