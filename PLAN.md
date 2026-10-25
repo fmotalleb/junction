@@ -359,8 +359,9 @@ so a client that half-closes its upload may lose the backend's remaining respons
 
 - [x] Remove UDP sessions only when the map still holds the same session object;
   recheck activity under the removal lock. Coordinate a closed state with creation.
-- [ ] Close retired UDP sockets immediately to unblock I/O, bound writes, and join
-  readers/workers before cleanup returns. Use context-aware target resolution.
+- [x] Close retired UDP sockets immediately to unblock I/O, bound target writes,
+  and join readers plus the idle sweeper before cleanup returns. Use context-aware
+  target resolution and cancel pending dials before waiting for creation to finish.
 - [x] Treat TCP EOF as directional completion: half-close the destination write
   side when supported, allow the reverse copy to drain, then close both ends.
   Define behavior for proxy wrappers without half-close support and retain

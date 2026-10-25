@@ -24,6 +24,8 @@ type UDPClientManager struct {
 	createMu   sync.Mutex
 	closing    bool
 	readers    sync.WaitGroup
+	workers    sync.WaitGroup
+	cancel     context.CancelFunc
 	bufferSize int
 }
 
@@ -50,14 +52,20 @@ func NewUDPClientManager(ctx context.Context, logger *zap.Logger, entry config.E
 	if err != nil {
 		return nil, err
 	}
+	managerCtx, cancel := context.WithCancel(ctx)
 	m := &UDPClientManager{
-		ctx:        ctx,
+		ctx:        managerCtx,
 		logger:     logger,
 		entry:      entry,
 		clients:    make(map[string]*UDPClientConn),
+		cancel:     cancel,
 		bufferSize: bufferSize,
 	}
-	go m.sweepIdleClients(ctx)
+	m.workers.Add(1)
+	go func() {
+		defer m.workers.Done()
+		m.sweepIdleClients(managerCtx)
+	}()
 	return m, nil
 }
 
@@ -72,6 +80,7 @@ func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, se
 	client.lastSeen.Store(time.Now().UnixNano())
 
 	// Forward packet to target
+	_ = client.targetConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	_, err := client.targetConn.Write(data)
 	if err != nil {
 		m.logger.Error("failed to forward packet to target",
@@ -110,6 +119,9 @@ func (m *UDPClientManager) lookupOrCreate(clientKey string, clientAddr *net.UDPA
 }
 
 func (m *UDPClientManager) Cleanup() {
+	// Cancel first so an in-progress context-aware resolution/dial releases
+	// createMu and lets cleanup proceed.
+	m.cancel()
 	m.createMu.Lock()
 	m.closing = true
 	m.clientsMux.Lock()
@@ -121,6 +133,7 @@ func (m *UDPClientManager) Cleanup() {
 	m.clientsMux.Unlock()
 	m.createMu.Unlock()
 	m.readers.Wait()
+	m.workers.Wait()
 }
 
 func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serverConn *net.UDPConn) *UDPClientConn {
@@ -174,22 +187,20 @@ func (m *UDPClientManager) dialTarget() (*net.UDPConn, error) {
 	if len(m.entry.Proxy) > 0 {
 		return nil, errors.New("udp-raw does not support proxy chains")
 	}
-	targetAddr, err := net.ResolveUDPAddr("udp", m.entry.Target)
+	dialCtx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(dialCtx, "udp", m.entry.Target)
 	if err != nil {
-		m.logger.Error("failed to resolve target address",
+		m.logger.Debug("failed to resolve or connect to target",
 			zap.String("target", m.entry.Target),
 			zap.Error(err))
 		return nil, err
 	}
-
-	targetConn, err := net.DialUDP("udp", nil, targetAddr)
-	if err != nil {
-		m.logger.Debug("failed to connect to target",
-			zap.String("target", m.entry.Target),
-			zap.Error(err))
-		return nil, err
+	targetConn, ok := conn.(*net.UDPConn)
+	if !ok {
+		_ = conn.Close()
+		return nil, errors.New("UDP dial returned a non-UDP connection")
 	}
-
 	return targetConn, nil
 }
 
