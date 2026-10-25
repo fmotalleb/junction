@@ -212,8 +212,8 @@ can therefore remain hidden while another runs indefinitely.
 - [ ] Give each listener, transport, tunnel, UDP manager, and worker an owner.
   On cancellation, stop acceptance, drain within a configured grace period, then
   force-close remaining resources and join workers.
-- [ ] Use explicit HTTP shutdown and close idle transports. Track hijacked CONNECT
-  sockets separately: `http.Server.Shutdown` does not close them.
+- [x] Use explicit HTTP shutdown and close idle transports. CONNECT relay contexts
+  now also inherit service cancellation, so hijacked sockets close with the tunnel.
 - [x] Propagate required component failures promptly, cancel siblings, and report
   which entry failed. Distinguish permanent configuration errors from retryable
   runtime errors, and treat normal shutdown as success.
