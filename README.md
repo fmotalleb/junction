@@ -286,6 +286,7 @@ junction run --listen 8443 \
     - `http-header`:
       - `flexible-port`: Allows per-request port override using the `Junction-Port` HTTP header. Requires `allowed_ports`; requests for other ports are rejected.
         If the header is missing or empty, the `to` value (or the router default) is used.
+      - HTTP requests default to port `80`. CONNECT uses the selected route's `to` port when configured; otherwise its authority must include a valid port. `Junction-Port` can override either value only when that port is allowlisted.
     - Other routers currently ignore feature flags (unknown features are ignored with a warning).
 
   - **`block_list`** (optional) [only when using sni,http-header]:
