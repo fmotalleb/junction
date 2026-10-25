@@ -110,8 +110,9 @@ send the private key, but still requires authentication of the SSH server.
 
 - [x] Support an operator-supplied `known_hosts` file or pinned server key using
   `knownhosts.New` or `ssh.FixedHostKey`; require verification by default.
-- [ ] If an insecure mode is retained, require an explicit setting with a clear
-  warning. Provide a documented migration for existing SSH configurations.
+- [x] Do not retain an insecure mode. Document migration for existing SSH
+  configurations: install the SSH server key in a verified `known_hosts` file
+  before startup; explain that an unverified `ssh-keyscan` result is not trust.
 - [x] Preload and validate trust/authentication material when compiling routes.
   Support bracketed IPv6 addresses using host/port parsing rather than a colon test.
 - [x] Close the underlying connection when the dial context is canceled during
