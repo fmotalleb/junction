@@ -14,10 +14,26 @@ import (
 	"github.com/fmotalleb/junction/config"
 )
 
-// DefaultDialTimeout bounds a single dial attempt, including the proxy
-// handshake, so a stalled upstream can not pin a goroutine and two sockets
-// until the process is restarted.
+// DefaultDialTimeout bounds a single dial attempt in hardened mode, including
+// the proxy handshake, so a stalled upstream cannot pin a goroutine and sockets.
 const DefaultDialTimeout = 30 * time.Second
+
+// DialTimeout returns the hardened per-attempt deadline, or a compatibility
+// deadline when the opt-in hardening profile is disabled.
+func DialTimeout() time.Duration {
+	if config.HardenedMode() {
+		return DefaultDialTimeout
+	}
+	return 0
+}
+
+// WithDialTimeout applies the hardening deadline only when hardened mode is on.
+func WithDialTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if timeout := DialTimeout(); timeout > 0 {
+		return context.WithTimeout(ctx, timeout)
+	}
+	return context.WithCancel(ctx)
+}
 
 type generator func(*url.URL, proxy.Dialer) (proxy.Dialer, error)
 
@@ -81,7 +97,9 @@ func NewDialerWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []s
 			dialer = d
 			continue
 		}
-		return nil, fmt.Errorf("unsupported proxy scheme %q", addr.Scheme)
+		if config.HardenedMode() {
+			return nil, fmt.Errorf("unsupported proxy scheme %q", addr.Scheme)
+		}
 	}
 
 	return dialer, nil

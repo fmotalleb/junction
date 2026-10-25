@@ -39,6 +39,20 @@ var (
 	}
 )
 
+func hardenedHeaderTimeout() time.Duration {
+	if config.HardenedMode() {
+		return 30 * time.Second
+	}
+	return 0
+}
+
+func hardenedMaxConnsPerHost() int {
+	if config.HardenedMode() {
+		return 100
+	}
+	return 0
+}
+
 // httpHandler starts an HTTP proxy server for entry points configured with RouterHTTPHeader routing.
 // It initializes the server with a proxy handler that forwards requests through a SOCKS5 proxy chain as specified by the entry configuration.
 // Returns an error if the server fails to start.
@@ -72,17 +86,18 @@ func httpHandler(ctx context.Context, registry *Registry, index int, entry confi
 		defer transport.CloseIdleConnections()
 	}
 	server := &http.Server{
-		ReadHeaderTimeout: time.Second * 30,
+		ReadHeaderTimeout: hardenedHeaderTimeout(),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		Addr:              entry.Listen.String(),
 		Handler: &httpProxyHandler{
-			ctx:       ctx,
-			logger:    logger,
-			chain:     chain,
-			transport: transport,
-			entry:     entry,
-			registry:  registry,
-			tag:       entry.Tag,
+			ctx:        ctx,
+			logger:     logger,
+			chain:      chain,
+			transport:  transport,
+			targetPort: entry.GetTargetOr(DefaultHTTPPort),
+			entry:      entry,
+			registry:   registry,
+			tag:        entry.Tag,
 		},
 	}
 	if len(features) > 0 {
@@ -102,13 +117,14 @@ func httpHandler(ctx context.Context, registry *Registry, index int, entry confi
 }
 
 type httpProxyHandler struct {
-	ctx       context.Context
-	logger    *zap.Logger
-	chain     *proxy.Chain
-	transport *http.Transport
-	entry     config.EntryPoint
-	registry  *Registry
-	tag       *string // NEW
+	ctx        context.Context
+	logger     *zap.Logger
+	chain      *proxy.Chain
+	transport  *http.Transport
+	targetPort string
+	entry      config.EntryPoint
+	registry   *Registry
+	tag        *string // NEW
 }
 
 // newProxyTransport builds one transport per entry point. Building it per
@@ -120,10 +136,10 @@ func newProxyTransport(chain *proxy.Chain) *http.Transport {
 		DialContext:           chain.DialContext,
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   10,
-		MaxConnsPerHost:       100,
+		MaxConnsPerHost:       hardenedMaxConnsPerHost(),
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
+		ResponseHeaderTimeout: hardenedHeaderTimeout(),
 		ExpectContinueTimeout: time.Second,
 	}
 }
@@ -188,14 +204,17 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	selectedPort, err := targetPortForRequest(r, entry)
-	if err != nil {
-		http.Error(w, "CONNECT requests require a valid host:port authority", http.StatusBadRequest)
-		return
+	selectedPort := entry.GetTargetOr(h.targetPort, DefaultHTTPPort)
+	if config.HardenedMode() {
+		selectedPort, err = targetPortForRequest(r, entry)
+		if err != nil {
+			http.Error(w, "CONNECT requests require a valid host:port authority", http.StatusBadRequest)
+			return
+		}
 	}
 	if slices.Contains(entry.Features, flexiblePortFeature) {
 		if requestedPort := r.Header.Get("Junction-Port"); requestedPort != "" {
-			if !slices.Contains(entry.AllowedPorts, requestedPort) {
+			if len(entry.AllowedPorts) > 0 && !slices.Contains(entry.AllowedPorts, requestedPort) {
 				h.logger.Warn("requested target port is not allowed", zap.String("port", requestedPort))
 				http.Error(w, "requested target port is not allowed", http.StatusForbidden)
 				return
@@ -340,7 +359,7 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, r *http.Request,
 
 	// Bound the dial: a SOCKS upstream that accepts the socket but never
 	// answers the CONNECT request parked this handler goroutine forever.
-	dialCtx, cancelDial := context.WithTimeout(ctx, proxy.DefaultDialTimeout)
+	dialCtx, cancelDial := proxy.WithDialTimeout(ctx)
 	targetConn, err := chain.DialContext(dialCtx, "tcp", targetHost)
 	cancelDial()
 	if err != nil {

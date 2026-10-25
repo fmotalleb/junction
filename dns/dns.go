@@ -109,7 +109,7 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	if len(cfg.ReturnAddr) == 0 {
 		return errors.New("fake DNS requires a return address (answer) to be configured")
 	}
-	if cfg.Listen != nil && !cfg.Listen.Addr().IsLoopback() && len(cfg.AllowFrom) == 0 {
+	if config.HardenedMode() && cfg.Listen != nil && !cfg.Listen.Addr().IsLoopback() && len(cfg.AllowFrom) == 0 {
 		return errors.New("fake DNS bound outside loopback requires allow_from client rules")
 	}
 
@@ -125,7 +125,10 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 
 	h := newHandler(sCtx, resolvers, forwarder, cfg.Allowed)
 	h.allowFrom = cfg.AllowFrom
-	listenAddr := "127.0.0.1:53"
+	listenAddr := ":53"
+	if config.HardenedMode() {
+		listenAddr = "127.0.0.1:53"
+	}
 	if cfg.Listen != nil {
 		listenAddr = cfg.Listen.String()
 	}
@@ -303,12 +306,14 @@ func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		h.sendRefusedResponse(w, r, h.logger())
 		return
 	}
-	select {
-	case h.inFlight <- struct{}{}:
-		defer func() { <-h.inFlight }()
-	default:
-		h.sendRefusedResponse(w, r, h.logger())
-		return
+	if config.HardenedMode() {
+		select {
+		case h.inFlight <- struct{}{}:
+			defer func() { <-h.inFlight }()
+		default:
+			h.sendRefusedResponse(w, r, h.logger())
+			return
+		}
 	}
 	if len(r.Question) == 0 {
 		h.handleEmptyQuestion(w, r)

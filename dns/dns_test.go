@@ -167,6 +167,7 @@ func TestIsAllowedClient(t *testing.T) {
 }
 
 func TestServeValidatesConfig(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
 	assert.Error(t, Serve(context.Background(), config.FakeDNS{}))
 	publicListen := netip.MustParseAddrPort("0.0.0.0:0")
 	publicCfg := config.FakeDNS{

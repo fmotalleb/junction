@@ -72,6 +72,14 @@ func serveSNIRouter(ctx context.Context, registry *Registry, index int, entry co
 		retry.reset()
 
 		setKeepAlive(conn)
+		if !config.HardenedMode() {
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				handleClient(ctx, registry, index, conn, entry, logger)
+			}()
+			continue
+		}
 		releaseSource, ok := sources.acquire(conn.RemoteAddr())
 		if !ok {
 			logger.Debug("per-source SNI tunnel limit reached", zap.String("client", conn.RemoteAddr().String()))
@@ -153,7 +161,7 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 			return
 		}
 	}
-	dialCtx, cancelDial := context.WithTimeout(ctx, proxy.DefaultDialTimeout)
+	dialCtx, cancelDial := proxy.WithDialTimeout(ctx)
 	server, err := chain.DialContext(dialCtx, "tcp", target)
 	cancelDial()
 	if err != nil {
@@ -163,7 +171,7 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 
 	// Bound the buffered ClientHello replay: relayTraffic only takes over
 	// afterwards, so an unbounded write here would outlive every timeout.
-	_ = server.SetWriteDeadline(time.Now().Add(proxy.DefaultDialTimeout))
+	_ = server.SetWriteDeadline(time.Now().Add(proxy.DialTimeout()))
 	if _, err := server.Write(buf[:n]); err != nil {
 		logger.Error("initial write failed", zap.Error(err))
 		return

@@ -36,11 +36,17 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 	if err := l.ctx.Err(); err != nil {
 		return nil, err
 	}
-	if depth > maxIncludeDepth {
+	if HardenedMode() && depth > maxIncludeDepth {
 		return nil, fmt.Errorf("configuration includes exceed maximum depth %d", maxIncludeDepth)
 	}
 	if path == "" && parent == "" {
-		data, err := io.ReadAll(io.LimitReader(os.Stdin, maxConfigBytes+1))
+		var data []byte
+		var err error
+		if HardenedMode() {
+			data, err = io.ReadAll(io.LimitReader(os.Stdin, maxConfigBytes+1))
+		} else {
+			data, err = io.ReadAll(os.Stdin)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read configuration from stdin: %w", err)
 		}
@@ -54,9 +60,11 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 	if _, seen := l.visited[key]; seen {
 		return nil, fmt.Errorf("configuration include cycle at %q", safeConfigPath(key))
 	}
-	l.count++
-	if l.count > maxConfigIncludes {
-		return nil, fmt.Errorf("configuration includes exceed maximum count %d", maxConfigIncludes)
+	if HardenedMode() {
+		l.count++
+		if l.count > maxConfigIncludes {
+			return nil, fmt.Errorf("configuration includes exceed maximum count %d", maxConfigIncludes)
+		}
 	}
 	l.visited[key] = struct{}{}
 	defer delete(l.visited, key)
@@ -79,15 +87,24 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 	for _, pattern := range includes {
 		paths, err := l.expand(pattern, key)
 		if err != nil {
-			return nil, fmt.Errorf("resolve include %q from %q: %w", RedactURL(pattern), safeConfigPath(key), err)
+			if HardenedMode() {
+				return nil, fmt.Errorf("resolve include %q from %q: %w", RedactURL(pattern), safeConfigPath(key), err)
+			}
+			continue
 		}
 		if len(paths) == 0 {
-			return nil, fmt.Errorf("include %q from %q matched no files", RedactURL(pattern), safeConfigPath(key))
+			if HardenedMode() {
+				return nil, fmt.Errorf("include %q from %q matched no files", RedactURL(pattern), safeConfigPath(key))
+			}
+			continue
 		}
 		for _, include := range paths {
 			child, err := l.read(include, key, depth+1)
 			if err != nil {
-				return nil, err
+				if l.ctx.Err() != nil || HardenedMode() {
+					return nil, err
+				}
+				continue
 			}
 			mergeConfig(merged, child)
 		}
@@ -97,7 +114,7 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 }
 
 func (l *configLoader) parse(data []byte, ext, path string) (map[string]any, error) {
-	if len(data) > maxConfigBytes {
+	if HardenedMode() && len(data) > maxConfigBytes {
 		return nil, fmt.Errorf("configuration %q exceeds %d bytes", safeConfigPath(path), maxConfigBytes)
 	}
 	v := viper.New()
@@ -111,12 +128,16 @@ func (l *configLoader) parse(data []byte, ext, path string) (map[string]any, err
 func (l *configLoader) readBytes(path string) ([]byte, string, error) {
 	u, err := url.Parse(path)
 	if err == nil && (u.Scheme == "http" || u.Scheme == "https") {
-		if u.Scheme == "http" && os.Getenv("JUNCTION_ALLOW_INSECURE_CONFIG_HTTP") != "1" {
+		if HardenedMode() && u.Scheme == "http" && os.Getenv("JUNCTION_ALLOW_INSECURE_CONFIG_HTTP") != "1" {
 			return nil, "", errors.New("remote configuration requires HTTPS (set JUNCTION_ALLOW_INSECURE_CONFIG_HTTP=1 to allow HTTP temporarily)")
 		}
-		ctx, cancel := context.WithTimeout(l.ctx, 15*time.Second)
+		requestCtx := l.ctx
+		cancel := func() {}
+		if HardenedMode() {
+			requestCtx, cancel = context.WithTimeout(l.ctx, 15*time.Second)
+		}
 		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+		req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, path, nil)
 		if err != nil {
 			return nil, "", fmt.Errorf("create remote configuration request: %w", err)
 		}
@@ -124,7 +145,10 @@ func (l *configLoader) readBytes(path string) ([]byte, string, error) {
 			password, _ := u.User.Password()
 			req.SetBasicAuth(u.User.Username(), password)
 		}
-		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		client := http.DefaultClient
+		if HardenedMode() {
+			client = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, "", fmt.Errorf("fetch remote configuration %q: request failed", RedactURL(path))
@@ -133,7 +157,12 @@ func (l *configLoader) readBytes(path string) ([]byte, string, error) {
 		if resp.StatusCode != http.StatusOK {
 			return nil, "", fmt.Errorf("fetch remote configuration %q: HTTP %s", RedactURL(path), resp.Status)
 		}
-		data, err := io.ReadAll(io.LimitReader(resp.Body, maxConfigBytes+1))
+		var data []byte
+		if HardenedMode() {
+			data, err = io.ReadAll(io.LimitReader(resp.Body, maxConfigBytes+1))
+		} else {
+			data, err = io.ReadAll(resp.Body)
+		}
 		if err != nil {
 			return nil, "", fmt.Errorf("read remote configuration %q: %w", RedactURL(path), err)
 		}

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -19,6 +20,12 @@ import (
 type Config struct {
 	Core        CoreCfg      `mapstructure:"core" toml:"core" yaml:"core" json:"core"`
 	EntryPoints []EntryPoint `mapstructure:"entrypoints" toml:"entrypoints" yaml:"entrypoints" json:"entrypoints"`
+}
+
+// HardenedMode enables the opt-in security controls documented in HARDENING.md.
+// Legacy-compatible behavior remains the default unless explicitly enabled.
+func HardenedMode() bool {
+	return os.Getenv("JUNCTION_HARDENED") == "1"
 }
 
 type CoreCfg struct {

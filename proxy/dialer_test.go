@@ -33,6 +33,18 @@ func TestProxyValidationErrorsRedactURLCredentials(t *testing.T) {
 	}
 }
 
+func TestUnknownProxySchemeFallsBackUnlessHardened(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	unsupported := &url.URL{Scheme: "https", Host: "proxy.example:443"}
+	if dialer, err := NewDialer([]*url.URL{unsupported}); err != nil || dialer == nil {
+		t.Fatalf("legacy fallback failed: dialer=%v err=%v", dialer, err)
+	}
+	t.Setenv("JUNCTION_HARDENED", "1")
+	if _, err := NewDialer([]*url.URL{unsupported}); err == nil {
+		t.Fatal("hardened mode accepted an unsupported proxy scheme")
+	}
+}
+
 // A proxy that accepts the socket but never answers must not park the dialer:
 // every such dial held a goroutine and two sockets for the lifetime of the
 // process.
@@ -90,6 +102,7 @@ func TestChainDialHonorsContextOnStalledProxy(t *testing.T) {
 }
 
 func TestNewDialerRejectsUnsupportedAndNilProxy(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
 	for _, chain := range [][]*url.URL{
 		{nil},
 		{{Scheme: "https", Host: "proxy.example:443"}},
@@ -102,6 +115,7 @@ func TestNewDialerRejectsUnsupportedAndNilProxy(t *testing.T) {
 }
 
 func TestSSHProxyDialerRequiresKnownHosts(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -139,5 +153,22 @@ func TestSSHProxyDialerRequiresKnownHosts(t *testing.T) {
 	}
 	if err := sshClient.config.HostKeyCallback(host, remote, wrongSigner.PublicKey()); err == nil {
 		t.Fatal("unknown host key accepted")
+	}
+}
+
+func TestSSHHostKeyVerificationIsOptIn(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	proxyURL, err := url.Parse("ssh://user:password@127.0.0.1:2222?known_hosts=/missing/known_hosts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dialer, err := sshDialer(proxyURL, proxy.Direct)
+	if err != nil {
+		t.Fatalf("legacy SSH dialer required known_hosts: %v", err)
+	}
+	client := dialer.(*sshProxyDialer)
+	remote := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 2222}
+	if err := client.config.HostKeyCallback("127.0.0.1:2222", remote, nil); err != nil {
+		t.Fatalf("legacy SSH host-key callback rejected a key: %v", err)
 	}
 }

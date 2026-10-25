@@ -92,6 +92,7 @@ func TestSweepKeepsActiveClients(t *testing.T) {
 }
 
 func TestUDPClientSessionLimitPerSource(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
 	m, serverConn, cancel := newTestManager(t, time.Hour)
 	defer cancel()
 
@@ -136,6 +137,24 @@ func TestUDPBufferSizeValidation(t *testing.T) {
 				t.Fatalf("udpBufferSize(%q) = %d, %v; want %d, nil", tc.input, got, err, tc.want)
 			}
 		})
+	}
+}
+
+func TestInvalidUDPBufferIsOnlyRejectedInHardenedMode(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	t.Setenv("UDP_BUFFER", "invalid")
+	manager, err := NewUDPClientManager(context.Background(), zap.NewNop(), config.EntryPoint{})
+	if err != nil {
+		t.Fatalf("default mode rejected invalid UDP_BUFFER: %v", err)
+	}
+	if manager.bufferSize != defaultUDPBufferSize {
+		t.Fatalf("invalid UDP_BUFFER fallback = %d, want %d", manager.bufferSize, defaultUDPBufferSize)
+	}
+	manager.Cleanup()
+
+	t.Setenv("JUNCTION_HARDENED", "1")
+	if _, err := NewUDPClientManager(context.Background(), zap.NewNop(), config.EntryPoint{}); err == nil {
+		t.Fatal("hardened mode accepted an invalid UDP_BUFFER")
 	}
 }
 
