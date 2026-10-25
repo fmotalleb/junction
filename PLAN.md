@@ -207,8 +207,8 @@ SIGINT/SIGTERM. `server.handleEntry` logs and discards listener errors, while
 `Serve` waits for all components before reporting a DNS error. One dead component
 can therefore remain hidden while another runs indefinitely.
 
-- [ ] Handle SIGINT and SIGTERM with platform-appropriate signal wiring; preserve
-  SIGHUP reload semantics. Clean up signal registration if logger setup fails.
+- [x] Handle SIGINT and SIGTERM with platform-appropriate signal wiring; preserve
+  Unix SIGHUP reload semantics. Signal registration is canceled if logger setup fails.
 - [ ] Give each listener, transport, tunnel, UDP manager, and worker an owner.
   On cancellation, stop acceptance, drain within a configured grace period, then
   force-close remaining resources and join workers.
@@ -271,17 +271,20 @@ therefore disappear without preventing startup. Also, the address hook at
 `config/hooks.go:41` splits on every colon; invoking it with `[::1]:8443` returns
 `no port`.
 
-- [ ] Fix or replace the loader's error handling so missing files, malformed
+- [x] Fix or replace the loader's error handling so missing files, malformed
   input, and failed required includes return errors. Optional includes must be
-  explicitly marked optional; define deterministic include precedence.
-- [ ] Decode into a fresh local `Config` on every load, validate it, and only
-  publish the complete candidate after success. Never merge a reload into the
-  previous runtime object implicitly.
+  explicitly marked optional; define deterministic include precedence. Optional
+  include syntax is not supported; all includes are required and precedence is
+  include order followed by the including file.
+- [x] Decode into a fresh local `Config` on every load; removed fields do not
+  merge from the previous value.
+- [ ] Validate a reload candidate before publishing it to the active runtime.
+  Never replace the last working runtime with an invalid candidate.
 - [x] Validate all entrypoints before binding: required fields, router type,
   positive durations, target scheme/host/port, proxy compatibility, groups,
   matcher values, and DNS IP/CIDR data. Report unknown security-related keys;
   consider strict decoding for all unknown fields.
-- [ ] Parse IPv4 and bracketed IPv6 with standard host/port APIs while preserving
+- [x] Parse IPv4 and bracketed IPv6 with standard host/port APIs while preserving
   documented loopback defaults for integer/port-only listener forms.
 - [ ] Load and validate a reload candidate before stopping the current runtime.
   Keep the last working configuration on invalid input; stage changes and define
