@@ -402,6 +402,9 @@ JSON Schema for the configuration file is available at `config.schema.json`.
 
 > You can specify config file path using `--config (-c)` flag (detects config file)
 > Default behavior is to read config from `stdin` using `toml` format
+> `--dry-run` writes the full configuration to stdout, including passwords and
+> secret fields. Treat it as an export, not a redacted diagnostic; if saving it,
+> use a private file owned by the service user with mode `0600`.
 
 ---
 

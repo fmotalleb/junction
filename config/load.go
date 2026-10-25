@@ -79,10 +79,10 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 	for _, pattern := range includes {
 		paths, err := l.expand(pattern, key)
 		if err != nil {
-			return nil, fmt.Errorf("resolve include %q from %q: %w", redactURL(pattern), safeConfigPath(key), err)
+			return nil, fmt.Errorf("resolve include %q from %q: %w", RedactURL(pattern), safeConfigPath(key), err)
 		}
 		if len(paths) == 0 {
-			return nil, fmt.Errorf("include %q from %q matched no files", redactURL(pattern), safeConfigPath(key))
+			return nil, fmt.Errorf("include %q from %q matched no files", RedactURL(pattern), safeConfigPath(key))
 		}
 		for _, include := range paths {
 			child, err := l.read(include, key, depth+1)
@@ -127,15 +127,15 @@ func (l *configLoader) readBytes(path string) ([]byte, string, error) {
 		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, "", fmt.Errorf("fetch remote configuration %q: request failed", redactURL(path))
+			return nil, "", fmt.Errorf("fetch remote configuration %q: request failed", RedactURL(path))
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return nil, "", fmt.Errorf("fetch remote configuration %q: HTTP %s", redactURL(path), resp.Status)
+			return nil, "", fmt.Errorf("fetch remote configuration %q: HTTP %s", RedactURL(path), resp.Status)
 		}
 		data, err := io.ReadAll(io.LimitReader(resp.Body, maxConfigBytes+1))
 		if err != nil {
-			return nil, "", fmt.Errorf("read remote configuration %q: %w", redactURL(path), err)
+			return nil, "", fmt.Errorf("read remote configuration %q: %w", RedactURL(path), err)
 		}
 		return data, filepath.Ext(u.Path), nil
 	}
@@ -233,10 +233,12 @@ func mergeConfig(dst, src map[string]any) {
 }
 
 func safeConfigPath(path string) string {
-	return redactURL(path)
+	return RedactURL(path)
 }
 
-func redactURL(raw string) string {
+// RedactURL removes userinfo and values from query parameters that may carry
+// credentials or tokens before a URL is written to logs or diagnostics.
+func RedactURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "[invalid configuration URL]"
