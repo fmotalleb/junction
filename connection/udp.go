@@ -21,7 +21,11 @@ type UDPClientManager struct {
 	clients    map[string]*UDPClientConn
 	clientsMux sync.RWMutex
 	createMu   sync.Mutex
+	closing    bool
+	readers    sync.WaitGroup
 }
+
+const maxUDPClientSessions = 4096
 
 type UDPClientConn struct {
 	clientAddr *net.UDPAddr
@@ -61,7 +65,7 @@ func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, se
 		m.logger.Error("failed to forward packet to target",
 			zap.String("client", clientKey),
 			zap.Error(err))
-		m.removeClient(clientKey)
+		m.removeClient(clientKey, client)
 	}
 }
 
@@ -79,6 +83,9 @@ func (m *UDPClientManager) lookupOrCreate(clientKey string, clientAddr *net.UDPA
 
 	m.createMu.Lock()
 	defer m.createMu.Unlock()
+	if m.closing {
+		return nil
+	}
 
 	m.clientsMux.RLock()
 	client, exists = m.clients[clientKey]
@@ -91,17 +98,28 @@ func (m *UDPClientManager) lookupOrCreate(clientKey string, clientAddr *net.UDPA
 }
 
 func (m *UDPClientManager) Cleanup() {
+	m.createMu.Lock()
+	m.closing = true
 	m.clientsMux.Lock()
-	defer m.clientsMux.Unlock()
-
 	for clientKey, client := range m.clients {
 		client.cancel()
+		_ = client.targetConn.Close()
 		delete(m.clients, clientKey)
 	}
+	m.clientsMux.Unlock()
+	m.createMu.Unlock()
+	m.readers.Wait()
 }
 
 func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serverConn *net.UDPConn) *UDPClientConn {
 	clientKey := clientAddr.String()
+	m.clientsMux.RLock()
+	full := len(m.clients) >= maxUDPClientSessions
+	m.clientsMux.RUnlock()
+	if full {
+		m.logger.Warn("UDP client session limit reached", zap.Int("limit", maxUDPClientSessions))
+		return nil
+	}
 
 	// Create connection to target
 	targetConn, err := m.dialTarget()
@@ -124,25 +142,22 @@ func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serve
 	m.logger.Debug("created new UDP client connection", zap.String("client", clientKey))
 
 	// One reader per socket; idle retirement is handled by the manager's sweeper.
+	m.readers.Add(1)
 	go m.handleTargetResponses(ctx, client, serverConn)
 
 	return client
 }
 
 func (m *UDPClientManager) dialTarget() (*net.UDPConn, error) {
+	if len(m.entry.Proxy) > 0 {
+		return nil, errors.New("udp-raw does not support proxy chains")
+	}
 	targetAddr, err := net.ResolveUDPAddr("udp", m.entry.Target)
 	if err != nil {
 		m.logger.Error("failed to resolve target address",
 			zap.String("target", m.entry.Target),
 			zap.Error(err))
 		return nil, err
-	}
-
-	// Handle proxy if configured
-	if len(m.entry.Proxy) > 0 {
-		// Note: UDP proxy support would need to be implemented in DialTarget
-		// For now, direct connection
-		m.logger.Warn("UDP proxy not fully implemented, using direct connection")
 	}
 
 	targetConn, err := net.DialUDP("udp", nil, targetAddr)
@@ -161,6 +176,7 @@ var bufferSize = sync.OnceValue(
 )
 
 func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UDPClientConn, serverConn *net.UDPConn) {
+	defer m.readers.Done()
 	defer client.targetConn.Close()
 	size := bufferSize()
 	buffer := make([]byte, size)
@@ -204,7 +220,7 @@ func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UD
 		client.lastSeen.Store(time.Now().UnixNano())
 	}
 
-	m.removeClient(clientKey)
+	m.removeClient(clientKey, client)
 }
 
 // idleTimeout is how long a client may stay silent before it is retired.
@@ -243,26 +259,43 @@ func (m *UDPClientManager) sweep(timeout time.Duration) {
 	cutoff := time.Now().Add(-timeout).UnixNano()
 
 	m.clientsMux.RLock()
-	var idle []string
+	var idle []struct {
+		key    string
+		client *UDPClientConn
+	}
 	for clientKey, client := range m.clients {
 		if client.lastSeen.Load() < cutoff {
-			idle = append(idle, clientKey)
+			idle = append(idle, struct {
+				key    string
+				client *UDPClientConn
+			}{clientKey, client})
 		}
 	}
 	m.clientsMux.RUnlock()
 
-	for _, clientKey := range idle {
-		m.logger.Debug("cleaning up idle UDP client", zap.String("client", clientKey))
-		m.removeClient(clientKey)
+	for _, candidate := range idle {
+		m.logger.Debug("cleaning up idle UDP client", zap.String("client", candidate.key))
+		m.removeIdleClient(candidate.key, candidate.client, time.Now().Add(-timeout).UnixNano())
 	}
 }
 
-func (m *UDPClientManager) removeClient(clientKey string) {
+func (m *UDPClientManager) removeIdleClient(clientKey string, expected *UDPClientConn, cutoff int64) {
+	m.clientsMux.Lock()
+	defer m.clientsMux.Unlock()
+	if client, exists := m.clients[clientKey]; exists && client == expected && client.lastSeen.Load() < cutoff {
+		client.cancel()
+		_ = client.targetConn.Close()
+		delete(m.clients, clientKey)
+	}
+}
+
+func (m *UDPClientManager) removeClient(clientKey string, expected *UDPClientConn) {
 	m.clientsMux.Lock()
 	defer m.clientsMux.Unlock()
 
-	if client, exists := m.clients[clientKey]; exists {
+	if client, exists := m.clients[clientKey]; exists && client == expected {
 		client.cancel()
+		_ = client.targetConn.Close()
 		delete(m.clients, clientKey)
 	}
 }

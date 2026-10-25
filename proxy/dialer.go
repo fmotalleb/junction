@@ -2,8 +2,11 @@ package proxy
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/proxy"
@@ -29,6 +32,28 @@ func NewDialer(chain []*url.URL) (proxy.Dialer, error) {
 	var dialer proxy.Dialer = proxy.Direct
 	// Build the proxy chain from last to first
 	for _, addr := range chain {
+		if addr == nil {
+			return nil, errors.New("proxy URL is nil")
+		}
+		if addr.Hostname() == "" {
+			return nil, fmt.Errorf("proxy URL %q must include a host", addr.Redacted())
+		}
+		switch addr.Scheme {
+		case "socks5", "socks5h":
+			if addr.Port() == "" {
+				return nil, fmt.Errorf("proxy URL %q must include a port", addr.Redacted())
+			}
+		case "ssh":
+			if addr.Port() == "" {
+				addr.Host = net.JoinHostPort(addr.Hostname(), "22")
+			}
+		}
+		if port := addr.Port(); port != "" {
+			portNumber, err := strconv.Atoi(port)
+			if err != nil || portNumber < 1 || portNumber > 65535 {
+				return nil, fmt.Errorf("proxy URL %q has an invalid port", addr.Redacted())
+			}
+		}
 		d, err := generateDialer(*addr, dialer)
 		if err != nil {
 			return nil, err
@@ -37,6 +62,7 @@ func NewDialer(chain []*url.URL) (proxy.Dialer, error) {
 			dialer = d
 			continue
 		}
+		return nil, fmt.Errorf("unsupported proxy scheme %q", addr.Scheme)
 	}
 
 	return dialer, nil

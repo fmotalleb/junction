@@ -1,6 +1,21 @@
 package router
 
-import "testing"
+import (
+	"context"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"sync/atomic"
+	"testing"
+
+	"github.com/fmotalleb/go-tools/matcher"
+	"go.uber.org/zap"
+
+	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/proxy"
+)
 
 const exampleHost = "example.com"
 
@@ -98,6 +113,54 @@ func TestPrepareTargetHost(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHTTPProxyDoesNotFollowRedirectOutsideAllowList(t *testing.T) {
+	var deniedReached atomic.Bool
+	denied := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		deniedReached.Store(true)
+		_, _ = io.WriteString(w, "denied origin reached")
+	}))
+	defer denied.Close()
+	allowed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, denied.URL, http.StatusFound)
+	}))
+	defer allowed.Close()
+
+	host, port, err := net.SplitHostPort(allowed.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	allow := new(matcher.Matcher)
+	compiled, err := allow.Decode(reflect.TypeOf(""), "glob:"+net.JoinHostPort(host, port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	allow = compiled.(*matcher.Matcher)
+	chain, err := proxy.NewChain(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := newProxyTransport(chain)
+	defer transport.CloseIdleConnections()
+	handler := &httpProxyHandler{
+		ctx:        context.Background(),
+		logger:     zap.NewNop(),
+		chain:      chain,
+		transport:  transport,
+		targetPort: port,
+		entry:      config.EntryPoint{AllowList: []*matcher.Matcher{allow}},
+	}
+	request := httptest.NewRequest(http.MethodGet, allowed.URL, nil)
+	request.RemoteAddr = "127.0.0.1:55555"
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusFound {
+		t.Fatalf("redirect response status = %d, want %d", response.Code, http.StatusFound)
+	}
+	if deniedReached.Load() {
+		t.Fatal("request followed redirect to a disallowed origin")
 	}
 }
 

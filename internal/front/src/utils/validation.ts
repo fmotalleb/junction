@@ -11,7 +11,7 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   }
 
   // Validate routing type
-  const validRoutingTypes: RoutingType[] = ['sni', 'http-header', 'tcp-raw', 'udp-raw'];
+  const validRoutingTypes: RoutingType[] = ['sni', 'http-header', 'http-to-https', 'tcp-raw', 'udp-raw'];
   if (!validRoutingTypes.includes(entryPoint.routing)) {
     errors.push({ field: 'routing', message: 'Invalid routing type' });
   }
@@ -19,7 +19,7 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   // Validate destination
   if (!entryPoint.to.trim()) {
     errors.push({ field: 'to', message: 'Destination is required' });
-  } else if (!isValidDestination(entryPoint.to)) {
+  } else if (entryPoint.routing === 'http-to-https' ? !isValidHttpsURL(entryPoint.to) : !isValidDestination(entryPoint.to)) {
     errors.push({ field: 'to', message: 'Invalid destination format (e.g., 443 or example.com:443)' });
   }
 
@@ -42,8 +42,8 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
 
   return errors;
 };
-const isValidListenAddress = (address: string): boolean => {  
-  const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|localhost|0\.0\.0\.0):(\d{1,5})$/;  
+const isValidListenAddress = (address: string): boolean => {
+  const regex = /^(\[[0-9a-fA-F:.%]+\]|[a-zA-Z0-9.-]+):(\d{1,5})$/;
   const match = address.match(regex);  
   if (!match) return false;  
 
@@ -66,7 +66,7 @@ const isValidDestination = (destination: string): boolean => {
 };  
 
 const isValidTimeout = (timeout: string): boolean => {
-  const regex = /^\d+[smh]$/;
+  const regex = /^(?:\d+(?:ns|us|µs|ms|s|m|h))+$/;
   return regex.test(timeout);
 };
 
@@ -74,6 +74,15 @@ const isValidProxyUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url);
     return ['socks5:', 'ssh:'].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+};
+
+const isValidHttpsURL = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' && parsed.hostname !== '' && parsed.username === '' && parsed.password === '';
   } catch {
     return false;
   }

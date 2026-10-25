@@ -1,4 +1,4 @@
-export type RoutingType = 'sni' | 'http-header' | 'tcp-raw' | 'udp-raw';
+export type RoutingType = 'sni' | 'http-header' | 'http-to-https' | 'tcp-raw' | 'udp-raw';
 export type ProxyProtocol = 'socks5' | 'ssh';
 
 export interface EntryPoint {
@@ -8,12 +8,21 @@ export interface EntryPoint {
   block_list?: string[];
   allow_list?: string[];
   proxy?: string[];
+  allow_from?: string[];
+  block_from?: string[];
+  tag?: string;
+  features?: string[];
+  extra?: Record<string, unknown>;
   to: string;
   timeout?: string;
+  [key: string]: unknown;
 }
 
 export interface NetworkConfig {
   entrypoints: EntryPoint[];
+  core?: Record<string, unknown>;
+  include?: string[];
+  [key: string]: unknown;
 }
 
 export interface ValidationError {

@@ -5,12 +5,12 @@ import (
 	"errors"
 	"net/http"
 	"net/http/pprof"
-	"sync"
 	"time"
 
 	"github.com/fmotalleb/go-tools/log"
 	"github.com/sethvargo/go-retry"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/dns"
@@ -23,38 +23,31 @@ var ErrServerDiedBeforeContext = errors.New("context is not canceled but listene
 // Serve starts all configured server entry points and the optional Singbox service, blocking until all listeners have stopped.
 // It returns an error if logger initialization fails or when all listeners have exited.
 func Serve(ctx context.Context, c config.Config) error {
-	wg := new(sync.WaitGroup)
+	if len(c.EntryPoints) == 0 && c.Core.FakeDNS == nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return ErrServerDiedBeforeContext
+	}
 	reg := router.NewRegistry()
 	defer reg.Reset()
-	var dnsErr error
+	group, serviceCtx := errgroup.WithContext(ctx)
 	if c.Core.FakeDNS != nil {
-		wg.Go(
-			func() {
-				dnsErr = runDNS(ctx, c.Core.FakeDNS)
-			},
-		)
+		group.Go(func() error { return runDNS(serviceCtx, c.Core.FakeDNS) })
 	}
 	if c.Core.Pprof.Enable {
 		pprofListen := c.Core.Pprof.Listen
 		if pprofListen == "" {
 			pprofListen = "127.0.0.1:6060"
 		}
-		wg.Go(func() {
-			if err := servePprof(ctx, pprofListen); err != nil {
-				log.FromContext(ctx).Named("pprof").Warn("pprof server stopped", zap.Error(err))
-			}
-		})
+		group.Go(func() error { return servePprof(serviceCtx, pprofListen) })
 	}
 	for _, e := range c.EntryPoints {
-		wg.Go(
-			func() {
-				handleEntry(ctx, reg, e)
-			},
-		)
+		entry := e
+		group.Go(func() error { return handleEntry(serviceCtx, reg, entry) })
 	}
-	wg.Wait()
-	if dnsErr != nil { // dns gave up after backoff; stop the process with a message, not a stack trace
-		return dnsErr
+	if err := group.Wait(); err != nil {
+		return err
 	}
 	select {
 	case <-ctx.Done(): // normal behavior is context cancellation
@@ -117,7 +110,7 @@ func runDNS(ctx context.Context, cfg *config.FakeDNS) error {
 // handleEntry starts handling the specified entry point within the given context and marks the wait group as done when finished.
 // handleEntry starts handling the given entry point and marks the wait group as done when it returns.
 // If starting the handler fails, it logs a warning that includes the entry and the error.
-func handleEntry(ctx context.Context, reg *router.Registry, e config.EntryPoint) {
+func handleEntry(ctx context.Context, reg *router.Registry, e config.EntryPoint) error {
 	warnOpenListener(ctx, e)
 	if err := reg.Handle(ctx, e); err != nil {
 		log.
@@ -125,11 +118,13 @@ func handleEntry(ctx context.Context, reg *router.Registry, e config.EntryPoint)
 			Named("handleEntry").
 			Warn(
 				"failed to start handler",
-				zap.Any("entry", e),
+				zap.String("router", string(e.Routing)),
+				zap.String("listen", e.Listen.String()),
 				zap.Error(err),
 			)
-		return
+		return err
 	}
+	return nil
 }
 
 func BuildBackoff() retry.Backoff {

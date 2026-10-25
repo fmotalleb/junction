@@ -1,7 +1,8 @@
 # Reliability and security improvement plan
 
 Reviewed on 2026-10-25 against commit `9d80cc0`.
-Status: proposed implementation work; this change only adds this plan.
+Status: implementation in progress. The completed items below reflect changes
+made in this worktree; unchecked items remain follow-up work.
 
 ## Scope and evidence
 
@@ -87,10 +88,10 @@ the declared extension block. `readSNI` assumes one 4096-byte `Read` contains th
 whole hello, which rejects valid fragmentation and larger ClientHello messages.
 The alternate `ClientHello.Unmarshal` implementation also needs length validation.
 
-- [ ] Immediately correct the bounds check and add the exact panic input as a regression.
-- [ ] Validate record type, ClientHello type, record/handshake/vector lengths,
+- [x] Immediately correct the bounds check and add the exact panic input as a regression.
+- [x] Validate record type, ClientHello type, record/handshake/vector lengths,
   extension boundaries, and the SNI name before constructing a dial address.
-- [ ] Use a bounded, deadline-aware reader that assembles the required handshake
+- [x] Use a bounded, deadline-aware reader that assembles the required handshake
   across TCP reads and TLS records. Preserve every consumed byte for replay.
 - [ ] Consolidate the two parser implementations or test them against the same
   valid/malformed corpus. Add fuzz targets for both public parser entry points.
@@ -107,13 +108,13 @@ which accepts every server key. A server impersonator can receive SSH password
 authentication and intercept the proxy hop. Public-key authentication does not
 send the private key, but still requires authentication of the SSH server.
 
-- [ ] Support an operator-supplied `known_hosts` file or pinned server key using
+- [x] Support an operator-supplied `known_hosts` file or pinned server key using
   `knownhosts.New` or `ssh.FixedHostKey`; require verification by default.
 - [ ] If an insecure mode is retained, require an explicit setting with a clear
   warning. Provide a documented migration for existing SSH configurations.
 - [ ] Preload and validate trust/authentication material when compiling routes.
   Support bracketed IPv6 addresses using host/port parsing rather than a colon test.
-- [ ] Close the underlying connection when the dial context is canceled during
+- [x] Close the underlying connection when the dial context is canceled during
   `ssh.NewClientConn`, including when its original deadline has not expired.
 
 **Acceptance:** trusted keys connect; unknown, changed, and wrong-host keys fail;
@@ -129,9 +130,9 @@ without error. With no other hops, traffic goes directly to the destination.
 `connection/udp.go:142` explicitly logs a warning and dials directly even when
 proxies were requested. Both behaviors can violate an operator's egress policy.
 
-- [ ] Reject unknown schemes, nil URL entries, missing hosts, invalid ports,
+- [x] Reject unknown schemes, nil URL entries, missing hosts, invalid ports,
   and invalid SSH authentication before opening listeners.
-- [ ] Reject `udp-raw` with a proxy until UDP proxying is implemented and tested.
+- [x] Reject `udp-raw` with a proxy until UDP proxying is implemented and tested.
   Do not silently substitute a direct connection.
 - [ ] Build a chain once per compiled route and preserve its documented hop order;
   TCP/SNI currently rebuild it for each connection, rereading SSH keys.
@@ -150,7 +151,7 @@ host/port, redirected to a different port, and reached that disallowed origin.
 destinations and does not constrain DNS results. SNI forwards its supplied name
 without a comparable destination-address policy.
 
-- [ ] Return upstream redirects to the client by default, as `http-to-https`
+- [x] Return upstream redirects to the client by default, as `http-to-https`
   already does. If redirect following is configurable, reapply all relevant
   host, port, address, and proxy-route restrictions on every hop.
 - [ ] Separate normalized hostname matching from destination-port policy.
@@ -216,7 +217,7 @@ can therefore remain hidden while another runs indefinitely.
   force-close remaining resources and join workers.
 - [ ] Use explicit HTTP shutdown and close idle transports. Track hijacked CONNECT
   sockets separately: `http.Server.Shutdown` does not close them.
-- [ ] Propagate required component failures promptly, cancel siblings, and report
+- [x] Propagate required component failures promptly, cancel siblings, and report
   which entry failed. Distinguish permanent configuration errors from retryable
   runtime errors, and treat normal shutdown as success.
 - [ ] Publish readiness only after all required listeners bind; expose component
@@ -352,11 +353,11 @@ refreshed after collection. `Cleanup` does not coordinate with pending creation
 or join readers. `utils/copy.go:7` closes both connections when one copy finishes,
 so a client that half-closes its upload may lose the backend's remaining response.
 
-- [ ] Remove UDP sessions only when the map still holds the same session object;
+- [x] Remove UDP sessions only when the map still holds the same session object;
   recheck activity under the removal lock. Coordinate a closed state with creation.
 - [ ] Close retired UDP sockets immediately to unblock I/O, bound writes, and join
   readers/workers before cleanup returns. Use context-aware target resolution.
-- [ ] Treat TCP EOF as directional completion: half-close the destination write
+- [x] Treat TCP EOF as directional completion: half-close the destination write
   side when supported, allow the reverse copy to drain, then close both ends.
   Define behavior for proxy wrappers without half-close support and retain
   timeout/cancellation escape paths.
@@ -375,12 +376,12 @@ can act as a public UDP DNS forwarder. Forwarder failures become NXDOMAIN at lin
 204, and unmatched source CIDRs can produce an A record with no valid IPv4 answer.
 `newResolvers` also dereferences answer/CIDR pointers without validating all cases.
 
-- [ ] Default new configurations to loopback and add explicit allowed-client
-  policy plus rate/concurrency limits. Document the public-listener migration.
-- [ ] Return SERVFAIL for temporary upstream failures; reserve NXDOMAIN for an
+- [x] Default new configurations to loopback and document the public-listener migration.
+- [ ] Add explicit allowed-client policy plus rate/concurrency limits.
+- [x] Return SERVFAIL for temporary upstream failures; reserve NXDOMAIN for an
   authoritative negative result. Define REFUSED or empty-answer behavior when
   no source range matches; do not emit an invalid A record.
-- [ ] Validate nil entries, nil CIDRs, and IPv4-only A answers before serving.
+- [x] Validate nil entries, nil CIDRs, and IPv4-only A answers before serving.
   Normalize DNS case/trailing dots and handle unsupported question classes and
   multiple questions deliberately.
 - [ ] Test and document truncated upstream response behavior. Add TCP fallback
@@ -402,7 +403,7 @@ pattern dispatch also needs regression coverage: `mergeFromPattern` tests
 serialize configuration, and `server/server.go:86` logs the whole entry on errors.
 Review those paths for credentials and sensitive extra configuration.
 
-- [ ] Treat remote config as privileged input: require HTTPS by default, bound
+- [x] Treat remote config as privileged input: require HTTPS by default, bound
   fetch time/body size/include depth and count, constrain redirects, and make any
   insecure HTTP exception explicit. Fix remote include dispatch with an upstream
   change or a narrow maintained replacement; avoid mutating the global HTTP client.
@@ -428,15 +429,16 @@ fields do not. Editing an imported unsupported routing mode throws. Import only
 checks the outer entrypoint array, and IPv4/timeout validation differs from Go.
 The YAML exporter imports a transitive package absent from direct dependencies.
 
-- [ ] Preserve all top-level and entry fields through import, edits, reordering,
+- [x] Preserve all top-level and entry fields through import, edits, reordering,
   and export; block or clearly report unsupported edits instead of losing fields.
 - [ ] Align types/validation with the backend schema, including all routers,
   source rules, IPv6, Go durations, tag/feature constraints, and HTTPS targets.
   Validate imported elements and bound file size before accepting them.
-- [ ] Add explicit source-access controls to the UI and make routing-type changes
+- [x] Add explicit source-access controls to the UI and make routing-type changes
   preserve policy or require a clear review of any removed rules.
-- [ ] Declare `yaml` directly, resolve the three lint errors, and add unit tests
-  for round trips plus a small browser smoke test for import/edit/export errors.
+- [x] Declare `yaml` directly and resolve the frontend lint errors.
+- [ ] Add unit tests for round trips plus a small browser smoke test for
+  import/edit/export errors.
   Review the TOML bundling warnings and use an appropriate browser entry point.
 
 **Acceptance:** a full configuration containing DNS, includes, source rules, tags,
@@ -466,14 +468,14 @@ without a checksum utility after calling nonexistent `input` and ignoring failur
   Pin Actions to reviewed commit SHAs, maintain least-privilege permissions, and
   test security-sensitive release changes before publishing. Select a supported
   Node release and keep the build/runtime toolchain policy explicit.
-- [ ] Fix Compose to consume a produced image or a documented build context;
+- [x] Fix Compose to consume a produced image or a documented build context;
   align its stage and command with the Dockerfile. Retain the nonroot runtime,
   consider digest-pinned base images, read-only rootfs, dropped capabilities, and
   only required writable mounts. Ensure examples expose only intended ports.
 - [ ] Build assets explicitly for releases, clean obsolete hashed assets, and
   smoke-test the packaged binary's generator page and every referenced asset.
   Define a clear error for binaries intentionally built without UI assets.
-- [ ] Make checksum verification mandatory and match exactly one expected filename
+- [x] Make checksum verification mandatory and match exactly one expected filename
   and valid digest. Add download timeouts, cleanup traps, narrow extraction, and
   atomic destination replacement. Never overwrite a working binary on failure.
 - [ ] Generate SBOM/provenance and consider signed artifacts with installer

@@ -2,12 +2,15 @@ package router
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"sync"
 
 	"github.com/fmotalleb/go-tools/log"
 	"go.uber.org/zap"
 
 	"github.com/fmotalleb/junction/config"
+	"github.com/fmotalleb/junction/proxy"
 )
 
 func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
@@ -30,10 +33,16 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		return true, err
 	}
 	defer listener.Close()
+	active := make(chan struct{}, maxConcurrentTunnels)
+	var workers sync.WaitGroup
+	defer func() { workers.Wait() }()
 
 	if entry.Target == "" {
 		logger.Error("TCP proxy must have a target ip:port address")
 		return true, buildFieldMissing("tcp-raw", "to")
+	}
+	if _, err := proxy.NewChain(entry.Proxy); err != nil {
+		return true, fmt.Errorf("invalid TCP proxy chain: %w", err)
 	}
 
 	logger.Info("raw TCP proxy booted")
@@ -69,7 +78,18 @@ func tcpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		}
 
 		setKeepAlive(conn)
-		go handleTCPConnection(ctx, logger, conn, entry)
+		select {
+		case active <- struct{}{}:
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				defer func() { <-active }()
+				handleTCPConnection(ctx, logger, conn, entry)
+			}()
+		default:
+			logger.Warn("maximum concurrent TCP tunnels reached", zap.Int("limit", maxConcurrentTunnels))
+			_ = conn.Close()
+		}
 	}
 }
 

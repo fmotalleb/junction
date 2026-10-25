@@ -4,94 +4,124 @@ import "encoding/binary"
 
 const (
 	tlsHandshakeFlag  = 0x16
-	tlsHandshakeBegin = 0x16
+	tlsHandshakeBegin = 0x01
+	maxClientHelloLen = 64 << 10
 
 	// HandshakeType(8 bit) + Length(24 bit) + Version(16 bit) + Random (256 bit).
-	tlsHelloSize = 1 + 3 + 2 + 32
+	tlsHelloSize = 2 + 32
 )
 
 func ExtractSNI(data []byte) []byte {
-	if !isTLSHandshake(data) {
-		return nil
-	}
-	handshake := data[5:]
-	pos, ok := skipClientHelloHeaders(handshake)
-	if !ok {
-		return nil
-	}
-	sni := extractSNIFromExtensions(handshake, pos)
-	return sni
+	name, _ := ClientHelloStatus(data)
+	return name
 }
 
-func isTLSHandshake(data []byte) bool {
-	if len(data) < 9 || data[0] != tlsHandshakeFlag {
-		return false
+// ClientHelloStatus reports whether data contains a complete first ClientHello
+// across one or more TLS records. A complete hello may legitimately omit SNI.
+func ClientHelloStatus(data []byte) ([]byte, bool) {
+	var handshake []byte
+	for len(data) >= 5 {
+		if data[0] != tlsHandshakeFlag {
+			return nil, true
+		}
+		recordLen := int(binary.BigEndian.Uint16(data[3:5]))
+		if recordLen == 0 || len(data)-5 < recordLen || len(handshake)+recordLen > maxClientHelloLen {
+			return nil, true
+		}
+		handshake = append(handshake, data[5:5+recordLen]...)
+		data = data[5+recordLen:]
+		if len(handshake) < 4 {
+			continue
+		}
+		if handshake[0] != tlsHandshakeBegin {
+			return nil, true
+		}
+		messageLen := int(handshake[1])<<16 | int(handshake[2])<<8 | int(handshake[3])
+		if messageLen > maxClientHelloLen-4 {
+			return nil, true
+		}
+		if len(handshake) >= 4+messageLen {
+			return parseClientHelloSNI(handshake[4 : 4+messageLen]), true
+		}
 	}
-	return data[5] != tlsHandshakeBegin
+	return nil, false
 }
 
-func skipClientHelloHeaders(handshake []byte) (int, bool) {
+func parseClientHelloSNI(hello []byte) []byte {
+	if len(hello) < tlsHelloSize {
+		return nil
+	}
 	pos := tlsHelloSize
-	if pos > len(handshake) {
-		return 0, false
-	}
-	sidLen := int(handshake[pos])
-	pos += 1 + sidLen
-	if pos+2 > len(handshake) {
-		return 0, false
-	}
-	csLen := int(binary.BigEndian.Uint16(handshake[pos:]))
-	pos += 2 + csLen
-	if pos+1 > len(handshake) {
-		return 0, false
-	}
-	compMethodsLen := int(handshake[pos])
-	pos += 1 + compMethodsLen
-	if pos+2 > len(handshake) {
-		return 0, false
-	}
-	return pos, true
-}
-
-func extractSNIFromExtensions(handshake []byte, pos int) []byte {
-	// already happens in skipClientHelloHeaders
-	// if pos+2 > len(handshake) {
-	// 	return nil
-	// }
-	extLen := int(binary.BigEndian.Uint16(handshake[pos:]))
-	pos += 2
-	end := pos + extLen
-	if end > len(handshake) {
+	if pos >= len(hello) {
 		return nil
 	}
-	for pos+4 <= end {
-		extType := binary.BigEndian.Uint16(handshake[pos:])
-		extDataLen := binary.BigEndian.Uint16(handshake[pos+2:])
+	sessionIDLen := int(hello[pos])
+	pos++
+	if sessionIDLen > len(hello)-pos {
+		return nil
+	}
+	pos += sessionIDLen
+	if len(hello)-pos < 2 {
+		return nil
+	}
+	cipherLen := int(binary.BigEndian.Uint16(hello[pos:]))
+	pos += 2
+	if cipherLen < 2 || cipherLen%2 != 0 || cipherLen > len(hello)-pos {
+		return nil
+	}
+	pos += cipherLen
+	if pos >= len(hello) {
+		return nil
+	}
+	compressionLen := int(hello[pos])
+	pos++
+	if compressionLen > len(hello)-pos {
+		return nil
+	}
+	pos += compressionLen
+	if len(hello)-pos < 2 {
+		return nil
+	}
+	extensionsLen := int(binary.BigEndian.Uint16(hello[pos:]))
+	pos += 2
+	if extensionsLen != len(hello)-pos {
+		return nil
+	}
+	end := pos + extensionsLen
+	for pos < end {
+		if end-pos < 4 {
+			return nil
+		}
+		extType := binary.BigEndian.Uint16(hello[pos:])
+		extDataLen := int(binary.BigEndian.Uint16(hello[pos+2:]))
 		pos += 4
-		if pos+int(extDataLen) > len(handshake) {
-			break
+		if extDataLen > end-pos {
+			return nil
 		}
-		if extType == 0x00 {
-			sniData := handshake[pos : pos+int(extDataLen)]
-			return parseSNIExtension(sniData)
+		if extType == 0 {
+			return parseSNIExtension(hello[pos : pos+extDataLen])
 		}
-		pos += int(extDataLen)
+		pos += extDataLen
 	}
 	return nil
 }
 
 // parseSNIExtension returns the only real world case, a single name in sni packet.
 func parseSNIExtension(sniData []byte) []byte {
-	if len(sniData) < 5 {
+	if len(sniData) < 5 || int(binary.BigEndian.Uint16(sniData[:2])) != len(sniData)-2 {
+		return nil
+	}
+	listLen := int(binary.BigEndian.Uint16(sniData[:2]))
+	if listLen < 3 || listLen > len(sniData)-2 {
 		return nil
 	}
 	nameType := sniData[2]
 	if nameType != 0 {
 		return nil
 	}
-	nameLen := int(binary.BigEndian.Uint16(sniData[3:5])) + 5
-	if nameLen > len(sniData) {
+	nameLen := int(binary.BigEndian.Uint16(sniData[3:5]))
+	if nameLen == 0 || nameLen != listLen-3 || nameLen > len(sniData)-5 {
 		return nil
 	}
-	return sniData[5:nameLen]
+	return sniData[5 : 5+nameLen]
 }

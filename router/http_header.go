@@ -74,6 +74,8 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		return true, err
 	}
 
+	transport := newProxyTransport(chain)
+	defer transport.CloseIdleConnections()
 	server := &http.Server{
 		ReadHeaderTimeout: time.Second * 30,
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
@@ -82,7 +84,7 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 			ctx:          ctx,
 			logger:       logger,
 			chain:        chain,
-			transport:    newProxyTransport(chain),
+			transport:    transport,
 			targetPort:   entry.GetTargetOr(DefaultHTTPPort),
 			entry:        entry,
 			tag:          entry.Tag, // NEW FIELD
@@ -95,7 +97,7 @@ func httpHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	}
 	logger.Info("HTTP proxy booted")
 
-	if err := server.ListenAndServe(); err != nil {
+	if err := serveHTTPServer(ctx, server); err != nil {
 		logger.Error("HTTP server error", zap.Error(err))
 		return true, errors.Join(
 			errors.New("failed to start listener for http proxy"),
@@ -140,8 +142,10 @@ func newProxyTransport(chain *proxy.Chain) *http.Transport {
 		DialContext:           chain.DialContext,
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   10,
+		MaxConnsPerHost:       100,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
 		ExpectContinueTimeout: time.Second,
 	}
 }
@@ -174,7 +178,9 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.tag != nil {
-		group := httpGroups[*h.tag]
+		httpGroupMu.Lock()
+		group := slices.Clone(httpGroups[*h.tag])
+		httpGroupMu.Unlock()
 		matched := false
 
 		for _, ep := range group {
@@ -315,8 +321,6 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request,
 	}
 	defer targetConn.Close()
 
-	w.WriteHeader(http.StatusOK)
-
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		h.logger.Error("Hijacking unsupported")
@@ -324,15 +328,35 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, _ *http.Request,
 		return
 	}
 
-	clientConn, _, err := hijacker.Hijack()
+	clientConn, buffered, err := hijacker.Hijack()
 	if err != nil {
 		h.logger.Error("Hijack failed", zap.Error(err))
 		http.Error(w, "Hijack failed", http.StatusInternalServerError)
 		return
 	}
 	defer clientConn.Close()
+	if _, err := buffered.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
+		return
+	}
+	if err := buffered.Flush(); err != nil {
+		return
+	}
 
-	relayTraffic(ctx, clientConn, targetConn, h.logger)
+	relayTraffic(ctx, &bufferedReadConn{Conn: clientConn, reader: buffered.Reader}, targetConn, h.logger)
+}
+
+type bufferedReadConn struct {
+	net.Conn
+	reader io.Reader
+}
+
+func (c *bufferedReadConn) Read(p []byte) (int, error) { return c.reader.Read(p) }
+
+func (c *bufferedReadConn) CloseWrite() error {
+	if conn, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return conn.CloseWrite()
+	}
+	return nil
 }
 
 func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Request, targetHost string) {
@@ -350,16 +374,16 @@ func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Copy headers
-	for k, v := range r.Header {
-		for _, val := range v {
-			req.Header.Add(k, val)
-		}
-	}
+	copyHeadersWithReplace(req.Header, r.Header, nil)
 
 	//nolint:gosec // Forwarding to a client-chosen destination is this router's
 	// job; allow_list/block_list and allow_from gate who may ask for what.
-	resp, err := (&http.Client{Transport: h.transport}).Do(req)
+	resp, err := (&http.Client{
+		Transport: h.transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}).Do(req)
 	if err != nil {
 		h.logger.Error("Request to target failed", zap.String("url", targetURL.String()), zap.Error(err))
 		http.Error(w, "Request failed", http.StatusBadGateway)
@@ -367,11 +391,7 @@ func (h *httpProxyHandler) handleHTTPRequest(w http.ResponseWriter, r *http.Requ
 	}
 	defer resp.Body.Close()
 
-	for k, v := range resp.Header {
-		for _, val := range v {
-			w.Header().Add(k, val)
-		}
-	}
+	copyResponseHeaders(w, resp.Header, nil, false)
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		h.logger.Error("Response copy failed", zap.Error(err))

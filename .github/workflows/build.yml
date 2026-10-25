@@ -26,6 +26,14 @@ jobs:
         uses: actions/setup-node@v4 # v4
         with:
           node-version: 20
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: internal/front
+      - name: Check frontend lint and types
+        run: |
+          npm run lint
+          ./node_modules/.bin/tsc -b --pretty false
+        working-directory: internal/front
       - name: Build
         run: make ci
       - run: make build

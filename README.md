@@ -140,17 +140,17 @@ junction run --listen 8443 \
 #### Fields
 
 - **Include**
-  You can include multiple config files (even from a remote http source):
-  Please note that this list is not loosely typed so you have to declare an array of strings
-  Order of included files are not guaranteed, do not mix ordered sensitive items in multiple files
+  You can include multiple config files, including remote HTTPS sources.
+  Include files are merged in listed order; the including file overrides included values.
 
   - Support Glob pattern matching
-  - Support `HTTP` and `HTTPS` with basic authentication
+  - Remote sources require `HTTPS` and support basic authentication. For temporary
+    migration only, `JUNCTION_ALLOW_INSECURE_CONFIG_HTTP=1` enables plain HTTP.
 
   ```toml
   include = [
     "./*.toml",
-    "http://remote-server.com/config.toml",
+    "https://remote-server.com/config.toml",
   ]
   ```
 
@@ -181,6 +181,8 @@ junction run --listen 8443 \
 
   - fake_dns: object or string of fake DNS config:
     In order to create a simple dns server to manipulate requests into this server (needs manual IP configuration)
+    By default the DNS listener binds to `127.0.0.1:53`. Set `listen` explicitly
+    to expose it on another interface, and restrict access at the network boundary.
     Limitations:
     - A Record support (for now since i don't use AAAA records)
     - UDP listener
@@ -250,8 +252,9 @@ junction run --listen 8443 \
     Supported proxy protocols:
 
     - **SOCKS5**: `socks5://[user:pass@]hostname:port`
-    - **SSH**: `ssh://user[:pass]@hostname:port[/path/to/private/key]`
+    - **SSH**: `ssh://user[:pass]@hostname:port[/path/to/private/key]?known_hosts=/path/to/known_hosts`
       - Use either password OR key authentication, not both
+      - Server keys must be present in `~/.ssh/known_hosts` or the configured `known_hosts` file
 
     Default: `direct` (no proxy)
 

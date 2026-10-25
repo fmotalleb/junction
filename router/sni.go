@@ -3,6 +3,8 @@ package router
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -26,6 +28,9 @@ var (
 func sniRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterSNI {
 		return false, nil
+	}
+	if _, err := proxy.NewChain(entry.Proxy); err != nil {
+		return true, fmt.Errorf("invalid SNI proxy chain: %w", err)
 	}
 
 	// Register entry by tag if available
@@ -66,13 +71,27 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 		return err
 	}
 	defer listener.Close()
+	active := make(chan struct{}, maxConcurrentTunnels)
+	var workers sync.WaitGroup
+	defer func() { workers.Wait() }()
 
 	logger.Info("SNI router started")
 
-	// Shutdown listener on context close
+	// Shutdown the listener on context close, and release the watcher on every exit.
+	listenerDone := make(chan struct{})
+	shutdownDone := make(chan struct{})
 	go func() {
-		<-ctx.Done()
+		defer close(shutdownDone)
+		select {
+		case <-ctx.Done():
+			_ = listener.Close()
+		case <-listenerDone:
+		}
+	}()
+	defer func() {
+		close(listenerDone)
 		_ = listener.Close()
+		<-shutdownDone
 	}()
 
 	var retry acceptRetry
@@ -93,7 +112,18 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 		retry.reset()
 
 		setKeepAlive(conn)
-		go handleClient(ctx, conn, entry, logger)
+		select {
+		case active <- struct{}{}:
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				defer func() { <-active }()
+				handleClient(ctx, conn, entry, logger)
+			}()
+		default:
+			logger.Warn("maximum concurrent SNI tunnels reached", zap.Int("limit", maxConcurrentTunnels))
+			_ = conn.Close()
+		}
 	}
 }
 
@@ -127,7 +157,10 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 	}
 
 	// Tagged routing
-	for _, ep := range sniGroups[*entry.Tag] {
+	groupMu.Lock()
+	group := append([]config.EntryPoint(nil), sniGroups[*entry.Tag]...)
+	groupMu.Unlock()
+	for _, ep := range group {
 		if ep.AllowedHost(sni) && ep.AllowedFrom(remote) {
 			proxyToTarget(ctx, conn, sni, buf, n, l, ep)
 			return
@@ -171,20 +204,30 @@ func readSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
 	_ = conn.SetReadDeadline(time.Now().Add(sniReadTimeout))
 	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 
-	buf := make([]byte, 4096)
-	n, err := conn.Read(buf)
-	if err != nil {
-		logger.Error("client read failed", zap.Error(err))
-		return nil, nil, 0, err
+	const maxClientHelloBytes = 64 << 10
+	buf := make([]byte, 0, maxClientHelloBytes)
+	for {
+		var header [5]byte
+		if _, err := io.ReadFull(conn, header[:]); err != nil {
+			return nil, nil, 0, err
+		}
+		recordLen := int(header[3])<<8 | int(header[4])
+		if header[0] != 0x16 || recordLen == 0 || recordLen > 18432 || len(buf)+len(header)+recordLen > maxClientHelloBytes {
+			return nil, nil, 0, errors.New("invalid or oversized TLS handshake record")
+		}
+		start := len(buf)
+		buf = append(buf, header[:]...)
+		buf = append(buf, make([]byte, recordLen)...)
+		if _, err := io.ReadFull(conn, buf[start+len(header):]); err != nil {
+			return nil, nil, 0, err
+		}
+		name, complete := tls.ClientHelloStatus(buf)
+		if complete {
+			if len(name) == 0 {
+				logger.Debug("SNI missing", zap.String("client", conn.RemoteAddr().String()))
+				return nil, nil, 0, errSNIMissing
+			}
+			return name, buf, len(buf), nil
+		}
 	}
-
-	name := tls.ExtractSNI(buf[:n])
-	if name == nil {
-		// Its common to happen
-		logger.Debug("SNI missing",
-			zap.String("client", conn.RemoteAddr().String()),
-		)
-		return nil, nil, 0, errSNIMissing
-	}
-	return name, buf, n, nil
 }

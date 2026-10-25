@@ -7,11 +7,12 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"strings"
+	"path/filepath"
 	"sync"
 	"time"
 
 	gossh "golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/net/proxy"
 )
 
@@ -26,6 +27,9 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 		return nil, nil
 	}
 
+	if url.User == nil {
+		return nil, errors.New("SSH proxy URL must include a username")
+	}
 	user := url.User.Username()
 	pass, hasPass := url.User.Password()
 
@@ -44,14 +48,26 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 	}
 
 	host := url.Host
-	if !strings.Contains(host, ":") {
-		host += ":22"
+	if url.Port() == "" {
+		host = net.JoinHostPort(url.Hostname(), "22")
+	}
+	knownHostsPath := url.Query().Get("known_hosts")
+	if knownHostsPath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("locate SSH known_hosts: %w", err)
+		}
+		knownHostsPath = filepath.Join(home, ".ssh", "known_hosts")
+	}
+	verifyHostKey, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("load SSH known_hosts %q: %w", knownHostsPath, err)
 	}
 
 	clientConfig := &gossh.ClientConfig{
 		User:            user,
 		Auth:            auth,
-		HostKeyCallback: ignoreHostKey,
+		HostKeyCallback: verifyHostKey,
 		Timeout:         10 * time.Second,
 	}
 
@@ -99,8 +115,20 @@ func (s *sshProxyDialer) DialContext(ctx context.Context, network, address strin
 		deadline = ctxDeadline
 	}
 	_ = rawConn.SetDeadline(deadline)
+	handshakeDone := make(chan struct{})
+	watcherDone := make(chan struct{})
+	go func() {
+		defer close(watcherDone)
+		select {
+		case <-ctx.Done():
+			_ = rawConn.Close()
+		case <-handshakeDone:
+		}
+	}()
 
 	conn, chans, reqs, err := gossh.NewClientConn(rawConn, s.addr, s.config)
+	close(handshakeDone)
+	<-watcherDone
 	if err != nil {
 		_ = rawConn.Close()
 		return nil, fmt.Errorf("SSH handshake failed: %w", err)
@@ -136,8 +164,4 @@ func (c *sshTunnelConn) Close() error {
 		_ = c.client.Close()
 	})
 	return c.Conn.Close()
-}
-
-func ignoreHostKey(_ string, _ net.Addr, _ gossh.PublicKey) error {
-	return nil
 }

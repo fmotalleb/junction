@@ -48,9 +48,9 @@ function getMap(self: EntryPoint) {
  *
  * @returns An object containing an array of entry points, each processed to exclude empty or undefined fields except for the `id`.
  */
-function dumpCfg(cfg: NetworkConfig): any {
+function dumpCfg(cfg: NetworkConfig): Record<string, unknown> {
   const entrypoints = cfg.entrypoints.map(e => getMap(e));
-  return { entrypoints };
+  return { ...cfg, entrypoints };
 }
 
 /**
@@ -69,7 +69,7 @@ export function exportConfig(config: NetworkConfig, format: ConfigFormat = 'json
     case 'yaml':
       return YAML.stringify(cfg);
     case 'toml':
-      return TOML.stringify(cfg);
+      return TOML.stringify(cfg as Parameters<typeof TOML.stringify>[0]);
     default:
       throw new Error(`Unsupported format: ${format}`);
   }
@@ -77,24 +77,50 @@ export function exportConfig(config: NetworkConfig, format: ConfigFormat = 'json
 
 export const importConfig = (jsonString: string): NetworkConfig => {
   try {
-    const parsed = JSON.parse(jsonString);
-    if (!parsed.entrypoints || !Array.isArray(parsed.entrypoints)) {
+    if (new TextEncoder().encode(jsonString).length > 4 * 1024 * 1024) {
+      throw new Error('Configuration exceeds the 4 MiB import limit');
+    }
+    const parsed: unknown = JSON.parse(jsonString);
+    if (!isRecord(parsed) || !Array.isArray(parsed.entrypoints)) {
       throw new Error('Invalid configuration format');
     }
 
-    const entrypoints: EntryPoint[] = parsed.entrypoints.map((ep: any) => ({
-      ...ep,
-      id: generateId(),
-      block_list: ep.block_list || [],
-      allow_list: ep.allow_list || [],
-      proxy: ep.proxy || []
-    }));
+    const entrypoints: EntryPoint[] = parsed.entrypoints.map((value: unknown) => {
+      if (!isRecord(value)) {
+        throw new Error('Each entry point must be an object');
+      }
+      for (const field of ['block_list', 'allow_list', 'allow_from', 'block_from', 'proxy', 'features']) {
+        if (value[field] !== undefined && (!Array.isArray(value[field]) || !value[field].every((item) => typeof item === 'string'))) {
+          throw new Error(`${field} must be an array of strings`);
+        }
+      }
+      const routing = typeof value.routing === 'string' ? value.routing : '';
+      if (!['sni', 'http-header', 'http-to-https', 'tcp-raw', 'udp-raw'].includes(routing)) {
+        throw new Error('Each entry point must have a supported routing type');
+      }
+      return {
+        ...value,
+        id: generateId(),
+        routing: routing as EntryPoint['routing'],
+        listen: typeof value.listen === 'string' ? value.listen : '',
+        to: typeof value.to === 'string' ? value.to : '',
+        block_list: (value.block_list as string[] | undefined) ?? [],
+        allow_list: (value.allow_list as string[] | undefined) ?? [],
+        allow_from: (value.allow_from as string[] | undefined) ?? [],
+        block_from: (value.block_from as string[] | undefined) ?? [],
+        proxy: (value.proxy as string[] | undefined) ?? [],
+      };
+    });
 
-    return { entrypoints };
-  } catch (error) {
-    throw new Error('Failed to parse configuration JSON');
+    return { ...parsed, entrypoints } as NetworkConfig;
+  } catch (error: unknown) {
+    throw new Error(error instanceof Error ? error.message : 'Failed to parse configuration JSON');
   }
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 export const downloadFile = (content: string, filename: string, contentType: string = 'application/json') => {
   const blob = new Blob([content], { type: contentType });

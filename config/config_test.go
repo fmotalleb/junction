@@ -1,8 +1,12 @@
 package config_test
 
 import (
+	"context"
 	"net"
+	"net/netip"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -219,4 +223,61 @@ func TestDNSResultDecode(t *testing.T) {
 
 	_, err = e.Decode(reflect.TypeOf(""), "not-an-ip")
 	assert.Error(t, err)
+}
+
+func TestStringToNetAddrPortHookSupportsIPv6(t *testing.T) {
+	hook := config.StringToNetAddrPortHook()
+	hookFn := hook.(func(reflect.Type, reflect.Type, interface{}) (interface{}, error))
+	portType := reflect.TypeOf(config.EntryPoint{}.Listen)
+	for input, want := range map[string]string{
+		"[::1]:8443": "[::1]:8443",
+		"8443":       "127.0.0.1:8443",
+	} {
+		got, err := hookFn(reflect.TypeOf(""), portType, input)
+		assert.NoError(t, err)
+		assert.Equal(t, want, got.(netip.AddrPort).String())
+	}
+}
+
+func TestParseReloadClearsRemovedFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	first := `{"core":{"fake_dns":{"answer":"127.0.0.1"}},"entrypoints":[{"routing":"sni","listen":"127.0.0.1:8443","to":"443"}]}`
+	if err := os.WriteFile(path, []byte(first), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var cfg config.Config
+	if err := config.Parse(context.Background(), &cfg, path); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Core.FakeDNS == nil || len(cfg.EntryPoints) != 1 {
+		t.Fatalf("initial config was not loaded: %+v", cfg)
+	}
+	second := `{"entrypoints":[{"routing":"sni","listen":"127.0.0.1:9443","to":"443"}]}`
+	if err := os.WriteFile(path, []byte(second), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Parse(context.Background(), &cfg, path); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Core.FakeDNS != nil || len(cfg.EntryPoints) != 1 || cfg.EntryPoints[0].Listen.String() != "127.0.0.1:9443" {
+		t.Fatalf("removed fields survived reload: %+v", cfg)
+	}
+}
+
+func TestParseFailsForMalformedOrMissingInclude(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	for name, contents := range map[string]string{
+		"malformed":       `{"entrypoints":[`,
+		"missing include": `{"entrypoints":[],"include":["missing.json"]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var cfg config.Config
+			if err := config.Parse(context.Background(), &cfg, path); err == nil {
+				t.Fatal("Parse succeeded; want an error")
+			}
+		})
+	}
 }

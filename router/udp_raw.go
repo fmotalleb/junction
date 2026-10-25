@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"errors"
 	"net"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -14,6 +15,9 @@ import (
 func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterUDPRaw {
 		return false, nil
+	}
+	if len(entry.Proxy) != 0 {
+		return true, errors.New("udp-raw does not support proxy chains")
 	}
 
 	logger := log.FromContext(ctx).
@@ -77,6 +81,6 @@ func udpRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
 		packet := make([]byte, n)
 		copy(packet, buffer[:n])
 
-		go clientManager.HandlePacket(clientAddr, packet, conn)
+		clientManager.HandlePacket(clientAddr, packet, conn)
 	}
 }

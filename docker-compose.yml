@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: standalone
-    command: ["junction", "--config=/config.toml", "-d"]
+      target: distroless
+    command: ["--config=/config.toml", "-d"]
     volumes:
       - ./config.toml:/config.toml:ro
     ports:

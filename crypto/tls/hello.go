@@ -71,18 +71,30 @@ func (out *ClientHello) Unmarshal(buf []byte) error {
 	}
 
 	recordLen := int(binary.BigEndian.Uint16(buf[3:5]))
-	if len(buf)-tlsRecordHeaderLen < recordLen {
+	if len(buf)-tlsRecordHeaderLen < recordLen || recordLen < tlsHandshakeHeaderLen {
 		return errors.New("truncated record")
 	}
-	handshake := buf[tlsRecordHeaderLen:]
+	handshake := buf[tlsRecordHeaderLen : tlsRecordHeaderLen+recordLen]
 	if handshake[0] != tlsHandshakeTypeClientHello {
 		return errors.New("not a client hello")
 	}
+	handshakeLen := int(handshake[1])<<16 | int(handshake[2])<<8 | int(handshake[3])
+	if handshakeLen > recordLen-tlsHandshakeHeaderLen || handshakeLen > maxClientHelloLen {
+		return errors.New("truncated or oversized ClientHello")
+	}
 
-	hello := handshake[tlsHandshakeHeaderLen:]
+	hello := handshake[tlsHandshakeHeaderLen : tlsHandshakeHeaderLen+handshakeLen]
 	pos, err := out.parseClientHelloBody(hello)
 	if err != nil {
 		return err
+	}
+	out.SNICount = 0
+	clear(out.SNIHostNames[:])
+	if pos == len(hello) {
+		return nil
+	}
+	if len(hello)-pos < 2 {
+		return errors.New("truncated extensions length")
 	}
 	if pos+2 > len(hello) {
 		// No extensions
@@ -92,7 +104,7 @@ func (out *ClientHello) Unmarshal(buf []byte) error {
 
 	extLen := int(binary.BigEndian.Uint16(hello[pos:]))
 	pos += 2
-	if pos+extLen > len(hello) {
+	if extLen != len(hello)-pos {
 		return errors.New("extensions truncated")
 	}
 
@@ -120,7 +132,10 @@ func (out *ClientHello) parseSNIExtension(data []byte) {
 	sniLen := int(binary.BigEndian.Uint16(data))
 	sniEnd := 2 + sniLen
 	sniPos := 2
-	for sniPos+3 <= sniEnd && out.SNICount < len(out.SNIHostNames) && sniEnd <= len(data) {
+	if sniEnd > len(data) {
+		return
+	}
+	for sniPos+3 <= sniEnd && out.SNICount < len(out.SNIHostNames) {
 		nameType := data[sniPos]
 		nameLen := int(binary.BigEndian.Uint16(data[sniPos+1:]))
 		sniPos += 3

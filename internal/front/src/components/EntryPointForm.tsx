@@ -45,8 +45,6 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
         routing: value as RoutingType,
         listen: '',
         to: '',
-        allow_list: undefined,
-        block_list: undefined,
       });
     } else {
         setFormData({ ...formData, [field]: value });
@@ -69,13 +67,22 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
   }[] = [
       { value: 'sni', label: 'SNI', description: 'Server Name Indication routing', defaultListener: '127.0.0.1:8443', defaultTarget: '443', features: ['auto-routing', 'proxy'] },
       { value: 'http-header', label: 'HTTP Header', description: 'Route based on HTTP headers', defaultListener: '127.0.0.1:8080', defaultTarget: '80', features: ['auto-routing', 'proxy'] },
+      { value: 'http-to-https', label: 'HTTP to HTTPS', description: 'Forward HTTP to an HTTPS backend', defaultListener: '127.0.0.1:8080', defaultTarget: 'https://example.com', features: ['auto-routing', 'proxy'] },
       { value: 'tcp-raw', label: 'TCP Raw', description: 'Raw TCP traffic routing', defaultListener: '127.0.0.1:8080', defaultTarget: '127.0.0.1:2080', features: ['proxy'] },
       { value: 'udp-raw', label: 'UDP Raw', description: 'Raw UDP traffic routing', defaultListener: '127.0.0.1:2053', defaultTarget: '1.1.1.1:53', features: [] }
     ];
 
   const selected = routingTypes.find((a) => a.value === formData.routing);
   if (!selected) {
-    throw new Error(`Invalid routing type: ${formData.routing}`);
+    return (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+        <div className="max-w-lg rounded-xl border border-gray-700 bg-gray-800 p-6 text-white">
+          <h2 className="text-lg font-semibold">Unsupported routing type</h2>
+          <p className="my-4 text-gray-300">This editor will preserve the entry point when you export the configuration. It cannot edit this routing type yet.</p>
+          <button type="button" onClick={onCancel} className="rounded-lg bg-gray-700 px-4 py-2">Close</button>
+        </div>
+      </div>
+    );
   }
   const hasAutoRoute = selected.features.includes('auto-routing');
   const canProxy = selected.features.includes('proxy');
@@ -182,6 +189,15 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
               className="w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white placeholder-gray-400  transition-all duration-300"
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Tag (optional)</label>
+            <input type="text" value={formData.tag || ''} onChange={(e) => handleFieldChange('tag', e.target.value)} className="w-full rounded-lg border border-gray-600 bg-gray-700/50 px-3 py-2 text-white" />
+          </div>
+
+          <ArrayInput label="Allowed Client Addresses" values={formData.allow_from || []} onChange={(values) => handleFieldChange('allow_from', values)} placeholder="127.0.0.1, 192.168.1.*" />
+          <ArrayInput label="Blocked Client Addresses" values={formData.block_from || []} onChange={(values) => handleFieldChange('block_from', values)} placeholder="10.0.0.7" />
+          <ArrayInput label="Features" values={formData.features || []} onChange={(values) => handleFieldChange('features', values)} placeholder="flexible-port" />
 
           {/* Proxy URLs */}
 
