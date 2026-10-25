@@ -10,11 +10,65 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/fmotalleb/go-tools/matcher"
+	"github.com/miekg/dns"
 
 	"github.com/fmotalleb/junction/config"
 )
 
 const exampleDomain = "example.com"
+
+func TestExchangeUpstreamRetriesTruncatedUDPOverTCP(t *testing.T) {
+	udpConn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tcpListener, err := net.Listen("tcp", udpConn.LocalAddr().String())
+	if err != nil {
+		_ = udpConn.Close()
+		t.Fatal(err)
+	}
+	udpServer := &dns.Server{
+		PacketConn: udpConn,
+		Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+			response := new(dns.Msg)
+			response.SetReply(r)
+			response.Truncated = true
+			_ = w.WriteMsg(response)
+		}),
+	}
+	tcpServer := &dns.Server{
+		Listener: tcpListener,
+		Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+			response := new(dns.Msg)
+			response.SetReply(r)
+			response.Answer = []dns.RR{&dns.A{
+				Hdr: dns.RR_Header{Name: r.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 30},
+				A:   net.ParseIP("192.0.2.1").To4(),
+			}}
+			_ = w.WriteMsg(response)
+		}),
+	}
+	go func() { _ = udpServer.ActivateAndServe() }()
+	go func() { _ = tcpServer.ActivateAndServe() }()
+	time.Sleep(20 * time.Millisecond)
+	t.Cleanup(func() {
+		_ = udpServer.Shutdown()
+		_ = tcpServer.Shutdown()
+	})
+
+	request := new(dns.Msg)
+	request.SetQuestion("large.example.", dns.TypeA)
+	response, err := exchangeUpstream(context.Background(), request, udpConn.LocalAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Truncated || len(response.Answer) != 1 {
+		t.Fatalf("TCP retry response = %+v, want one complete answer", response)
+	}
+	if got := response.Answer[0].(*dns.A).A.To4(); !reflect.DeepEqual(got, net.ParseIP("192.0.2.1").To4()) {
+		t.Fatalf("TCP retry answer = %v, want 192.0.2.1", got)
+	}
+}
 
 func mustMatcher(t *testing.T, pattern string) *matcher.Matcher {
 	t.Helper()

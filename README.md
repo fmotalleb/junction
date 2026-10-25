@@ -165,8 +165,9 @@ junction run --listen 8443 \
     rules in place as well.
     Limitations:
     - A Record support (for now since i don't use AAAA records)
-    - UDP listener
-    - UDP forwarder
+    - UDP listener; DNS-over-TCP clients are not supported
+    - UDP upstream forwarding with automatic TCP retry when the upstream marks
+      its UDP response truncated
     Config:
       - `listen`: UDP listen address, requires a UDP ip:port
       - `answer`: IPv4 Answer, requires a single IPv4 address

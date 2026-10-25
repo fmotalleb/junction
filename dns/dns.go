@@ -240,8 +240,7 @@ func (h *handler) forwardRequest(w dns.ResponseWriter, r *dns.Msg, logger *zap.L
 	ctx, cancel := context.WithTimeout(h.ctx, time.Second*10)
 	defer cancel()
 
-	// Otherwise forward to upstream
-	resp, exchangeErr := dns.ExchangeContext(ctx, r, h.forwarder)
+	resp, exchangeErr := exchangeUpstream(ctx, r, h.forwarder)
 	if exchangeErr != nil {
 		logger.Debug("failed to read result from forwarder", zap.Error(exchangeErr))
 		// Upstream failures are temporary server failures, not authoritative
@@ -257,6 +256,28 @@ func (h *handler) forwardRequest(w dns.ResponseWriter, r *dns.Msg, logger *zap.L
 	if err := w.WriteMsg(resp); err != nil {
 		logger.Warn("failed to write answer from forwarder", zap.Error(err))
 	}
+}
+
+func exchangeUpstream(ctx context.Context, request *dns.Msg, forwarder string) (*dns.Msg, error) {
+	client := &dns.Client{Net: "udp", Timeout: 5 * time.Second}
+	response, _, err := client.ExchangeContext(ctx, request, forwarder)
+	if err != nil {
+		return nil, err
+	}
+	if response == nil {
+		return nil, errors.New("upstream DNS returned an empty response")
+	}
+	if !response.Truncated {
+		return response, nil
+	}
+	response, _, err = (&dns.Client{Net: "tcp", Timeout: 5 * time.Second}).ExchangeContext(ctx, request, forwarder)
+	if err != nil {
+		return nil, err
+	}
+	if response == nil {
+		return nil, errors.New("upstream DNS returned an empty TCP response")
+	}
+	return response, nil
 }
 
 func (h *handler) sendRefusedResponse(w dns.ResponseWriter, r *dns.Msg, logger *zap.Logger) {
