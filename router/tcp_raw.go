@@ -97,7 +97,7 @@ func handleTCPConnection(parentCtx context.Context, logger *zap.Logger, conn net
 
 	if chain == nil {
 		var err error
-		chain, err = proxy.NewChain(entry.Proxy)
+		chain, err = proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
 		if err != nil {
 			return
 		}

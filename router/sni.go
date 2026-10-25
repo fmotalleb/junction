@@ -150,7 +150,7 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 	target := net.JoinHostPort(sni, entry.GetTargetOr(DefaultSNIPort))
 	if chain == nil {
 		var err error
-		chain, err = proxy.NewChain(entry.Proxy)
+		chain, err = proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
 		if err != nil {
 			return
 		}

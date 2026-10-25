@@ -40,6 +40,17 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
     });
   }
 
+  for (const field of ['destination_allow', 'destination_block'] as const) {
+    for (const cidr of entryPoint[field] || []) {
+      if (!isValidCIDR(cidr)) {
+        errors.push({ field, message: `Invalid CIDR: ${cidr}` });
+      }
+    }
+  }
+  if ((entryPoint.destination_allow?.length || entryPoint.destination_block?.length) && entryPoint.proxy?.length) {
+    errors.push({ field: 'proxy', message: 'Destination CIDR rules require a direct route without proxies' });
+  }
+
   return errors;
 };
 const isValidListenAddress = (address: string): boolean => {
@@ -83,6 +94,23 @@ const isValidHttpsURL = (value: string): boolean => {
   try {
     const parsed = new URL(value);
     return parsed.protocol === 'https:' && parsed.hostname !== '' && parsed.username === '' && parsed.password === '';
+  } catch {
+    return false;
+  }
+};
+
+const isValidCIDR = (value: string): boolean => {
+  const parts = value.trim().split('/');
+  if (parts.length !== 2 || !/^\d+$/.test(parts[1])) return false;
+  const prefix = Number(parts[1]);
+  const address = parts[0];
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
+    return prefix <= 32 && address.split('.').every((octet) => Number(octet) <= 255);
+  }
+  if (!address.includes(':') || prefix > 128) return false;
+  try {
+    new URL(`http://[${address}]/`);
+    return true;
   } catch {
     return false;
   }

@@ -240,12 +240,12 @@ junction run --listen 8443 \
     - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field. **Note**: Proxy not supported
   - **`tag`** (optional):
       The tag attribute groups multiple entrypoints so they share a single listening socket while applying different domain-matching rules. A tag represents a routing group evaluated on the same port.
-      This causes all entrypoints with the same tag to have a fallback behavior
-      Order is not guaranteed, thus modify allow list and block list on all entrypoints manually
+      Rules are checked in configuration order; the first matching entrypoint is used.
       All entrypoints in a tag group must:
         - use the same listen address
-        - use the same routing mode (sni or http-header)
+        - use the same routing mode (`sni`, `http-header`, or `http-to-https`)
         - specify the same tag identifier
+      Tags are not supported for `tcp-raw` or `udp-raw`.
 
   - **`proxy`** (optional):
     Upstream proxy configuration. Accepts:
@@ -325,6 +325,14 @@ junction run --listen 8443 \
     List of client address patterns to allow (applies to all routers). If specified, only listed clients are allowed.
     - Supports wildcards and regular expressions (same matcher rules as `allow_list`)
     - Block rules are applied before allow rules
+
+  - **`destination_allow`** and **`destination_block`** (optional):
+    CIDR policy applied to resolved destination addresses on direct routes.
+    If `destination_allow` is set, only addresses in those ranges are dialed;
+    `destination_block` always takes precedence. The proxy resolves the hostname
+    and dials the checked address directly. These rules cannot be combined with
+    a proxy chain because the chain may resolve destinations remotely; startup
+    fails if both are configured.
 
 **Important Notes**:
 

@@ -31,18 +31,20 @@ type PprofConfig struct {
 }
 
 type EntryPoint struct {
-	Routing         Router             `mapstructure:"routing,omitempty" toml:"routing,omitempty" yaml:"routing,omitempty" json:"routing,omitempty"`
-	Listen          netip.AddrPort     `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
-	BlockList       []*matcher.Matcher `mapstructure:"block_list,omitempty" toml:"block_list,omitempty" yaml:"block_list,omitempty" json:"block_list,omitempty"`
-	AllowList       []*matcher.Matcher `mapstructure:"allow_list,omitempty" toml:"allow_list,omitempty" yaml:"allow_list,omitempty" json:"allow_list,omitempty"`
-	AllowFrom       []*matcher.Matcher `mapstructure:"allow_from,omitempty" toml:"allow_from,omitempty" yaml:"allow_from,omitempty" json:"allow_from,omitempty"`
-	BlockFrom       []*matcher.Matcher `mapstructure:"block_from,omitempty" toml:"block_from,omitempty" yaml:"block_from,omitempty" json:"block_from,omitempty"`
-	Proxy           []*url.URL         `mapstructure:"proxy,omitempty" toml:"proxy,omitempty" yaml:"proxy,omitempty" json:"proxy,omitempty"`
-	Target          string             `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
-	ResponseHeaders map[string]string  `mapstructure:"response_headers,omitempty" toml:"response_headers,omitempty" yaml:"response_headers,omitempty" json:"response_headers,omitempty"`
-	Content         string             `mapstructure:"content,omitempty" toml:"content,omitempty" yaml:"content,omitempty" json:"content,omitempty"`
-	StatusCode      int                `mapstructure:"status_code,omitempty" toml:"status_code,omitempty" yaml:"status_code,omitempty" json:"status_code,omitempty"`
-	Timeout         time.Duration      `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Routing          Router             `mapstructure:"routing,omitempty" toml:"routing,omitempty" yaml:"routing,omitempty" json:"routing,omitempty"`
+	Listen           netip.AddrPort     `mapstructure:"listen,omitempty" toml:"listen,omitempty" yaml:"listen,omitempty" json:"listen,omitempty"`
+	BlockList        []*matcher.Matcher `mapstructure:"block_list,omitempty" toml:"block_list,omitempty" yaml:"block_list,omitempty" json:"block_list,omitempty"`
+	AllowList        []*matcher.Matcher `mapstructure:"allow_list,omitempty" toml:"allow_list,omitempty" yaml:"allow_list,omitempty" json:"allow_list,omitempty"`
+	AllowFrom        []*matcher.Matcher `mapstructure:"allow_from,omitempty" toml:"allow_from,omitempty" yaml:"allow_from,omitempty" json:"allow_from,omitempty"`
+	BlockFrom        []*matcher.Matcher `mapstructure:"block_from,omitempty" toml:"block_from,omitempty" yaml:"block_from,omitempty" json:"block_from,omitempty"`
+	DestinationAllow []string           `mapstructure:"destination_allow,omitempty" toml:"destination_allow,omitempty" yaml:"destination_allow,omitempty" json:"destination_allow,omitempty"`
+	DestinationBlock []string           `mapstructure:"destination_block,omitempty" toml:"destination_block,omitempty" yaml:"destination_block,omitempty" json:"destination_block,omitempty"`
+	Proxy            []*url.URL         `mapstructure:"proxy,omitempty" toml:"proxy,omitempty" yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Target           string             `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
+	ResponseHeaders  map[string]string  `mapstructure:"response_headers,omitempty" toml:"response_headers,omitempty" yaml:"response_headers,omitempty" json:"response_headers,omitempty"`
+	Content          string             `mapstructure:"content,omitempty" toml:"content,omitempty" yaml:"content,omitempty" json:"content,omitempty"`
+	StatusCode       int                `mapstructure:"status_code,omitempty" toml:"status_code,omitempty" yaml:"status_code,omitempty" json:"status_code,omitempty"`
+	Timeout          time.Duration      `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
 
 	// Tag used for grouping entrypoints of auto-router kind
 	Tag *string `mapstructure:"tag,omitempty" toml:"tag,omitempty" yaml:"tag,omitempty" json:"tag,omitempty"`

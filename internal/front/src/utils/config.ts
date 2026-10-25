@@ -89,7 +89,7 @@ export const importConfig = (jsonString: string): NetworkConfig => {
       if (!isRecord(value)) {
         throw new Error('Each entry point must be an object');
       }
-      for (const field of ['block_list', 'allow_list', 'allow_from', 'block_from', 'proxy', 'features']) {
+      for (const field of ['block_list', 'allow_list', 'allow_from', 'block_from', 'destination_allow', 'destination_block', 'proxy', 'features']) {
         if (value[field] !== undefined && (!Array.isArray(value[field]) || !value[field].every((item) => typeof item === 'string'))) {
           throw new Error(`${field} must be an array of strings`);
         }

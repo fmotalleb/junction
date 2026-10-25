@@ -61,7 +61,7 @@ func httpHandler(ctx context.Context, registry *Registry, index int, entry confi
 	transport := route.transport
 	if chain == nil {
 		var err error
-		chain, err = proxy.NewChain(entry.Proxy)
+		chain, err = proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
 		if err != nil {
 			logger.Error("failed to create proxy dialer", zap.Error(err))
 			return true, err
