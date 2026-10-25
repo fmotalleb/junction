@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -44,6 +45,8 @@ type keepAliveConn interface {
 const keepAlivePeriod = 30 * time.Second
 
 const maxConcurrentTunnels = 1024
+
+const maxHTTPConnectionsPerListener = 1024
 
 // setKeepAlive lets the OS detect peers that vanished without a FIN/RST. Such
 // peers otherwise leave the relay blocked until the entry timeout expires.
@@ -156,8 +159,13 @@ func buildFieldMissing(service, field string) error {
 }
 
 func serveHTTPServer(ctx context.Context, server *http.Server) error {
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return err
+	}
+	limited := newLimitedListener(listener, maxHTTPConnectionsPerListener)
 	errCh := make(chan error, 1)
-	go func() { errCh <- server.ListenAndServe() }()
+	go func() { errCh <- server.Serve(limited) }()
 	select {
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
@@ -177,4 +185,67 @@ func serveHTTPServer(ctx context.Context, server *http.Server) error {
 		}
 		return err
 	}
+}
+
+type limitedListener struct {
+	net.Listener
+	permits chan struct{}
+	done    chan struct{}
+	close   sync.Once
+}
+
+func newLimitedListener(listener net.Listener, limit int) *limitedListener {
+	return &limitedListener{Listener: listener, permits: make(chan struct{}, limit), done: make(chan struct{})}
+}
+
+func (l *limitedListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	select {
+	case l.permits <- struct{}{}:
+		select {
+		case <-l.done:
+			<-l.permits
+			_ = conn.Close()
+			return nil, net.ErrClosed
+		default:
+			return &limitedConn{Conn: conn, release: func() { <-l.permits }}, nil
+		}
+	case <-l.done:
+		_ = conn.Close()
+		return nil, net.ErrClosed
+	}
+}
+
+func (l *limitedListener) Close() error {
+	l.close.Do(func() { close(l.done) })
+	return l.Listener.Close()
+}
+
+type limitedConn struct {
+	net.Conn
+	release func()
+	close   sync.Once
+}
+
+func (c *limitedConn) Close() error {
+	err := c.Conn.Close()
+	c.close.Do(c.release)
+	return err
+}
+
+func (c *limitedConn) CloseWrite() error {
+	if conn, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return conn.CloseWrite()
+	}
+	return nil
+}
+
+func (c *limitedConn) CloseRead() error {
+	if conn, ok := c.Conn.(interface{ CloseRead() error }); ok {
+		return conn.CloseRead()
+	}
+	return nil
 }
