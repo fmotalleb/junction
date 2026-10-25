@@ -307,3 +307,41 @@ func TestParseFailsForMalformedOrMissingInclude(t *testing.T) {
 		})
 	}
 }
+
+func TestParseIncludesResolveRelativeAliasesAndPrecedence(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	write := func(path, contents string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(dir, "sub", "base.json"), `{"core":{"fake_dns":{"answer":"10.0.0.1"}}}`)
+	write(filepath.Join(dir, "override.json"), `{"core":{"fake_dns":{"answer":"10.0.0.2"}}}`)
+	mainPath := filepath.Join(dir, "main.json")
+	write(mainPath, `{"include":["sub/../sub/base.json","override.json"],"core":{"fake_dns":{"answer":"10.0.0.3"}}}`)
+
+	var cfg config.Config
+	if err := config.Parse(context.Background(), &cfg, mainPath); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Core.FakeDNS == nil || len(cfg.Core.FakeDNS.ReturnAddr) != 1 || cfg.Core.FakeDNS.ReturnAddr[0].Result.String() != "10.0.0.3" {
+		t.Fatalf("including file did not override includes in order: %+v", cfg.Core.FakeDNS)
+	}
+}
+
+func TestParseDetectsIncludeCyclesThroughPathAliases(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.json")
+	contents := `{"include":["sub/../main.json"]}`
+	if err := os.WriteFile(mainPath, []byte(contents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var cfg config.Config
+	if err := config.Parse(context.Background(), &cfg, mainPath); err == nil {
+		t.Fatal("Parse accepted a recursive include through a normalized path alias")
+	}
+}

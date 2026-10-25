@@ -418,8 +418,9 @@ Review those paths for credentials and sensitive extra configuration.
   fetch time/body size/include depth and count, constrain redirects, and make any
   insecure HTTP exception explicit. Fix remote include dispatch with an upstream
   change or a narrow maintained replacement; avoid mutating the global HTTP client.
-- [ ] Preserve existing cycle detection while testing aliases, relative includes,
-  and deterministic precedence. Do not accept partial source failures (R8).
+- [x] Preserve cycle detection and test normalized path aliases, relative includes,
+  deterministic include order, and including-file precedence. Do not accept
+  partial source failures (R8).
 - [ ] Redact URL userinfo, sensitive query values, and secret-bearing config fields
   in logs/errors. HTTPS route logs now redact URL credentials and query secrets;
   audit decoder and proxy errors for other secret-bearing values.
