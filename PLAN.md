@@ -345,6 +345,8 @@ stale entity metadata.
   target base queries, status semantics, trailers, HEAD, and no-body responses.
 - [ ] Check hijack support before committing success, preserve and forward buffered
   CONNECT bytes, and register the tunnel with the runtime owner from R6.
+  - [x] Check `http.Hijacker` support before dialing the CONNECT destination.
+  - [ ] Test preservation of buffered CONNECT bytes and register tunnel ownership.
 - [ ] Preserve untouched content encodings; decode only supported encodings.
   Recalculate outbound request/response framing after rewrites and remove or
   recompute invalidated validators, digests, range metadata, and lengths.

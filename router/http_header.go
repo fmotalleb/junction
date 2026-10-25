@@ -326,6 +326,13 @@ func isLocal(name string) bool {
 }
 
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, r *http.Request, targetHost string, entry config.EntryPoint, chain *proxy.Chain) {
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		h.logger.Error("Hijacking unsupported")
+		http.Error(w, "Hijacking unsupported", http.StatusInternalServerError)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), entry.GetTimeout())
 	defer cancel()
 	stopServiceCancel := context.AfterFunc(h.ctx, cancel)
@@ -342,13 +349,6 @@ func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	defer targetConn.Close()
-
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		h.logger.Error("Hijacking unsupported")
-		http.Error(w, "Hijacking unsupported", http.StatusInternalServerError)
-		return
-	}
 
 	clientConn, buffered, err := hijacker.Hijack()
 	if err != nil {

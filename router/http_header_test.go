@@ -146,6 +146,23 @@ func TestTargetPortForRequestUsesCONNECTAuthorityOnlyWithoutFixedTarget(t *testi
 	}
 }
 
+func TestHandleConnectChecksHijackSupportBeforeDial(t *testing.T) {
+	chain, err := proxy.NewChain(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := &httpProxyHandler{ctx: context.Background(), logger: zap.NewNop()}
+	request := httptest.NewRequest(http.MethodConnect, "http://example.com:443", nil)
+	response := httptest.NewRecorder()
+
+	// An invalid network address would fail dialing with 502. An unsupported
+	// ResponseWriter must be rejected first, before attempting that dial.
+	handler.handleConnect(response, request, "\x00", config.EntryPoint{}, chain)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("CONNECT status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestCopyHeadersWithReplaceDropsUntrustedForwardingAndHopHeaders(t *testing.T) {
 	src := http.Header{
 		"Forwarded":           {"for=198.51.100.8"},
