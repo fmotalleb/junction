@@ -11,8 +11,31 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/fmotalleb/junction/config"
 )
+
+func TestRelayTrafficStopsOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	source, sourcePeer := net.Pipe()
+	destination, destinationPeer := net.Pipe()
+	defer sourcePeer.Close()
+	defer destinationPeer.Close()
+	done := make(chan struct{})
+	go func() {
+		relayTraffic(ctx, source, destination, zap.NewNop())
+		close(done)
+	}()
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("relayTraffic did not stop after context cancellation")
+	}
+}
 
 // Helpers and a relay test guarding against the resource leaks that made a
 // long running process climb to hundreds of megabytes until the socket buffers

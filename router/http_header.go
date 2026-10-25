@@ -310,6 +310,8 @@ func isLocal(name string) bool {
 func (h *httpProxyHandler) handleConnect(w http.ResponseWriter, r *http.Request, targetHost string, entry config.EntryPoint, chain *proxy.Chain) {
 	ctx, cancel := context.WithTimeout(r.Context(), entry.GetTimeout())
 	defer cancel()
+	stopServiceCancel := context.AfterFunc(h.ctx, cancel)
+	defer stopServiceCancel()
 
 	// Bound the dial: a SOCKS upstream that accepts the socket but never
 	// answers the CONNECT request parked this handler goroutine forever.
