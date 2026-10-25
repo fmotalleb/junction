@@ -39,7 +39,9 @@ func StringToNetAddrPortHook() mapstructure.DecodeHookFunc {
 				return netip.AddrPort{}, nil
 			}
 			addrPort, err := netip.ParseAddrPort(str)
-			if err != nil && !strings.Contains(str, ":") {
+			if err != nil && strings.HasPrefix(str, ":") && strings.Count(str, ":") == 1 {
+				addrPort, err = netip.ParseAddrPort(net.JoinHostPort("127.0.0.1", strings.TrimPrefix(str, ":")))
+			} else if err != nil && !strings.Contains(str, ":") {
 				addrPort, err = netip.ParseAddrPort(net.JoinHostPort("127.0.0.1", str))
 			}
 			if err != nil {
