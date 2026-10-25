@@ -100,6 +100,14 @@ func TestValidateEntryPointBeforeServing(t *testing.T) {
 	}
 }
 
+func TestValidateEntryPointRejectsNegativeEnvironmentTimeout(t *testing.T) {
+	t.Setenv("TIMEOUT", "-1s")
+	entry := config.EntryPoint{Routing: config.RouterSNI, Listen: mustAddrPort(t, "127.0.0.1:8443")}
+	if err := validateEntryPoint(entry); err == nil {
+		t.Fatal("negative effective timeout from TIMEOUT was accepted")
+	}
+}
+
 func TestValidateUnrestrictedPublicHostRoutingRequiresOptIn(t *testing.T) {
 	for _, routing := range []config.Router{config.RouterSNI, config.RouterHTTPHeader} {
 		entry := config.EntryPoint{Routing: routing, Listen: mustAddrPort(t, "0.0.0.0:8443")}
