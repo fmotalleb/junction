@@ -50,6 +50,14 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   if ((entryPoint.destination_allow?.length || entryPoint.destination_block?.length) && entryPoint.proxy?.length) {
     errors.push({ field: 'proxy', message: 'Destination CIDR rules require a direct route without proxies' });
   }
+  for (const port of entryPoint.allowed_ports || []) {
+    if (!isValidPort(port)) {
+      errors.push({ field: 'allowed_ports', message: `Invalid allowed port: ${port}` });
+    }
+  }
+  if (entryPoint.features?.includes('flexible-port') && !entryPoint.allowed_ports?.length) {
+    errors.push({ field: 'allowed_ports', message: 'flexible-port requires an explicit allowed port list' });
+  }
 
   return errors;
 };
@@ -79,6 +87,12 @@ const isValidDestination = (destination: string): boolean => {
 const isValidTimeout = (timeout: string): boolean => {
   const regex = /^(?:\d+(?:ns|us|µs|ms|s|m|h))+$/;
   return regex.test(timeout);
+};
+
+const isValidPort = (value: string): boolean => {
+  if (!/^\d{1,5}$/.test(value)) return false;
+  const port = Number(value);
+  return port >= 1 && port <= 65535;
 };
 
 const isValidProxyUrl = (url: string): boolean => {

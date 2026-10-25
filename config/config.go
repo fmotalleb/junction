@@ -13,6 +13,7 @@ import (
 	"github.com/fmotalleb/go-tools/constants"
 	"github.com/fmotalleb/go-tools/env"
 	"github.com/fmotalleb/go-tools/matcher"
+	"golang.org/x/net/idna"
 )
 
 type Config struct {
@@ -40,8 +41,9 @@ type EntryPoint struct {
 	// Tag used for grouping entrypoints of auto-router kind
 	Tag *string `mapstructure:"tag,omitempty" toml:"tag,omitempty" yaml:"tag,omitempty" json:"tag,omitempty"`
 
-	Features  []string       `mapstructure:"features,omitempty" toml:"features,omitempty" yaml:"features,omitempty" json:"features,omitempty"`
-	ExtraConf map[string]any `mapstructure:"extra" toml:"extra,omitempty" yaml:"extra,omitempty" json:"extra,omitempty"`
+	Features     []string       `mapstructure:"features,omitempty" toml:"features,omitempty" yaml:"features,omitempty" json:"features,omitempty"`
+	AllowedPorts []string       `mapstructure:"allowed_ports,omitempty" toml:"allowed_ports,omitempty" yaml:"allowed_ports,omitempty" json:"allowed_ports,omitempty"`
+	ExtraConf    map[string]any `mapstructure:"extra" toml:"extra,omitempty" yaml:"extra,omitempty" json:"extra,omitempty"`
 }
 
 type FakeDNS struct {
@@ -91,6 +93,74 @@ func (e *EntryPoint) Allowed(name string) bool {
 	}
 
 	return true
+}
+
+// AllowedHost applies host rules to normalized forms of a hostname. Ports are
+// removed before matching; IPv4/IPv6 literals, case, trailing dots, and IDNA
+// Unicode/ASCII forms therefore do not change the policy result.
+func (e *EntryPoint) AllowedHost(authority string) bool {
+	candidates := normalizedHostCandidates(authority)
+	if len(candidates) == 0 {
+		return false
+	}
+	for _, rule := range e.BlockList {
+		for _, candidate := range candidates {
+			if rule.Match(candidate) {
+				return false
+			}
+		}
+	}
+	if len(e.AllowList) == 0 {
+		return true
+	}
+	for _, rule := range e.AllowList {
+		for _, candidate := range candidates {
+			if rule.Match(candidate) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func normalizedHostCandidates(authority string) []string {
+	host := strings.TrimSpace(authority)
+	if strings.Contains(host, "://") {
+		parsed, err := url.Parse(host)
+		if err != nil || parsed.Host == "" || parsed.User != nil {
+			return nil
+		}
+		host = parsed.Host
+	}
+	if splitHost, _, err := net.SplitHostPort(host); err == nil {
+		host = splitHost
+	}
+	host = strings.Trim(host, "[]")
+	if ip := net.ParseIP(host); ip != nil {
+		return []string{ip.String()}
+	}
+	trimmed := strings.TrimSuffix(host, ".")
+	if trimmed == "" {
+		return nil
+	}
+	variants := []string{trimmed, strings.ToLower(trimmed)}
+	ascii, err := idna.Lookup.ToASCII(trimmed)
+	if err == nil {
+		variants = append(variants, strings.ToLower(ascii))
+		unicode, unicodeErr := idna.Lookup.ToUnicode(ascii)
+		if unicodeErr == nil {
+			variants = append(variants, strings.ToLower(strings.TrimSuffix(unicode, ".")))
+		}
+	}
+	unique := make([]string, 0, len(variants))
+	seen := make(map[string]struct{}, len(variants))
+	for _, variant := range variants {
+		if _, exists := seen[variant]; !exists {
+			seen[variant] = struct{}{}
+			unique = append(unique, variant)
+		}
+	}
+	return unique
 }
 
 func (e *EntryPoint) AllowedFrom(addr net.Addr) bool {

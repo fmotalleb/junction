@@ -133,7 +133,7 @@ func TestHTTPProxyDoesNotFollowRedirectOutsideAllowList(t *testing.T) {
 		t.Fatal(err)
 	}
 	allow := new(matcher.Matcher)
-	compiled, err := allow.Decode(reflect.TypeOf(""), "glob:"+net.JoinHostPort(host, port))
+	compiled, err := allow.Decode(reflect.TypeOf(""), "glob:"+host)
 	if err != nil {
 		t.Fatal(err)
 	}

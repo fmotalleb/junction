@@ -106,7 +106,7 @@ func handleClient(ctx context.Context, registry *Registry, index int, conn net.C
 	l := logger.With(zap.String("sni", sni))
 
 	if entry.Tag == nil {
-		if !entry.Allowed(sni) {
+		if !entry.AllowedHost(sni) {
 			l.Warn("SNI rejected")
 			_ = conn.Close()
 			return
@@ -120,7 +120,7 @@ func handleClient(ctx context.Context, registry *Registry, index int, conn net.C
 	group := registry.GroupRoutes(*entry.Tag)
 	for _, route := range group {
 		ep := route.entry
-		if ep.Allowed(sni) && ep.AllowedFrom(remote) {
+		if ep.AllowedHost(sni) && ep.AllowedFrom(remote) {
 			proxyToTarget(ctx, conn, sni, buf, n, l, ep, route.chain)
 			return
 		}

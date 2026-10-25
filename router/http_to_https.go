@@ -220,7 +220,7 @@ func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) 
 
 	for _, compiled := range group {
 		ep := compiled.entry
-		if !ep.Allowed(incomingHost) || !ep.AllowedFrom(remoteAddr) {
+		if !ep.AllowedHost(incomingHost) || !ep.AllowedFrom(remoteAddr) {
 			continue
 		}
 		route = httpsRoute{
