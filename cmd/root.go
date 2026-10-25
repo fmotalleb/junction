@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -32,8 +33,9 @@ import (
 )
 
 var (
-	dump  = false
-	debug = false
+	dump       = false
+	redactDump = false
+	debug      = false
 )
 
 // rootCmd represents the base command when called without any subcommands.
@@ -53,6 +55,9 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if redactDump && !dump {
+			return errors.New("--redact-secrets requires --dry-run")
+		}
 		var configFile string
 		var err error
 		var cfg config.Config
@@ -72,7 +77,15 @@ var rootCmd = &cobra.Command{
 					return pErr
 				}
 				if dump {
-					return dumpConf(&cfg)
+					format, _ := cmd.Flags().GetString("format")
+					if redactDump {
+						redacted, err := redactConfig(&cfg)
+						if err != nil {
+							return err
+						}
+						return dumpConf(redacted, format)
+					}
+					return dumpConf(&cfg, format)
 				}
 				if sErr := server.Serve(ctx, cfg); sErr != nil {
 					return sErr
@@ -100,4 +113,5 @@ func init() {
 	rootCmd.Flags().StringP("format", "f", "", "config format (yaml, json, toml, ini, hcl)")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug mode")
 	rootCmd.PersistentFlags().BoolVar(&dump, "dry-run", false, "just output the config, do not start service")
+	rootCmd.PersistentFlags().BoolVar(&redactDump, "redact-secrets", false, "redact secrets in --dry-run output; output is diagnostic and may not be reusable")
 }

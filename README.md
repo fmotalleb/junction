@@ -377,6 +377,8 @@ JSON Schema for the configuration file is available at `config.schema.json`.
 > `--dry-run` writes the full configuration to stdout, including passwords and
 > secret fields. Treat it as an export, not a redacted diagnostic; if saving it,
 > use a private file owned by the service user with mode `0600`.
+> Use `--dry-run --redact-secrets` for a redacted diagnostic. Secret values are
+> replaced, so this output is not suitable for restarting Junction.
 
 ---
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/fmotalleb/go-tools/log"
@@ -33,7 +34,7 @@ func marshalData(data any, format string) ([]byte, error) {
 
 // dumpConf serializes the given configuration into the specified format and prints it to standard output.
 // If no format is provided, TOML is used by default. Returns an error if serialization fails or the format is unsupported.
-func dumpConf(cfg *config.Config, form ...string) error {
+func dumpConf(cfg any, form ...string) error {
 	var err error
 	var result []byte
 	format := ""
@@ -49,6 +50,53 @@ func dumpConf(cfg *config.Config, form ...string) error {
 	}
 	fmt.Println(string(result))
 	return nil
+}
+
+func redactConfig(cfg any) (any, error) {
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("encode configuration for redaction: %w", err)
+	}
+	var value any
+	if err := json.Unmarshal(data, &value); err != nil {
+		return nil, fmt.Errorf("decode configuration for redaction: %w", err)
+	}
+	return redactSecrets(value, ""), nil
+}
+
+func redactSecrets(value any, key string) any {
+	if isSensitiveConfigKey(key) {
+		return "[REDACTED]"
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		redacted := make(map[string]any, len(typed))
+		for childKey, childValue := range typed {
+			redacted[childKey] = redactSecrets(childValue, childKey)
+		}
+		return redacted
+	case []any:
+		redacted := make([]any, len(typed))
+		for index, childValue := range typed {
+			redacted[index] = redactSecrets(childValue, key)
+		}
+		return redacted
+	case string:
+		if strings.Contains(typed, "://") {
+			return config.RedactURL(typed)
+		}
+	}
+	return value
+}
+
+func isSensitiveConfigKey(key string) bool {
+	key = strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(key, "-", "_"), ".", "_"))
+	for _, marker := range []string{"password", "passwd", "token", "secret", "private_key", "credential", "api_key", "authorization", "auth"} {
+		if strings.Contains(key, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func buildAppContext() (context.Context, context.CancelFunc, error) {

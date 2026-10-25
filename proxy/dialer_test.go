@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,22 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/net/proxy"
 )
+
+func TestProxyValidationErrorsRedactURLCredentials(t *testing.T) {
+	proxyURL, err := url.Parse("socks5://alice:password-sentinel@proxy.example:0?token=token-sentinel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = NewDialer([]*url.URL{proxyURL})
+	if err == nil {
+		t.Fatal("NewDialer accepted port zero")
+	}
+	for _, secret := range []string{"password-sentinel", "token-sentinel"} {
+		if strings.Contains(err.Error(), secret) {
+			t.Errorf("proxy validation error leaked %q: %v", secret, err)
+		}
+	}
+}
 
 // A proxy that accepts the socket but never answers must not park the dialer:
 // every such dial held a goroutine and two sockets for the lifetime of the

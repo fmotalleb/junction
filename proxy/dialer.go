@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"golang.org/x/net/proxy"
+
+	"github.com/fmotalleb/junction/config"
 )
 
 // DefaultDialTimeout bounds a single dial attempt, including the proxy
@@ -53,12 +55,12 @@ func NewDialerWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []s
 			return nil, errors.New("proxy URL is nil")
 		}
 		if addr.Hostname() == "" {
-			return nil, fmt.Errorf("proxy URL %q must include a host", addr.Redacted())
+			return nil, fmt.Errorf("proxy URL %q must include a host", config.RedactURL(addr.String()))
 		}
 		switch addr.Scheme {
 		case "socks5", "socks5h":
 			if addr.Port() == "" {
-				return nil, fmt.Errorf("proxy URL %q must include a port", addr.Redacted())
+				return nil, fmt.Errorf("proxy URL %q must include a port", config.RedactURL(addr.String()))
 			}
 		case "ssh":
 			if addr.Port() == "" {
@@ -68,7 +70,7 @@ func NewDialerWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []s
 		if port := addr.Port(); port != "" {
 			portNumber, err := strconv.Atoi(port)
 			if err != nil || portNumber < 1 || portNumber > 65535 {
-				return nil, fmt.Errorf("proxy URL %q has an invalid port", addr.Redacted())
+				return nil, fmt.Errorf("proxy URL %q has an invalid port", config.RedactURL(addr.String()))
 			}
 		}
 		d, err := generateDialer(*addr, dialer)
