@@ -93,8 +93,8 @@ The alternate `ClientHello.Unmarshal` implementation also needs length validatio
   extension boundaries, and the SNI name before constructing a dial address.
 - [x] Use a bounded, deadline-aware reader that assembles the required handshake
   across TCP reads and TLS records. Preserve every consumed byte for replay.
-- [ ] Consolidate the two parser implementations or test them against the same
-  valid/malformed corpus. Add fuzz targets for both public parser entry points.
+- [x] Test both parser implementations against the same valid/malformed
+  single-record corpus. Fuzz targets cover both public parser entry points.
 
 **Acceptance:** all truncation boundaries and arbitrary fuzz inputs return a
 result or error without panic; invalid vector lengths are rejected; valid hellos

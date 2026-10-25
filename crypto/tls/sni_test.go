@@ -90,6 +90,40 @@ func TestUnmarshalClientHello(t *testing.T) {
 	}
 }
 
+func TestSNIParsersAgreeOnSingleRecordCorpus(t *testing.T) {
+	valid := testData["google.com"]
+	malformed := make([]byte, 43)
+	malformed[0], malformed[5] = 0x16, 0x01
+	badRecordType := append([]byte(nil), valid...)
+	badRecordType[0] = 0x17
+	badHandshakeType := append([]byte(nil), valid...)
+	badHandshakeType[5] = 0x02
+	badHandshakeLength := append([]byte(nil), valid...)
+	badHandshakeLength[6], badHandshakeLength[7], badHandshakeLength[8] = 0xff, 0xff, 0xff
+	badExtensionsLength := append([]byte(nil), valid...)
+	badExtensionsLength[len(badExtensionsLength)-2] = 0xff
+
+	corpus := map[string][]byte{
+		"valid":                 valid,
+		"panic regression":      malformed,
+		"bad record type":       badRecordType,
+		"bad handshake type":    badHandshakeType,
+		"bad handshake length":  badHandshakeLength,
+		"bad extensions length": badExtensionsLength,
+	}
+	for name, input := range corpus {
+		t.Run(name, func(t *testing.T) {
+			gotExtract := tls.ExtractSNI(input)
+			var parsed tls.ClientHello
+			var gotUnmarshal []byte
+			if err := parsed.Unmarshal(input); err == nil && parsed.SNICount > 0 {
+				gotUnmarshal = parsed.SNIHostNames[0]
+			}
+			assert.Equal(t, string(gotExtract), string(gotUnmarshal))
+		})
+	}
+}
+
 func BenchmarkExtractSNI(b *testing.B) {
 	data := testData[benchmarkOn]
 	b.SetBytes(int64(len(data)))
