@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -65,6 +66,9 @@ func (r *Registry) Prepare(entries []config.EntryPoint) error {
 	r.primary = make(map[int]bool)
 	r.routes = make(map[int]compiledEntry)
 	for index, entry := range entries {
+		if err := validateEntryPoint(entry); err != nil {
+			return fmt.Errorf("entry point %d: %w", index, err)
+		}
 		chain, err := proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
 		if err != nil {
 			return fmt.Errorf("entry point %d has an invalid proxy chain: %w", index, err)
@@ -105,6 +109,46 @@ func (r *Registry) Prepare(entries []config.EntryPoint) error {
 		}
 		group.entries = append(group.entries, compiled)
 		r.groups[key] = group
+	}
+	return nil
+}
+
+func validateEntryPoint(entry config.EntryPoint) error {
+	routing := entry.Routing
+	if !routing.IsValid() {
+		return fmt.Errorf("invalid routing type %q", routing)
+	}
+	if !entry.Listen.IsValid() {
+		return errors.New("listen address is required and must be host:port")
+	}
+	if entry.Timeout < 0 {
+		return errors.New("timeout cannot be negative")
+	}
+	switch routing {
+	case config.RouterSNI:
+		if entry.Target != "" {
+			if err := isValidPort(entry.Target); err != nil {
+				return fmt.Errorf("SNI target must be a port: %w", err)
+			}
+		}
+	case config.RouterHTTPHeader:
+		if entry.Target != "" {
+			if err := isValidPort(entry.Target); err != nil {
+				return fmt.Errorf("HTTP target must be a port: %w", err)
+			}
+		}
+	case config.RouterTCPRaw, config.RouterUDPRaw:
+		host, port, err := net.SplitHostPort(entry.Target)
+		if err != nil || host == "" {
+			return errors.New("raw TCP/UDP target must be host:port")
+		}
+		if err := isValidPort(port); err != nil {
+			return fmt.Errorf("raw TCP/UDP target: %w", err)
+		}
+	case config.RouterHTTPToHTTPS:
+		if entry.Target == "" {
+			return errors.New("http-to-https target URL is required for every route")
+		}
 	}
 	return nil
 }

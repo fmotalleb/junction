@@ -233,12 +233,13 @@ session retains a socket and response buffer. Entry timeouts default to 24 hours
 incoming request context, and ordinary HTTP requests have no client timeout.
 `newProxyTransport` also lacks a response-header timeout and a connection cap.
 
-- [ ] Add per-listener and per-source connection limits, bounded pending dials,
-  bounded UDP queues/workers, and a maximum UDP session count with explicit
-  eviction/rejection behavior. Preserve packet order within each UDP flow.
+- [x] Cap concurrent TCP, SNI, and HTTP connections per listener, and cap UDP
+  client sessions with rejection behavior.
+- [ ] Add per-source limits, bound pending dials and UDP queues/workers, and
+  preserve packet order within each UDP flow under load.
 - [ ] Split connect, handshake/header, body-idle, tunnel-idle, and maximum-lifetime
   settings. Apply a dial deadline to HTTP as well as raw TCP/SNI paths.
-- [ ] Derive outgoing requests from `r.Context()` and the selected route's limits;
+- [x] Derive outgoing requests from `r.Context()` and the selected route's limits;
   bound transport connections and response-header waits. Support long-lived
   streams deliberately instead of applying a blanket short total timeout.
 - [ ] Validate `UDP_BUFFER` and all capacity/duration settings; reject negative,
@@ -270,7 +271,7 @@ therefore disappear without preventing startup. Also, the address hook at
 - [ ] Decode into a fresh local `Config` on every load, validate it, and only
   publish the complete candidate after success. Never merge a reload into the
   previous runtime object implicitly.
-- [ ] Validate all entrypoints before binding: required fields, router type,
+- [x] Validate all entrypoints before binding: required fields, router type,
   positive durations, target scheme/host/port, proxy compatibility, groups,
   matcher values, and DNS IP/CIDR data. Report unknown security-related keys;
   consider strict decoding for all unknown fields.

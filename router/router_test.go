@@ -1,9 +1,11 @@
 package router
 
 import (
+	"net"
 	"net/netip"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/fmotalleb/junction/config"
 )
@@ -69,6 +71,80 @@ func TestRegistryPrepareRejectsUnsupportedProxyBeforeServing(t *testing.T) {
 	registry := NewRegistry()
 	if err := registry.Prepare([]config.EntryPoint{{Proxy: []*url.URL{proxyURL}}}); err == nil {
 		t.Fatal("Prepare accepted an unsupported proxy scheme")
+	}
+}
+
+func TestValidateEntryPointBeforeServing(t *testing.T) {
+	listen := mustAddrPort(t, "127.0.0.1:8080")
+	for _, entry := range []config.EntryPoint{
+		{Routing: config.RouterSNI, Listen: listen},
+		{Routing: config.RouterHTTPHeader, Listen: listen, Target: "8081"},
+		{Routing: config.RouterHTTPToHTTPS, Listen: listen, Target: "https://backend.example"},
+		{Routing: config.RouterTCPRaw, Listen: listen, Target: "127.0.0.1:9000"},
+		{Routing: config.RouterUDPRaw, Listen: listen, Target: "127.0.0.1:9000"},
+	} {
+		if err := validateEntryPoint(entry); err != nil {
+			t.Errorf("valid entry %q rejected: %v", entry.Routing, err)
+		}
+	}
+	for _, entry := range []config.EntryPoint{
+		{Routing: config.RouterSNI, Target: "443"},
+		{Routing: config.Router("unknown"), Listen: listen},
+		{Routing: config.RouterTCPRaw, Listen: listen, Target: "not-a-host-port"},
+		{Routing: config.RouterHTTPHeader, Listen: listen, Target: "70000"},
+		{Routing: config.RouterSNI, Listen: listen, Timeout: -time.Second},
+	} {
+		if err := validateEntryPoint(entry); err == nil {
+			t.Errorf("invalid entry %q unexpectedly accepted", entry.Routing)
+		}
+	}
+}
+
+func TestLimitedListenerReleasesPermitWhenConnectionCloses(t *testing.T) {
+	base, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener := newLimitedListener(base, 1)
+	defer listener.Close()
+
+	client1, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client1.Close()
+	server1, err := listener.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server1.Close()
+
+	client2, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client2.Close()
+	accepted := make(chan net.Conn, 1)
+	acceptErr := make(chan error, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			acceptErr <- err
+			return
+		}
+		accepted <- conn
+	}()
+
+	if err := server1.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case conn := <-accepted:
+		_ = conn.Close()
+	case err := <-acceptErr:
+		t.Fatalf("second connection was not accepted after permit release: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("connection limit permit was not released")
 	}
 }
 
