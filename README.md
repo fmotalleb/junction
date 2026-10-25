@@ -238,7 +238,7 @@ junction run --listen 8443 \
     - `http-header`: Uses HTTP `Host` header. Default port: `80`
     - `http-static`: Serves a configured templated response without proxying the request
     - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port` in `to` field
-    - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field. **Note**: Proxy not supported
+    - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field. Proxy chains are not supported. Sessions are capped at 4096 per listener and 64 per source IP. `UDP_BUFFER` controls the upstream response buffer and must be 1–65507 bytes (default 65507).
   - **`tag`** (optional):
       The tag attribute groups multiple entrypoints so they share a single listening socket while applying different domain-matching rules. A tag represents a routing group evaluated on the same port.
       Rules are checked in configuration order; the first matching entrypoint is used.

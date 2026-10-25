@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/fmotalleb/go-tools/env"
 	"go.uber.org/zap"
 
 	"github.com/fmotalleb/junction/config"
@@ -23,10 +24,15 @@ type UDPClientManager struct {
 	createMu   sync.Mutex
 	closing    bool
 	readers    sync.WaitGroup
+	bufferSize int
 }
 
 const maxUDPClientSessions = 4096
 const maxUDPClientSessionsPerSource = 64
+const (
+	defaultUDPBufferSize = 65507
+	maxUDPBufferSize     = 65507
+)
 
 type UDPClientConn struct {
 	clientAddr *net.UDPAddr
@@ -39,15 +45,20 @@ type UDPClientConn struct {
 // single sweeper goroutine that retires idle clients. Idle detection is done
 // centrally instead of with one timer goroutine per client, so a busy entrypoint
 // does not grow a timer for every address it has ever seen.
-func NewUDPClientManager(ctx context.Context, logger *zap.Logger, entry config.EntryPoint) *UDPClientManager {
+func NewUDPClientManager(ctx context.Context, logger *zap.Logger, entry config.EntryPoint) (*UDPClientManager, error) {
+	bufferSize, err := udpBufferSize(os.Getenv("UDP_BUFFER"))
+	if err != nil {
+		return nil, err
+	}
 	m := &UDPClientManager{
-		ctx:     ctx,
-		logger:  logger,
-		entry:   entry,
-		clients: make(map[string]*UDPClientConn),
+		ctx:        ctx,
+		logger:     logger,
+		entry:      entry,
+		clients:    make(map[string]*UDPClientConn),
+		bufferSize: bufferSize,
 	}
 	go m.sweepIdleClients(ctx)
-	return m
+	return m, nil
 }
 
 func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, serverConn *net.UDPConn) {
@@ -182,14 +193,24 @@ func (m *UDPClientManager) dialTarget() (*net.UDPConn, error) {
 	return targetConn, nil
 }
 
-var bufferSize = sync.OnceValue(
-	func() int { return env.IntOr("UDP_BUFFER", 65507) },
-)
+func udpBufferSize(raw string) (int, error) {
+	if raw == "" {
+		return defaultUDPBufferSize, nil
+	}
+	size, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, errors.New("UDP_BUFFER must be an integer")
+	}
+	if size < 1 || size > maxUDPBufferSize {
+		return 0, errors.New("UDP_BUFFER must be between 1 and 65507 bytes")
+	}
+	return size, nil
+}
 
 func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UDPClientConn, serverConn *net.UDPConn) {
 	defer m.readers.Done()
 	defer client.targetConn.Close()
-	size := bufferSize()
+	size := m.bufferSize
 	buffer := make([]byte, size)
 	clientKey := client.clientAddr.String()
 

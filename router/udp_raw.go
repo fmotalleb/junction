@@ -27,6 +27,16 @@ func udpRouter(ctx context.Context, _ *Registry, _ int, entry config.EntryPoint)
 			zap.String("listen", entry.Listen.String()),
 		)
 
+	if entry.Target == "" {
+		logger.Error("UDP proxy must have a target ip:port address")
+		return true, buildFieldMissing("udp-raw", "to")
+	}
+	clientManager, err := connection.NewUDPClientManager(ctx, logger, entry)
+	if err != nil {
+		return true, err
+	}
+	defer clientManager.Cleanup()
+
 	addrPort := entry.Listen
 	udpAddr := net.UDPAddrFromAddrPort(addrPort)
 	conn, err := net.ListenUDP("udp", udpAddr)
@@ -36,20 +46,12 @@ func udpRouter(ctx context.Context, _ *Registry, _ int, entry config.EntryPoint)
 	}
 	defer conn.Close()
 
-	if entry.Target == "" {
-		logger.Error("UDP proxy must have a target ip:port address")
-		return true, buildFieldMissing("udp-raw", "to")
-	}
-
 	logger.Info("raw UDP proxy booted")
 
 	go func() {
 		<-ctx.Done()
 		_ = conn.Close()
 	}()
-
-	clientManager := connection.NewUDPClientManager(ctx, logger, entry)
-	defer clientManager.Cleanup()
 
 	buffer := make([]byte, 65507) // Max UDP payload size
 	var retry acceptRetry
