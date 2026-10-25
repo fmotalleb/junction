@@ -246,6 +246,7 @@ func TestStringToNetAddrPortHookSupportsIPv6(t *testing.T) {
 	for input, want := range map[string]string{
 		"[::1]:8443": "[::1]:8443",
 		"8443":       "127.0.0.1:8443",
+		":8443":      "127.0.0.1:8443",
 	} {
 		got, err := hookFn(reflect.TypeOf(""), portType, input)
 		assert.NoError(t, err)
