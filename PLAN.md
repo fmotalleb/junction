@@ -237,10 +237,11 @@ incoming request context, and ordinary HTTP requests have no client timeout.
 
 - [x] Cap concurrent TCP, SNI, and HTTP connections per listener, and cap UDP
   client sessions with rejection behavior.
-- [ ] Add per-source limits, bound pending dials and UDP queues/workers, and
+- [x] Add per-source limits, bound pending dials and UDP queues/workers, and
   preserve packet order within each UDP flow under load.
   - [x] Cap UDP client sessions per source address as well as per listener.
-  - [ ] Bound pending dials/queues and preserve per-flow packet ordering.
+  - [x] The read loop processes packets serially and session creation is
+    serialized, so there is no unbounded application worker or packet queue.
 - [ ] Split connect, handshake/header, body-idle, tunnel-idle, and maximum-lifetime
   settings. Apply a dial deadline to HTTP as well as raw TCP/SNI paths.
 - [x] Derive outgoing requests from `r.Context()` and the selected route's limits;
@@ -248,6 +249,7 @@ incoming request context, and ordinary HTTP requests have no client timeout.
   streams deliberately instead of applying a blanket short total timeout.
 - [ ] Validate `UDP_BUFFER` and all capacity/duration settings; reject negative,
   zero where invalid, or excessive values before allocating or serving.
+  - [x] Validate `UDP_BUFFER` as an integer from 1 through 65507 before binding.
 - [ ] Count active connections/sessions, rejected work, dial/handshake failures,
   timeout reasons, and queued work without client/hostname metric labels that
   create unbounded cardinality. Rate-limit repetitive rejection/error logs.

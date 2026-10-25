@@ -51,7 +51,11 @@ func newTestManager(t *testing.T, timeout time.Duration) (*UDPClientManager, *ne
 		Target:  target.LocalAddr().String(),
 		Timeout: timeout,
 	}
-	return NewUDPClientManager(ctx, zap.NewNop(), entry), serverConn, cancel
+	manager, err := NewUDPClientManager(ctx, zap.NewNop(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manager, serverConn, cancel
 }
 
 var testClient = &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 41234}
@@ -103,6 +107,35 @@ func TestUDPClientSessionLimitPerSource(t *testing.T) {
 	}
 	if got := clientCount(m); got != maxUDPClientSessionsPerSource {
 		t.Fatalf("source sessions = %d, want %d", got, maxUDPClientSessionsPerSource)
+	}
+}
+
+func TestUDPBufferSizeValidation(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		want  int
+		bad   bool
+	}{
+		{"", defaultUDPBufferSize, false},
+		{"1", 1, false},
+		{"65507", maxUDPBufferSize, false},
+		{"0", 0, true},
+		{"-1", 0, true},
+		{"65508", 0, true},
+		{"nope", 0, true},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := udpBufferSize(tc.input)
+			if tc.bad {
+				if err == nil {
+					t.Fatalf("udpBufferSize(%q) succeeded with %d", tc.input, got)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("udpBufferSize(%q) = %d, %v; want %d, nil", tc.input, got, err, tc.want)
+			}
+		})
 	}
 }
 
