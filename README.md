@@ -260,6 +260,11 @@ junction run --listen 8443 \
     - **SSH**: `ssh://user[:pass]@hostname:port[/path/to/private/key]?known_hosts=/path/to/known_hosts`
       - Use either password OR key authentication, not both
       - Server keys must be present in `~/.ssh/known_hosts` or the configured `known_hosts` file
+      - Host-key verification is mandatory; configurations that previously relied
+        on accepting unknown SSH keys must add the verified server key before
+        starting. Obtain the fingerprint through a trusted channel, verify the
+        entry gathered with `ssh-keyscan`, then install it in the default or
+        configured `known_hosts` file. Do not trust an unverified scan result.
 
     Default: `direct` (no proxy)
 
