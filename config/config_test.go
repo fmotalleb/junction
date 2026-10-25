@@ -266,6 +266,17 @@ func TestRedactURLRemovesCredentials(t *testing.T) {
 	}
 }
 
+func TestHardenedModeIsOptIn(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	if config.HardenedMode() {
+		t.Fatal("hardened mode enabled without explicit opt-in")
+	}
+	t.Setenv("JUNCTION_HARDENED", "1")
+	if !config.HardenedMode() {
+		t.Fatal("hardened mode did not enable with explicit opt-in")
+	}
+}
+
 func TestParseDoesNotExposeInvalidDecodedValue(t *testing.T) {
 	const sentinel = "decoder-secret-sentinel"
 	path := filepath.Join(t.TempDir(), "config.toml")
@@ -312,6 +323,7 @@ func TestParseReloadClearsRemovedFields(t *testing.T) {
 }
 
 func TestParseFailsForMalformedOrMissingInclude(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
 	path := filepath.Join(t.TempDir(), "config.json")
 	for name, contents := range map[string]string{
 		"malformed":       `{"entrypoints":[`,
@@ -326,6 +338,18 @@ func TestParseFailsForMalformedOrMissingInclude(t *testing.T) {
 				t.Fatal("Parse succeeded; want an error")
 			}
 		})
+	}
+}
+
+func TestParseSkipsMissingIncludesByDefault(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"entrypoints":[],"include":["missing.json"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var cfg config.Config
+	if err := config.Parse(context.Background(), &cfg, path); err != nil {
+		t.Fatalf("default mode rejected a missing include: %v", err)
 	}
 }
 

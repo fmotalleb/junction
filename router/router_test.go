@@ -101,6 +101,7 @@ func TestValidateEntryPointBeforeServing(t *testing.T) {
 }
 
 func TestValidateEntryPointRejectsNegativeEnvironmentTimeout(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
 	t.Setenv("TIMEOUT", "-1s")
 	entry := config.EntryPoint{Routing: config.RouterSNI, Listen: mustAddrPort(t, "127.0.0.1:8443")}
 	if err := validateEntryPoint(entry); err == nil {
@@ -109,6 +110,7 @@ func TestValidateEntryPointRejectsNegativeEnvironmentTimeout(t *testing.T) {
 }
 
 func TestValidateUnrestrictedPublicHostRoutingRequiresOptIn(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
 	for _, routing := range []config.Router{config.RouterSNI, config.RouterHTTPHeader} {
 		entry := config.EntryPoint{Routing: routing, Listen: mustAddrPort(t, "0.0.0.0:8443")}
 		if err := validateEntryPoint(entry); err == nil {
@@ -117,6 +119,18 @@ func TestValidateUnrestrictedPublicHostRoutingRequiresOptIn(t *testing.T) {
 		entry.PublicAccess = true
 		if err := validateEntryPoint(entry); err != nil {
 			t.Errorf("%s explicit public access was rejected: %v", routing, err)
+		}
+	}
+}
+
+func TestPublicListenerAndFlexiblePortRestrictionsAreOptIn(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	for _, entry := range []config.EntryPoint{
+		{Routing: config.RouterSNI, Listen: mustAddrPort(t, "0.0.0.0:8443")},
+		{Routing: config.RouterHTTPHeader, Listen: mustAddrPort(t, "127.0.0.1:8080"), Features: []string{"flexible-port"}},
+	} {
+		if err := validateEntryPoint(entry); err != nil {
+			t.Fatalf("legacy-compatible entry rejected: %v", err)
 		}
 	}
 }

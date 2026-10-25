@@ -71,7 +71,7 @@ func httpToHTTPSHandler(ctx context.Context, registry *Registry, index int, entr
 	}
 
 	server := &http.Server{
-		ReadHeaderTimeout: 30 * time.Second,
+		ReadHeaderTimeout: hardenedHeaderTimeout(),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		Addr:              entry.Listen.String(),
 		Handler: &httpToHTTPSProxy{
@@ -176,7 +176,11 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstreamURL.Path = singleJoiningSlash(route.targetURL.Path, r.URL.Path)
 	upstreamURL.RawQuery = r.URL.RawQuery
 
-	body, err := rewriteRequestBody(r, route.reqReplacer, maxRewrittenBodyBytes)
+	var rewriteLimit int64
+	if config.HardenedMode() {
+		rewriteLimit = maxRewrittenBodyBytes
+	}
+	body, err := rewriteRequestBody(r, route.reqReplacer, rewriteLimit)
 	if err != nil {
 		http.Error(w, "request body too large or unreadable", http.StatusRequestEntityTooLarge)
 		return
@@ -254,11 +258,17 @@ func rewriteRequestBody(r *http.Request, reqReplacer *strings.Replacer, limit in
 	if r.Body == nil || reqReplacer == nil || r.Header.Get("Content-Encoding") != "" || !isTextContentType(r.Header.Get("Content-Type")) {
 		return r.Body, nil
 	}
-	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	var bodyBytes []byte
+	var err error
+	if limit > 0 {
+		bodyBytes, err = io.ReadAll(io.LimitReader(r.Body, limit+1))
+	} else {
+		bodyBytes, err = io.ReadAll(r.Body)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(bodyBytes)) > limit {
+	if limit > 0 && int64(len(bodyBytes)) > limit {
 		return nil, fmt.Errorf("request body exceeds rewrite limit of %d bytes", limit)
 	}
 	if len(bodyBytes) == 0 {
@@ -323,18 +333,27 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 		}
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRewrittenBodyBytes+1))
+	var rewriteLimit int64
+	if config.HardenedMode() {
+		rewriteLimit = maxRewrittenBodyBytes
+	}
+	var body []byte
+	if rewriteLimit > 0 {
+		body, err = io.ReadAll(io.LimitReader(resp.Body, rewriteLimit+1))
+	} else {
+		body, err = io.ReadAll(resp.Body)
+	}
 	if err != nil {
 		h.logger.Error("Response read failed", zap.Error(err))
 		http.Error(w, "Upstream read failed", http.StatusBadGateway)
 		return
 	}
-	if int64(len(body)) > maxRewrittenBodyBytes {
+	if rewriteLimit > 0 && int64(len(body)) > rewriteLimit {
 		http.Error(w, "upstream response too large to rewrite", http.StatusBadGateway)
 		return
 	}
 	if strings.EqualFold(contentEncoding, "gzip") {
-		body, err = decodeBody(contentEncoding, body, maxRewrittenBodyBytes)
+		body, err = decodeBody(contentEncoding, body, rewriteLimit)
 		if err != nil {
 			http.Error(w, "upstream response could not be decoded", http.StatusBadGateway)
 			return
@@ -364,11 +383,16 @@ func decodeBody(contentEncoding string, body []byte, limit int64) ([]byte, error
 		return nil, err
 	}
 	defer gr.Close()
-	uncompressed, err := io.ReadAll(io.LimitReader(gr, limit+1))
+	var uncompressed []byte
+	if limit > 0 {
+		uncompressed, err = io.ReadAll(io.LimitReader(gr, limit+1))
+	} else {
+		uncompressed, err = io.ReadAll(gr)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(uncompressed)) > limit {
+	if limit > 0 && int64(len(uncompressed)) > limit {
 		return nil, fmt.Errorf("decompressed response exceeds %d bytes", limit)
 	}
 	return uncompressed, nil

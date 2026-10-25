@@ -16,7 +16,7 @@ func udpRouter(ctx context.Context, _ *Registry, _ int, entry config.EntryPoint)
 	if entry.Routing != config.RouterUDPRaw {
 		return false, nil
 	}
-	if len(entry.Proxy) != 0 {
+	if config.HardenedMode() && len(entry.Proxy) != 0 {
 		return true, errors.New("udp-raw does not support proxy chains")
 	}
 

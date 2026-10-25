@@ -14,6 +14,8 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/net/proxy"
+
+	"github.com/fmotalleb/junction/config"
 )
 
 var ErrSSHAuthMissing = errors.New("no auth method provided (password or key path required)")
@@ -51,24 +53,31 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 	if url.Port() == "" {
 		host = net.JoinHostPort(url.Hostname(), "22")
 	}
-	knownHostsPath := url.Query().Get("known_hosts")
-	if knownHostsPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("locate SSH known_hosts: %w", err)
+	verifyHostKey := gossh.InsecureIgnoreHostKey()
+	if config.HardenedMode() {
+		knownHostsPath := url.Query().Get("known_hosts")
+		if knownHostsPath == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("locate SSH known_hosts: %w", err)
+			}
+			knownHostsPath = filepath.Join(home, ".ssh", "known_hosts")
 		}
-		knownHostsPath = filepath.Join(home, ".ssh", "known_hosts")
-	}
-	verifyHostKey, err := knownhosts.New(knownHostsPath)
-	if err != nil {
-		return nil, fmt.Errorf("load SSH known_hosts %q: %w", knownHostsPath, err)
+		verifyHostKey, err = knownhosts.New(knownHostsPath)
+		if err != nil {
+			return nil, fmt.Errorf("load SSH known_hosts %q: %w", knownHostsPath, err)
+		}
 	}
 
+	var sshTimeout time.Duration
+	if config.HardenedMode() {
+		sshTimeout = 10 * time.Second
+	}
 	clientConfig := &gossh.ClientConfig{
 		User:            user,
 		Auth:            auth,
 		HostKeyCallback: verifyHostKey,
-		Timeout:         10 * time.Second,
+		Timeout:         sshTimeout,
 	}
 
 	return &sshProxyDialer{
@@ -110,11 +119,16 @@ func (s *sshProxyDialer) DialContext(ctx context.Context, network, address strin
 
 	// NewClientConn takes no context, so bound the handshake with a deadline
 	// instead of letting a silent peer pin this goroutine forever.
-	deadline := time.Now().Add(DefaultDialTimeout)
-	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+	var deadline time.Time
+	if timeout := DialTimeout(); timeout > 0 {
+		deadline = time.Now().Add(timeout)
+	}
+	if ctxDeadline, ok := ctx.Deadline(); ok && (deadline.IsZero() || ctxDeadline.Before(deadline)) {
 		deadline = ctxDeadline
 	}
-	_ = rawConn.SetDeadline(deadline)
+	if !deadline.IsZero() {
+		_ = rawConn.SetDeadline(deadline)
+	}
 	handshakeDone := make(chan struct{})
 	watcherDone := make(chan struct{})
 	go func() {

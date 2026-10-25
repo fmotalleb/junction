@@ -123,18 +123,17 @@ func validateEntryPoint(entry config.EntryPoint) error {
 	if !entry.Listen.IsValid() {
 		return errors.New("listen address is required and must be host:port")
 	}
-	if (routing == config.RouterSNI || routing == config.RouterHTTPHeader) &&
-		!entry.Listen.Addr().IsLoopback() && len(entry.AllowFrom) == 0 && !entry.PublicAccess {
-		return errors.New("unrestricted non-loopback SNI/HTTP listeners require public_access = true or explicit allow_from rules")
-	}
-	if entry.Timeout < 0 {
-		return errors.New("timeout cannot be negative")
-	}
-	if entry.GetTimeout() <= 0 {
-		return errors.New("effective timeout must be positive; check TIMEOUT and the entry timeout")
-	}
-	if slices.Contains(entry.Features, flexiblePortFeature) && len(entry.AllowedPorts) == 0 {
-		return errors.New("flexible-port requires an explicit allowed_ports list")
+	if config.HardenedMode() {
+		if (routing == config.RouterSNI || routing == config.RouterHTTPHeader) &&
+			!entry.Listen.Addr().IsLoopback() && len(entry.AllowFrom) == 0 && !entry.PublicAccess {
+			return errors.New("unrestricted non-loopback SNI/HTTP listeners require public_access = true or explicit allow_from rules")
+		}
+		if entry.Timeout < 0 || entry.GetTimeout() <= 0 {
+			return errors.New("effective timeout must be positive; check TIMEOUT and the entry timeout")
+		}
+		if slices.Contains(entry.Features, flexiblePortFeature) && len(entry.AllowedPorts) == 0 {
+			return errors.New("flexible-port requires an explicit allowed_ports list")
+		}
 	}
 	for _, port := range entry.AllowedPorts {
 		if err := isValidPort(port); err != nil {

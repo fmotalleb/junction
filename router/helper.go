@@ -15,6 +15,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/proxy"
 )
 
@@ -27,7 +28,7 @@ func dialTarget(ctx context.Context, proxyAddr []*url.URL, target string, logger
 
 	// The context bounds the connect and the proxy handshake; a silent upstream
 	// otherwise left this goroutine and both sockets parked indefinitely.
-	dialCtx, cancel := context.WithTimeout(ctx, proxy.DefaultDialTimeout)
+	dialCtx, cancel := proxy.WithDialTimeout(ctx)
 	defer cancel()
 
 	conn, err := chain.DialContext(dialCtx, "tcp", target)
@@ -214,9 +215,12 @@ func serveHTTPServer(ctx context.Context, server *http.Server) error {
 	if err != nil {
 		return err
 	}
-	limited := newLimitedListener(listener, maxHTTPConnectionsPerListener)
+	var servingListener net.Listener = listener
+	if config.HardenedMode() {
+		servingListener = newLimitedListener(listener, maxHTTPConnectionsPerListener)
+	}
 	errCh := make(chan error, 1)
-	go func() { errCh <- server.Serve(limited) }()
+	go func() { errCh <- server.Serve(servingListener) }()
 	select {
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {

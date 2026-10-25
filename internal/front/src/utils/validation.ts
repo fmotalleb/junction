@@ -9,10 +9,6 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   } else if (!isValidListenAddress(entryPoint.listen)) {
     errors.push({ field: 'listen', message: 'Invalid listen address format (e.g., 0.0.0.0:8443)' });
   }
-  if ((entryPoint.routing === 'sni' || entryPoint.routing === 'http-header') && isNonLoopbackListen(entryPoint.listen) && !entryPoint.allow_from?.length && !entryPoint.public_access) {
-    errors.push({ field: 'public_access', message: 'Set public_access to true to expose this unrestricted listener, or configure allowed client addresses' });
-  }
-
   // Validate routing type
   const validRoutingTypes: RoutingType[] = ['sni', 'http-header', 'http-to-https', 'tcp-raw', 'udp-raw'];
   if (!validRoutingTypes.includes(entryPoint.routing)) {
@@ -58,10 +54,6 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
       errors.push({ field: 'allowed_ports', message: `Invalid allowed port: ${port}` });
     }
   }
-  if (entryPoint.features?.includes('flexible-port') && !entryPoint.allowed_ports?.length) {
-    errors.push({ field: 'allowed_ports', message: 'flexible-port requires an explicit allowed port list' });
-  }
-
   return errors;
 };
 const isValidListenAddress = (address: string): boolean => {
@@ -96,13 +88,6 @@ const isValidTimeout = (timeout: string): boolean => {
   return regex.test(timeout);
 };
 
-const isNonLoopbackListen = (address: string): boolean => {
-  const match = address.match(/^(?:\[([^\]]+)\]|([^:]+)):\d{1,5}$/);
-  if (!match) return false;
-  const host = match[1] || match[2];
-  return !['127.0.0.1', '::1', 'localhost'].includes(host.toLowerCase());
-};
-
 const isValidPort = (value: string): boolean => {
   if (!/^\d{1,5}$/.test(value)) return false;
   const port = Number(value);
@@ -112,7 +97,7 @@ const isValidPort = (value: string): boolean => {
 const isValidProxyUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url);
-    return ['socks5:', 'ssh:'].includes(parsed.protocol);
+    return parsed.hostname !== '';
   } catch {
     return false;
   }

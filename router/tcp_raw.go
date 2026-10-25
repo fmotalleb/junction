@@ -76,6 +76,14 @@ func tcpRouter(ctx context.Context, registry *Registry, index int, entry config.
 		}
 
 		setKeepAlive(conn)
+		if !config.HardenedMode() {
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				handleTCPConnection(ctx, logger, conn, entry, route.chain)
+			}()
+			continue
+		}
 		releaseSource, ok := sources.acquire(conn.RemoteAddr())
 		if !ok {
 			logger.Debug("per-source TCP tunnel limit reached", zap.String("client", conn.RemoteAddr().String()))

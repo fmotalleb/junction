@@ -4,6 +4,11 @@ Reviewed on 2026-10-25 against commit `9d80cc0`.
 Status: implementation in progress. The completed items below reflect changes
 made in this worktree; unchecked items remain follow-up work.
 
+Compatibility note: security and resource restrictions from this plan are
+available through the opt-in `JUNCTION_HARDENED=1` profile. Existing behavior
+remains the default. See `HARDENING.md` for the enabled controls and deployment
+steps; `BREAKING.md` no longer requires a migration for these controls.
+
 ## Scope and evidence
 
 Reviewed the Go CLI, configuration loader and its pinned `go-tools` dependency,
@@ -50,18 +55,18 @@ feature is enabled and reachable; exposure should influence rollout order.
 | ID | Priority | Change | Delivery phase |
 | --- | --- | --- | --- |
 | R1 | P0 | Make SNI parsing safe and handle fragmented ClientHello messages | 1 |
-| R2 | P1 | Verify SSH host identities | 1 |
-| R3 | P1 | Reject unsupported proxies instead of silently dialing directly | 1 |
+| R2 | P1 | Verify SSH host identities in hardened mode | 1 |
+| R3 | P1 | Reject unsupported proxies in hardened mode | 1 |
 | R4 | P1 | Enforce destination policy across redirects and connections | 1 |
 | R5 | P1 | Compile deterministic, isolated tagged routes | 2 |
 | R6 | P1 | Own shutdown, signal handling, and component failures | 2 |
-| R7 | P1 | Bound connections, pending work, sessions, and phase timeouts | 2 |
-| R8 | P1 | Validate fresh configuration snapshots and fail on load errors | 1–2 |
+| R7 | P1 | Optionally bound connections, pending work, sessions, and phase timeouts | 2 |
+| R8 | P1 | Validate fresh configuration snapshots and optionally fail on load errors | 1–2 |
 | R9 | P1 | Bound reverse-proxy body rewriting and decompression | 1 |
 | R10 | P2 | Correct HTTP forwarding, CONNECT, and encoding semantics | 3 |
 | R11 | P2 | Fix UDP session ownership and preserve TCP half-closes | 3 |
-| R12 | P2 | Restrict DNS clients and return accurate DNS failures | 3 |
-| R13 | P2 | Protect configuration sources and redact diagnostic secrets | 3 |
+| R12 | P2 | Optionally restrict DNS clients and return accurate DNS failures | 3 |
+| R13 | P2 | Optionally protect configuration sources and redact diagnostic secrets | 3 |
 | R14 | P2 | Preserve configuration faithfully in the editor | 4 |
 | R15 | P2 | Make CI, installation, and release artifacts verifiable | 4 |
 
@@ -109,16 +114,16 @@ authentication and intercept the proxy hop. Public-key authentication does not
 send the private key, but still requires authentication of the SSH server.
 
 - [x] Support an operator-supplied `known_hosts` file or pinned server key using
-  `knownhosts.New` or `ssh.FixedHostKey`; require verification by default.
-- [x] Do not retain an insecure mode. Document migration for existing SSH
-  configurations: install the SSH server key in a verified `known_hosts` file
-  before startup; explain that an unverified `ssh-keyscan` result is not trust.
+  `knownhosts.New` or `ssh.FixedHostKey` when `JUNCTION_HARDENED=1` is set.
+- [x] Keep legacy-compatible SSH behavior as the default. Document hardened-mode
+  setup: install the SSH server key in a verified `known_hosts` file before
+  enabling hardening; an unverified `ssh-keyscan` result is not trust.
 - [x] Preload and validate trust/authentication material when compiling routes.
   Support bracketed IPv6 addresses using host/port parsing rather than a colon test.
 - [x] Close the underlying connection when the dial context is canceled during
   `ssh.NewClientConn`, including when its original deadline has not expired.
 
-**Acceptance:** trusted keys connect; unknown, changed, and wrong-host keys fail;
+**Acceptance in hardened mode:** trusted keys connect; unknown, changed, and wrong-host keys fail;
 nonstandard ports and IPv6 work; cancellation during a silent handshake releases
 the socket promptly. Logs do not contain passwords or private-key contents.
 
@@ -131,13 +136,14 @@ without error. With no other hops, traffic goes directly to the destination.
 `connection/udp.go:142` explicitly logs a warning and dials directly even when
 proxies were requested. Both behaviors can violate an operator's egress policy.
 
-- [x] Reject unknown schemes, nil URL entries, missing hosts, invalid ports,
-  and invalid SSH authentication before opening listeners.
-- [x] Reject `udp-raw` with a proxy until UDP proxying is implemented and tested.
-  Do not silently substitute a direct connection.
+- [x] Reject unsupported schemes in hardened mode. Validate malformed URL
+  entries, missing hosts, invalid ports, and SSH authentication before opening
+  listeners.
+- [x] Reject `udp-raw` proxy settings in hardened mode until UDP proxying is
+  implemented and tested. Preserve direct fallback in compatibility mode.
 - [x] Build a chain once per compiled route and preserve its documented hop order.
 
-**Acceptance:** malformed or unsupported chains prevent startup with a redacted,
+**Acceptance in hardened mode:** malformed or unsupported chains prevent startup with a redacted,
 entry-specific error; a test verifies that no direct target connection occurs;
 supported SOCKS5/SSH chains still traverse every hop in the declared order.
 
@@ -156,8 +162,8 @@ without a comparable destination-address policy.
   host, port, address, and proxy-route restrictions on every hop.
 - [x] Separate normalized hostname matching from destination-port policy.
   Define case, trailing-dot, IDNA, and IP-literal behavior consistently for HTTP
-  and SNI. `flexible-port` now requires `allowed_ports`, and `Junction-Port`
-  overrides are rejected unless the selected route lists the requested port.
+  and SNI. In hardened mode, `flexible-port` requires `allowed_ports`; a supplied
+  allowlist rejects `Junction-Port` overrides outside the selected route's list.
 - [x] Add an explicit destination CIDR policy for deployments that must exclude
   loopback, private, link-local, metadata, multicast, or unspecified addresses.
   Preserve intentional private backends through explicit configuration.
@@ -166,9 +172,8 @@ without a comparable destination-address policy.
   document the trust boundary and enforce address policy at the egress hop or
   refuse modes whose promised restriction cannot be enforced locally.
 - [x] Require an explicit public-access choice for unrestricted non-loopback
-  SNI/HTTP-header listeners. Existing configs without `allow_from` or
-  `public_access = true` fail with a migration hint; the UI and examples expose
-  the explicit choice.
+  SNI/HTTP-header listeners in hardened mode. Compatibility mode preserves the
+  existing listener behavior; examples document the explicit hardened choice.
 
 **Acceptance:** redirects cannot escape allow/block rules; normalized host variants
 behave consistently; flexible ports cannot escape policy; controlled DNS answer
@@ -229,6 +234,9 @@ siblings and returns a useful error rather than leaving partial service.
 
 ## R7 — Resource limits and meaningful timeouts
 
+The added caps and short phase deadlines are opt-in through `JUNCTION_HARDENED=1`;
+compatibility mode preserves the previous unbounded listener and dial behavior.
+
 **Evidence: source inspection.** TCP/SNI spawn unrestricted connection goroutines;
 `router/udp_raw.go:80` spawns one goroutine per datagram, and the UDP client table
 has no capacity limit. A new-client flood can queue behind `createMu` while each
@@ -265,6 +273,10 @@ within configured limits; legitimate streams continue making progress.
 
 ## R8 — Strict loading and fresh configuration snapshots
 
+Compatibility mode skips include-resolution and included-file errors as before.
+Hardened mode treats every include as required and applies the new fetch and
+size bounds. Top-level parse errors and include cycles remain errors.
+
 **Evidence: reproduced; dependency behavior inspected.** `cmd/root.go:58,71`
 reuses `cfg` across reloads; `config.Parse` decodes into the supplied object.
 Parsing a configuration with FakeDNS and then one without it retains FakeDNS.
@@ -275,11 +287,9 @@ therefore disappear without preventing startup. Also, the address hook at
 `config/hooks.go:41` splits on every colon; invoking it with `[::1]:8443` returns
 `no port`.
 
-- [x] Fix or replace the loader's error handling so missing files, malformed
-  input, and failed required includes return errors. Optional includes must be
-  explicitly marked optional; define deterministic include precedence. Optional
-  include syntax is not supported; all includes are required and precedence is
-  include order followed by the including file.
+- [x] In hardened mode, make missing files, malformed included input, and failed
+  includes return errors; compatibility mode preserves skipped include failures.
+  Include precedence is include order followed by the including file.
 - [x] Decode into a fresh local `Config` on every load; removed fields do not
   merge from the previous value.
 - [ ] Validate a reload candidate before publishing it to the active runtime.
@@ -295,12 +305,15 @@ therefore disappear without preventing startup. Also, the address hook at
   rollback behavior for bind failures. The current one-minute reloader argument
   is a shutdown grace period, not a debounce interval; correct that documentation.
 
-**Acceptance:** missing policy includes and malformed files fail; reload removal
+**Acceptance in hardened mode:** missing policy includes and malformed includes fail; reload removal
 of DNS, proxies, lists, and optional values takes effect; invalid candidates leave
 the working runtime intact; IPv6/port-only inputs round-trip; misspelled access
 keys cannot silently create an unrestricted route.
 
 ## R9 — Bounded body transformation
+
+The 8 MiB transformation limits are enabled in hardened mode. Compatibility mode
+retains the previous full-body rewrite behavior.
 
 **Evidence: source inspection.** `router/http_to_https.go:268,309,332` reads whole
 request bodies, response bodies, and decompressed gzip output without size limits.
@@ -402,7 +415,7 @@ can act as a public UDP DNS forwarder. Forwarder failures become NXDOMAIN at lin
   retry over TCP when a UDP answer is truncated. The local DNS listener remains
   UDP-only, and the README states that limitation.
 
-**Acceptance:** disallowed clients cannot use either fake answers or recursion;
+**Acceptance in hardened mode:** disallowed clients cannot use either fake answers or recursion;
 timeout/refusal/NXDOMAIN produce distinct correct responses; unmatched CIDRs and
 invalid IP data do not panic or emit malformed answers; large/truncated replies
 follow the documented behavior.
@@ -417,7 +430,8 @@ pattern dispatch also needs regression coverage: `mergeFromPattern` tests
 serialize configuration, and `server/server.go:86` logs the whole entry on errors.
 Review those paths for credentials and sensitive extra configuration.
 
-- [x] Treat remote config as privileged input: require HTTPS by default, bound
+- [x] Treat remote config as privileged input in hardened mode: require HTTPS,
+  bound
   fetch time/body size/include depth and count, constrain redirects, and make any
   insecure HTTP exception explicit. Fix remote include dispatch with an upstream
   change or a narrow maintained replacement; avoid mutating the global HTTP client.
@@ -455,7 +469,8 @@ The YAML exporter imports a transitive package absent from direct dependencies.
   Validate imported elements and bound file size before accepting them.
   - [x] Match SNI/HTTP target ports, raw TCP/UDP host-port targets, and IPv4,
     bracketed IPv6, port-only, and `:port` listen forms to backend validation.
-  - [x] Validate imported `public_access` as a boolean and enforce its UI opt-in.
+- [x] Validate imported `public_access` as a boolean; listener admission policy
+  is enforced by the backend only when hardened mode is enabled.
 - [x] Add explicit source-access controls to the UI and make routing-type changes
   preserve policy or require a clear review of any removed rules.
 - [x] Declare `yaml` directly and resolve the frontend lint errors.
@@ -525,9 +540,10 @@ entries, bad digests, download failure, and preservation of the old binary.
 3. Exercise grouped routing, invalid reload rollback, signals, CONNECT, slow peers,
    HTTP compression, and UDP churn in integration tests. Set measurable resource
    budgets for the intended deployment and verify them under representative load.
-4. Publish migration notes for SSH trust, rejected proxy schemes/UDP proxy settings,
-   strict include errors, public listener admission, DNS defaults, host/port matching,
-   and timeout changes. Preserve deliberate private routing and long-lived streams.
+4. Publish hardening guidance for SSH trust, rejected proxy schemes/UDP proxy
+   settings, strict include errors, public listener admission, DNS defaults,
+   host/port matching, and resource limits. Preserve compatibility defaults and
+   deliberate private routing when the opt-in profile is disabled.
 5. Canary the release with readiness, reload outcomes, error rates, active sockets,
    and memory monitored. Keep the prior artifact/config available for rollback.
 

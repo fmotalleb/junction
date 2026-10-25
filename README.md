@@ -140,15 +140,17 @@ junction run --listen 8443 \
 #### Fields
 
 - **Include**
-  You can include multiple config files, including remote HTTPS sources.
+  You can include multiple config files, including remote HTTP or HTTPS sources.
   Include files are merged in listed order; the including file overrides included values.
-  Every listed include is required: a missing file, unmatched glob, or parse error
-  aborts loading. Optional include syntax is not supported. Parsing builds a fresh
-  configuration snapshot, so removed fields do not carry over from a previous load.
+  Missing or invalid includes are skipped by default. With
+  `JUNCTION_HARDENED=1`, include failures abort loading and remote sources require
+  HTTPS. Parsing builds a fresh configuration snapshot, so removed fields do not
+  carry over from a previous load.
 
   - Support Glob pattern matching
-  - Remote sources require `HTTPS` and support basic authentication. For temporary
-    migration only, `JUNCTION_ALLOW_INSECURE_CONFIG_HTTP=1` enables plain HTTP.
+  - Remote sources support basic authentication. HTTPS is recommended. In
+    hardened mode, plain HTTP is rejected unless
+    `JUNCTION_ALLOW_INSECURE_CONFIG_HTTP=1` is set temporarily.
 
   ```toml
   include = [
@@ -184,10 +186,10 @@ junction run --listen 8443 \
 
   - fake_dns: object or string of fake DNS config:
     In order to create a simple dns server to manipulate requests into this server (needs manual IP configuration)
-    By default the DNS listener binds to `127.0.0.1:53`. Set `listen` explicitly
-    to expose it on another interface; public bindings require `allow_from` client
-    rules and are limited to 256 concurrent DNS requests. Keep network firewall
-    rules in place as well.
+    By default the DNS listener binds to all interfaces on port 53. In hardened
+    mode it binds to `127.0.0.1:53`; set `listen` explicitly to choose another
+    address. Hardened mode requires `allow_from` rules for non-loopback listeners.
+    Keep network firewall rules in place as well.
     Limitations:
     - A Record support (for now since i don't use AAAA records)
     - UDP listener; DNS-over-TCP clients are not supported
@@ -234,10 +236,9 @@ junction run --listen 8443 \
     - Port only: `":port"` (binds to `127.0.0.1:port`)
     - Integer: `port` (binds to `127.0.0.1:port`)
 
-    Unrestricted non-loopback `sni` and `http-header` listeners must set
-    `public_access = true`. Add `allow_from` rules to restrict clients instead.
-    Existing public configurations without either setting now fail startup and
-    must be migrated deliberately.
+    In hardened mode, unrestricted non-loopback `sni` and `http-header` listeners
+    must set `public_access = true` or define `allow_from` rules. In the default
+    compatibility mode, listeners start without that opt-in.
 
   - **`routing`** (required):
     Target hostname resolution method:
@@ -246,9 +247,13 @@ junction run --listen 8443 \
     - `http-header`: Uses HTTP `Host` header. Default port: `80`
     - `http-static`: Serves a configured templated response without proxying the request
     - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port` in `to` field
-    - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field. Proxy chains are not supported. Sessions are capped at 4096 per listener and 64 per source IP. `UDP_BUFFER` controls the upstream response buffer and must be 1–65507 bytes (default 65507).
-    - TCP, SNI, and HTTP listeners accept at most 1024 concurrent connections
-      each, with a per-source cap of 64 connections.
+    - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field.
+      Proxy chains are not implemented and fall back to direct traffic by default.
+      `UDP_BUFFER` controls the upstream response buffer (default 65507 bytes).
+      Hardened mode rejects proxy chains and validates buffer limits.
+    - Hardened mode caps TCP, SNI, and HTTP listeners at 1024 concurrent
+      connections each, with a per-source cap of 64; UDP sessions are capped at
+      4096 per listener and 64 per source IP.
   - **`tag`** (optional):
       The tag attribute groups multiple entrypoints so they share a single listening socket while applying different domain-matching rules. A tag represents a routing group evaluated on the same port.
       Rules are checked in configuration order; the first matching entrypoint is used.
@@ -269,14 +274,11 @@ junction run --listen 8443 \
     - **SOCKS5**: `socks5://[user:pass@]hostname:port`
     - **SSH**: `ssh://user[:pass]@hostname:port[/path/to/private/key]?known_hosts=/path/to/known_hosts`
       - Use either password OR key authentication, not both
-      - Server keys must be present in `~/.ssh/known_hosts` or the configured `known_hosts` file
-      - Host-key verification is mandatory; configurations that previously relied
-        on accepting unknown SSH keys must add the verified server key before
-        starting. Obtain the fingerprint through a trusted channel, verify the
-        entry gathered with `ssh-keyscan`, then install it in the default or
-        configured `known_hosts` file. Do not trust an unverified scan result.
+      - SSH host-key verification is enabled by `JUNCTION_HARDENED=1`. Configure
+        `~/.ssh/known_hosts` or the `known_hosts` query parameter when using it.
 
-    Default: `direct` (no proxy)
+    Default: `direct` (no proxy). Unsupported schemes are ignored by default and
+    may leave the chain direct; hardened mode rejects them.
 
     Example proxy chains (equivalent):
 
@@ -320,9 +322,9 @@ junction run --listen 8443 \
     List of feature flags that enable routing-specific behavior.
 
     - `http-header`:
-      - `flexible-port`: Allows per-request port override using the `Junction-Port` HTTP header. Requires `allowed_ports`; requests for other ports are rejected.
+      - `flexible-port`: Allows per-request port override using the `Junction-Port` HTTP header. When `allowed_ports` is set, requests for other ports are rejected. Hardened mode requires an explicit `allowed_ports` list.
         If the header is missing or empty, the `to` value (or the router default) is used.
-      - HTTP requests default to port `80`. CONNECT uses the selected route's `to` port when configured; otherwise its authority must include a valid port. `Junction-Port` can override either value only when that port is allowlisted.
+      - HTTP requests default to port `80`. Hardened mode validates targetless CONNECT authorities and uses the authority port.
     - Other routers currently ignore feature flags (unknown features are ignored with a warning).
 
   - **`block_list`** (optional) [only when using sni,http-header]:
@@ -353,6 +355,9 @@ junction run --listen 8443 \
 
 **Important Notes**:
 
+- Set `JUNCTION_HARDENED=1` to opt into the security and resource controls. See
+  [`HARDENING.md`](HARDENING.md) for details.
+
 - Proxy chains execute in order; incorrect ordering breaks the chain
 - `tcp-raw` and `udp-raw` require explicit `ip:port` targets
 - `udp-raw` routing doesn't support proxy protocols
@@ -365,7 +370,7 @@ junction run --listen 8443 \
 ```toml
 [[entrypoints]]
 listen = "0.0.0.0:8443" # Listen IP:Port address
-public_access = true # Explicitly allow any client to use this SNI listener
+public_access = true # Needed for unrestricted public access in hardened mode
 to = "443"  # Reroutes connections to this port (defaults to 443)
 routing = "sni" # Routing method
 proxy = "socks5://127.0.0.1:7890" # socks5 proxy address
@@ -376,7 +381,7 @@ routing = "http-header"
 to = "80" # Defaults from `Host`
 proxy = "socks5://127.0.0.1:7890"
 features = ["flexible-port"] # Allow per-request port override via Junction-Port header
-allowed_ports = ["80", "443"] # Required; Junction-Port must match one of these
+allowed_ports = ["80", "443"] # Restricts Junction-Port; required in hardened mode
 allow_from = ["127.0.0.1", "10.0.*", "regex:^192\\.168\\.1\\."]
 
 [[entrypoints]]
