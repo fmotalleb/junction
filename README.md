@@ -142,6 +142,9 @@ junction run --listen 8443 \
 - **Include**
   You can include multiple config files, including remote HTTPS sources.
   Include files are merged in listed order; the including file overrides included values.
+  Every listed include is required: a missing file, unmatched glob, or parse error
+  aborts loading. Optional include syntax is not supported. Parsing builds a fresh
+  configuration snapshot, so removed fields do not carry over from a previous load.
 
   - Support Glob pattern matching
   - Remote sources require `HTTPS` and support basic authentication. For temporary
