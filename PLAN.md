@@ -381,9 +381,9 @@ can act as a public UDP DNS forwarder. Forwarder failures become NXDOMAIN at lin
 - [x] Validate nil entries, nil CIDRs, and IPv4-only A answers before serving.
   Normalize DNS case/trailing dots and handle unsupported question classes and
   multiple questions deliberately.
-- [ ] Test and document truncated upstream response behavior. Add TCP fallback
-  upstream and TCP serving if full resolver compatibility is intended; otherwise
-  make the UDP-only limitation explicit in examples and port mappings.
+- [x] Test and document truncated upstream response behavior. Upstream lookups
+  retry over TCP when a UDP answer is truncated. The local DNS listener remains
+  UDP-only, and the README states that limitation.
 
 **Acceptance:** disallowed clients cannot use either fake answers or recursion;
 timeout/refusal/NXDOMAIN produce distinct correct responses; unmatched CIDRs and
