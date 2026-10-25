@@ -123,6 +123,10 @@ func validateEntryPoint(entry config.EntryPoint) error {
 	if !entry.Listen.IsValid() {
 		return errors.New("listen address is required and must be host:port")
 	}
+	if (routing == config.RouterSNI || routing == config.RouterHTTPHeader) &&
+		!entry.Listen.Addr().IsLoopback() && len(entry.AllowFrom) == 0 && !entry.PublicAccess {
+		return errors.New("unrestricted non-loopback SNI/HTTP listeners require public_access = true or explicit allow_from rules")
+	}
 	if entry.Timeout < 0 {
 		return errors.New("timeout cannot be negative")
 	}

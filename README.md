@@ -234,6 +234,11 @@ junction run --listen 8443 \
     - Port only: `":port"` (binds to `127.0.0.1:port`)
     - Integer: `port` (binds to `127.0.0.1:port`)
 
+    Unrestricted non-loopback `sni` and `http-header` listeners must set
+    `public_access = true`. Add `allow_from` rules to restrict clients instead.
+    Existing public configurations without either setting now fail startup and
+    must be migrated deliberately.
+
   - **`routing`** (required):
     Target hostname resolution method:
 
@@ -359,6 +364,7 @@ junction run --listen 8443 \
 ```toml
 [[entrypoints]]
 listen = "0.0.0.0:8443" # Listen IP:Port address
+public_access = true # Explicitly allow any client to use this SNI listener
 to = "443"  # Reroutes connections to this port (defaults to 443)
 routing = "sni" # Routing method
 proxy = "socks5://127.0.0.1:7890" # socks5 proxy address

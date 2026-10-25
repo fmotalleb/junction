@@ -148,6 +148,14 @@ func warnOpenListener(ctx context.Context, e config.EntryPoint) {
 	if len(e.AllowFrom) != 0 || !e.Listen.IsValid() || e.Listen.Addr().IsLoopback() {
 		return
 	}
+	if e.PublicAccess {
+		log.FromContext(ctx).Named("handleEntry").Warn(
+			"entry point explicitly permits unrestricted public access",
+			zap.String("listen", e.Listen.String()),
+			zap.String("router", string(e.Routing)),
+		)
+		return
+	}
 	log.
 		FromContext(ctx).
 		Named("handleEntry").

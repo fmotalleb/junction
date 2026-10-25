@@ -3,7 +3,7 @@ allowed = [
   "*.google.com",
   "regex:allowed\\.domain.+",
 ]
-listen = "0.0.0.0:5453"
+listen = "127.0.0.1:5453"
 forwarder = "8.8.8.8:53"
 
 [[core.fake_dns.answer]]

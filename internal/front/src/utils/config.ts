@@ -94,6 +94,9 @@ export const importConfig = (jsonString: string): NetworkConfig => {
           throw new Error(`${field} must be an array of strings`);
         }
       }
+      if (value.public_access !== undefined && typeof value.public_access !== 'boolean') {
+        throw new Error('public_access must be a boolean');
+      }
       const routing = typeof value.routing === 'string' ? value.routing : '';
       if (!['sni', 'http-header', 'http-to-https', 'tcp-raw', 'udp-raw'].includes(routing)) {
         throw new Error('Each entry point must have a supported routing type');

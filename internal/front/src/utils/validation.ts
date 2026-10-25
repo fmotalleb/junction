@@ -9,6 +9,9 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   } else if (!isValidListenAddress(entryPoint.listen)) {
     errors.push({ field: 'listen', message: 'Invalid listen address format (e.g., 0.0.0.0:8443)' });
   }
+  if ((entryPoint.routing === 'sni' || entryPoint.routing === 'http-header') && isNonLoopbackListen(entryPoint.listen) && !entryPoint.allow_from?.length && !entryPoint.public_access) {
+    errors.push({ field: 'public_access', message: 'Set public_access to true to expose this unrestricted listener, or configure allowed client addresses' });
+  }
 
   // Validate routing type
   const validRoutingTypes: RoutingType[] = ['sni', 'http-header', 'http-to-https', 'tcp-raw', 'udp-raw'];
@@ -87,6 +90,13 @@ const isValidDestination = (destination: string): boolean => {
 const isValidTimeout = (timeout: string): boolean => {
   const regex = /^(?:\d+(?:ns|us|µs|ms|s|m|h))+$/;
   return regex.test(timeout);
+};
+
+const isNonLoopbackListen = (address: string): boolean => {
+  const match = address.match(/^(?:\[([^\]]+)\]|([^:]+)):\d{1,5}$/);
+  if (!match) return false;
+  const host = match[1] || match[2];
+  return !['127.0.0.1', '::1', 'localhost'].includes(host.toLowerCase());
 };
 
 const isValidPort = (value: string): boolean => {

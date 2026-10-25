@@ -52,6 +52,7 @@ type EntryPoint struct {
 
 	Features     []string       `mapstructure:"features,omitempty" toml:"features,omitempty" yaml:"features,omitempty" json:"features,omitempty"`
 	AllowedPorts []string       `mapstructure:"allowed_ports,omitempty" toml:"allowed_ports,omitempty" yaml:"allowed_ports,omitempty" json:"allowed_ports,omitempty"`
+	PublicAccess bool           `mapstructure:"public_access,omitempty" toml:"public_access,omitempty" yaml:"public_access,omitempty" json:"public_access,omitempty"`
 	ExtraConf    map[string]any `mapstructure:"extra" toml:"extra,omitempty" yaml:"extra,omitempty" json:"extra,omitempty"`
 }
 
