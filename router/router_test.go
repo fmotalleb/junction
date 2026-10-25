@@ -100,6 +100,19 @@ func TestValidateEntryPointBeforeServing(t *testing.T) {
 	}
 }
 
+func TestValidateUnrestrictedPublicHostRoutingRequiresOptIn(t *testing.T) {
+	for _, routing := range []config.Router{config.RouterSNI, config.RouterHTTPHeader} {
+		entry := config.EntryPoint{Routing: routing, Listen: mustAddrPort(t, "0.0.0.0:8443")}
+		if err := validateEntryPoint(entry); err == nil {
+			t.Errorf("%s unrestricted public listener was accepted without opt-in", routing)
+		}
+		entry.PublicAccess = true
+		if err := validateEntryPoint(entry); err != nil {
+			t.Errorf("%s explicit public access was rejected: %v", routing, err)
+		}
+	}
+}
+
 func TestLimitedListenerReleasesPermitWhenConnectionCloses(t *testing.T) {
 	base, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

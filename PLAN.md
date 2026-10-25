@@ -165,8 +165,10 @@ without a comparable destination-address policy.
   address without resolving it again. For remotely resolving SOCKS/SSH hops,
   document the trust boundary and enforce address policy at the egress hop or
   refuse modes whose promised restriction cannot be enforced locally.
-- [ ] Require an explicit public-access choice for unrestricted public HTTP/SNI
-  listeners; retain a migration warning before changing existing defaults.
+- [x] Require an explicit public-access choice for unrestricted non-loopback
+  SNI/HTTP-header listeners. Existing configs without `allow_from` or
+  `public_access = true` fail with a migration hint; the UI and examples expose
+  the explicit choice.
 
 **Acceptance:** redirects cannot escape allow/block rules; normalized host variants
 behave consistently; flexible ports cannot escape policy; controlled DNS answer

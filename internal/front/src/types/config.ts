@@ -15,6 +15,7 @@ export interface EntryPoint {
   tag?: string;
   features?: string[];
   allowed_ports?: string[];
+  public_access?: boolean;
   extra?: Record<string, unknown>;
   to: string;
   timeout?: string;

@@ -27,6 +27,7 @@ allowed = [                             # Allowed domain patterns for fake DNS
 [[entrypoints]]
 routing = "sni"                         # Uses SNI to detect target hostname
 listen = "0.0.0.0:8443"                 # Bind to all interfaces on port 8443
+public_access = true                     # Explicitly allow unrestricted SNI access
 proxy = "socks5://10.11.12.22:8999"     # Single SOCKS5 proxy
 to = "443"                              # Target port for SNI connections (default: 443)
 timeout = "50s"                         # Connection timeout (default: TIMEOUT env or 24h)
@@ -70,6 +71,7 @@ timeout = "50s"
 [[entrypoints]]
 routing = "sni"
 listen = "0.0.0.0:443"
+public_access = true
                                       # Block/Allow list only work when using sni or http-header
 block_list = [                        # Blocklist (processed before allowlist)
   "api.example.com"
@@ -96,6 +98,7 @@ block_list = [
   "*.example.com"
 ]
 listen = "0.0.0.0:8446"
+public_access = true
 proxy = "socks5://10.11.12.22:8990"
 
 [[entrypoints]]
@@ -105,4 +108,5 @@ allow_list = [
   "*.example.com"
 ]
 listen = "0.0.0.0:8446"
+public_access = true
 proxy = "socks5://10.11.12.22:8999"
