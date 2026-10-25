@@ -386,7 +386,7 @@ func copyHeadersWithReplace(dst, src http.Header, replacer *strings.Replacer) {
 	connectionHeaders := connectionHeaderNames(src)
 	for k, vv := range src {
 		// skip hop-by-hop headers
-		if isHopHeader(k) || connectionHeaders[strings.ToLower(k)] {
+		if isHopHeader(k) || isUntrustedForwardingHeader(k) || connectionHeaders[strings.ToLower(k)] {
 			continue
 		}
 		for _, v := range vv {
@@ -395,6 +395,15 @@ func copyHeadersWithReplace(dst, src http.Header, replacer *strings.Replacer) {
 			}
 			dst.Add(k, v)
 		}
+	}
+}
+
+func isUntrustedForwardingHeader(name string) bool {
+	switch strings.ToLower(name) {
+	case "forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-port", "x-forwarded-proto", "x-real-ip", "x-client-ip", "x-cluster-client-ip":
+		return true
+	default:
+		return false
 	}
 }
 

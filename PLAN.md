@@ -325,8 +325,9 @@ stale entity metadata.
 - [ ] Prefer `httputil.ReverseProxy` with a `Rewrite` hook for ordinary HTTP paths,
   retaining route selection, custom dialing, and bounded response transformations.
   Strip hop-by-hop headers and all fields named by `Connection` in both directions.
-- [ ] Replace untrusted forwarded identity headers with values derived from the
-  connection and trusted proxy policy; never leak proxy credentials upstream.
+- [x] Strip untrusted forwarded identity headers at the shared outbound header
+  boundary; the HTTPS router adds its own host/protocol values from the request.
+  Hop-by-hop `Proxy-Authorization` is dropped by the same copier.
 - [ ] Define default HTTP port and CONNECT authority behavior explicitly, including
   interaction with fixed route ports and `flexible-port`. Preserve escaped paths,
   target base queries, status semantics, trailers, HEAD, and no-body responses.

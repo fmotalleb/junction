@@ -116,6 +116,29 @@ func TestPrepareTargetHost(t *testing.T) {
 	}
 }
 
+func TestCopyHeadersWithReplaceDropsUntrustedForwardingAndHopHeaders(t *testing.T) {
+	src := http.Header{
+		"Forwarded":           {"for=198.51.100.8"},
+		"X-Forwarded-For":     {"198.51.100.8"},
+		"X-Forwarded-Host":    {"attacker.example"},
+		"X-Real-Ip":           {"198.51.100.8"},
+		"Proxy-Authorization": {"Basic c2VjcmV0"},
+		"Connection":          {"X-Private-Hop"},
+		"X-Private-Hop":       {"secret"},
+		"X-Request-Id":        {"request-1"},
+	}
+	dst := make(http.Header)
+	copyHeadersWithReplace(dst, src, nil)
+	for _, name := range []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Real-Ip", "Proxy-Authorization", "X-Private-Hop"} {
+		if values := dst.Values(name); len(values) != 0 {
+			t.Errorf("forwarded %s = %v, want absent", name, values)
+		}
+	}
+	if got := dst.Get("X-Request-Id"); got != "request-1" {
+		t.Errorf("X-Request-Id = %q, want request-1", got)
+	}
+}
+
 func TestHTTPProxyDoesNotFollowRedirectOutsideAllowList(t *testing.T) {
 	var deniedReached atomic.Bool
 	denied := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
