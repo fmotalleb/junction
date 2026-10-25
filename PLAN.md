@@ -448,6 +448,9 @@ The YAML exporter imports a transitive package absent from direct dependencies.
 - [ ] Align types/validation with the backend schema, including all routers,
   source rules, IPv6, Go durations, tag/feature constraints, and HTTPS targets.
   Validate imported elements and bound file size before accepting them.
+  - [x] Match SNI/HTTP target ports, raw TCP/UDP host-port targets, and IPv4,
+    bracketed IPv6, port-only, and `:port` listen forms to backend validation.
+  - [x] Validate imported `public_access` as a boolean and enforce its UI opt-in.
 - [x] Add explicit source-access controls to the UI and make routing-type changes
   preserve policy or require a clear review of any removed rules.
 - [x] Declare `yaml` directly and resolve the frontend lint errors.

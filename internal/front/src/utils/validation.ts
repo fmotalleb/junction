@@ -22,7 +22,7 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   // Validate destination
   if (!entryPoint.to.trim()) {
     errors.push({ field: 'to', message: 'Destination is required' });
-  } else if (entryPoint.routing === 'http-to-https' ? !isValidHttpsURL(entryPoint.to) : !isValidDestination(entryPoint.to)) {
+  } else if (entryPoint.routing === 'http-to-https' ? !isValidHttpsURL(entryPoint.to) : !isValidDestination(entryPoint.to, entryPoint.routing)) {
     errors.push({ field: 'to', message: 'Invalid destination format (e.g., 443 or example.com:443)' });
   }
 
@@ -65,30 +65,34 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   return errors;
 };
 const isValidListenAddress = (address: string): boolean => {
-  const regex = /^(\[[0-9a-fA-F:.%]+\]|[a-zA-Z0-9.-]+):(\d{1,5})$/;
-  const match = address.match(regex);  
-  if (!match) return false;  
+  const portOnly = address.match(/^:?([0-9]{1,5})$/);
+  if (portOnly) return isValidPort(portOnly[1]);
 
-  const port = parseInt(match[2], 10);  
-  return port >= 1 && port <= 65535;  
-};  
+  const match = address.match(/^(\[[0-9a-fA-F:.%]+\]|(?:[0-9]{1,3}\.){3}[0-9]{1,3}):([0-9]{1,5})$/);
+  if (!match || !isValidPort(match[2])) return false;
+  const host = match[1];
+  if (!host.startsWith('[')) return host.split('.').every((octet) => Number(octet) <= 255);
+  try {
+    return new URL(`http://${address}`).hostname !== '';
+  } catch {
+    return false;
+  }
+};
 
-const isValidDestination = (destination: string): boolean => {  
-  // Port only (e.g., "443") or host:port (e.g., "example.com:443")  
-  if (/^\d{1,5}$/.test(destination)) {  
-    const port = parseInt(destination, 10);  
-    return port >= 1 && port <= 65535;  
-  }  
-  const regex = /^[a-zA-Z0-9.-]+:(\d{1,5})$/;  
-  const match = destination.match(regex);  
-  if (!match) return false;  
-
-  const port = parseInt(match[1], 10);  
-  return port >= 1 && port <= 65535;  
-};  
+const isValidDestination = (destination: string, routing: RoutingType): boolean => {
+  if (routing === 'sni' || routing === 'http-header') return isValidPort(destination);
+  if (routing !== 'tcp-raw' && routing !== 'udp-raw') return false;
+  try {
+    const parsed = new URL(`udp://${destination}`);
+    return parsed.hostname !== '' && isValidPort(parsed.port) && parsed.username === '' && parsed.password === '' && parsed.pathname === '/' && parsed.search === '' && parsed.hash === '';
+  } catch {
+    return false;
+  }
+};
 
 const isValidTimeout = (timeout: string): boolean => {
-  const regex = /^(?:\d+(?:ns|us|µs|ms|s|m|h))+$/;
+  if (timeout === '0') return true;
+  const regex = /^(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))+$/;
   return regex.test(timeout);
 };
 
