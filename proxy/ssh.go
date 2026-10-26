@@ -53,7 +53,7 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 	if url.Port() == "" {
 		host = net.JoinHostPort(url.Hostname(), "22")
 	}
-	verifyHostKey := gossh.InsecureIgnoreHostKey()
+	verifyHostKey := gossh.InsecureIgnoreHostKey() // #nosec G106 -- compatibility mode preserves historical behavior; hardened mode loads known_hosts below.
 	if config.HardenedMode() {
 		knownHostsPath := url.Query().Get("known_hosts")
 		if knownHostsPath == "" {

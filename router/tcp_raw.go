@@ -67,43 +67,44 @@ func tcpRouter(ctx context.Context, registry *Registry, index int, entry config.
 		}
 		retry.reset()
 
-		if !entry.AllowedFrom(conn.RemoteAddr()) {
-			logger.Debug("connection rejected",
-				zap.String("client", conn.RemoteAddr().String()),
-			)
-			_ = conn.Close()
-			continue
-		}
+		dispatchTCPConnection(ctx, logger, conn, entry, route.chain, active, sources, &workers)
+	}
+}
 
-		setKeepAlive(conn)
-		if !config.HardenedMode() {
-			workers.Add(1)
-			go func() {
-				defer workers.Done()
-				handleTCPConnection(ctx, logger, conn, entry, route.chain)
-			}()
-			continue
-		}
-		releaseSource, ok := sources.acquire(conn.RemoteAddr())
-		if !ok {
-			logger.Debug("per-source TCP tunnel limit reached", zap.String("client", conn.RemoteAddr().String()))
-			_ = conn.Close()
-			continue
-		}
-		select {
-		case active <- struct{}{}:
-			workers.Add(1)
-			go func() {
-				defer workers.Done()
-				defer func() { <-active }()
-				defer releaseSource()
-				handleTCPConnection(ctx, logger, conn, entry, route.chain)
-			}()
-		default:
-			releaseSource()
-			logger.Warn("maximum concurrent TCP tunnels reached", zap.Int("limit", maxConcurrentTunnels))
-			_ = conn.Close()
-		}
+func dispatchTCPConnection(ctx context.Context, logger *zap.Logger, conn net.Conn, entry config.EntryPoint, chain *proxy.Chain, active chan struct{}, sources *sourceLimiter, workers *sync.WaitGroup) {
+	if !entry.AllowedFrom(conn.RemoteAddr()) {
+		logger.Debug("connection rejected", zap.String("client", conn.RemoteAddr().String()))
+		_ = conn.Close()
+		return
+	}
+	setKeepAlive(conn)
+	if !config.HardenedMode() {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			handleTCPConnection(ctx, logger, conn, entry, chain)
+		}()
+		return
+	}
+	releaseSource, ok := sources.acquire(conn.RemoteAddr())
+	if !ok {
+		logger.Debug("per-source TCP tunnel limit reached", zap.String("client", conn.RemoteAddr().String()))
+		_ = conn.Close()
+		return
+	}
+	select {
+	case active <- struct{}{}:
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			defer func() { <-active }()
+			defer releaseSource()
+			handleTCPConnection(ctx, logger, conn, entry, chain)
+		}()
+	default:
+		releaseSource()
+		logger.Warn("maximum concurrent TCP tunnels reached", zap.Int("limit", maxConcurrentTunnels))
+		_ = conn.Close()
 	}
 }
 

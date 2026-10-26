@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -17,29 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/fmotalleb/junction/config"
-	"github.com/fmotalleb/junction/proxy"
 )
-
-func dialTarget(ctx context.Context, proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Conn, error) {
-	chain, err := proxy.NewChain(proxyAddr)
-	if err != nil {
-		logger.Error("failed to create SOCKS5 dialer", zap.Error(err))
-		return nil, err
-	}
-
-	// The context bounds the connect and the proxy handshake; a silent upstream
-	// otherwise left this goroutine and both sockets parked indefinitely.
-	dialCtx, cancel := proxy.WithDialTimeout(ctx)
-	defer cancel()
-
-	conn, err := chain.DialContext(dialCtx, "tcp", target)
-	if err != nil {
-		logger.Debug("failed to connect to target", zap.Error(err))
-		return nil, err
-	}
-	setKeepAlive(conn)
-	return conn, nil
-}
 
 type keepAliveConn interface {
 	SetKeepAlive(bool) error
@@ -229,7 +206,7 @@ func buildFieldMissing(service, field string) error {
 }
 
 func serveHTTPServer(ctx context.Context, server *http.Server) error {
-	listener, err := net.Listen("tcp", server.Addr)
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", server.Addr)
 	if err != nil {
 		return err
 	}

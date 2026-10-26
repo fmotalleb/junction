@@ -48,6 +48,10 @@ func ClientHelloStatus(data []byte) ([]byte, bool) {
 }
 
 func parseClientHelloSNI(hello []byte) []byte {
+	return findSNIExtension(clientHelloExtensions(hello))
+}
+
+func clientHelloExtensions(hello []byte) []byte {
 	if len(hello) < tlsHelloSize {
 		return nil
 	}
@@ -87,19 +91,24 @@ func parseClientHelloSNI(hello []byte) []byte {
 	if extensionsLen != len(hello)-pos {
 		return nil
 	}
-	end := pos + extensionsLen
+	return hello[pos : pos+extensionsLen]
+}
+
+func findSNIExtension(extensions []byte) []byte {
+	pos := 0
+	end := len(extensions)
 	for pos < end {
 		if end-pos < 4 {
 			return nil
 		}
-		extType := binary.BigEndian.Uint16(hello[pos:])
-		extDataLen := int(binary.BigEndian.Uint16(hello[pos+2:]))
+		extType := binary.BigEndian.Uint16(extensions[pos:])
+		extDataLen := int(binary.BigEndian.Uint16(extensions[pos+2:]))
 		pos += 4
 		if extDataLen > end-pos {
 			return nil
 		}
 		if extType == 0 {
-			return parseSNIExtension(hello[pos : pos+extDataLen])
+			return parseSNIExtension(extensions[pos : pos+extDataLen])
 		}
 		pos += extDataLen
 	}

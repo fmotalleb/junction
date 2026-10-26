@@ -53,7 +53,6 @@ func httpToHTTPSHandler(ctx context.Context, registry *Registry, index int, entr
 	}
 	compiled, prepared := registry.Route(index)
 	if !prepared {
-		compiled.entry = entry
 		var err error
 		compiled.chain, err = proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
 		if err != nil {
@@ -314,29 +313,34 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 	defer resp.Body.Close()
 
 	if route.respReplacer == nil || !isTextContentType(resp.Header.Get("Content-Type")) {
-		copyResponseHeaders(w, resp.Header, nil, false)
-		w.WriteHeader(resp.StatusCode)
-		if _, err := io.Copy(w, resp.Body); err != nil {
-			h.logger.Error("Response copy failed", zap.Error(err))
-		}
+		streamUpstreamResponse(w, resp, h.logger)
 		return
 	}
 	contentEncoding := strings.TrimSpace(resp.Header.Get("Content-Encoding"))
 	if contentEncoding != "" && !strings.EqualFold(contentEncoding, "gzip") {
 		// Encodings we do not decode cannot be safely rewritten. Pass them
 		// through untouched and stream without consuming the rewrite buffer.
-		copyResponseHeaders(w, resp.Header, nil, false)
-		w.WriteHeader(resp.StatusCode)
-		if _, err := io.Copy(w, resp.Body); err != nil {
-			h.logger.Error("Response copy failed", zap.Error(err))
-		}
+		streamUpstreamResponse(w, resp, h.logger)
 		return
 	}
+	h.writeRewrittenResponse(w, resp, contentEncoding, route.respReplacer)
+}
+
+func streamUpstreamResponse(w http.ResponseWriter, resp *http.Response, logger *zap.Logger) {
+	copyResponseHeaders(w, resp.Header, nil, false)
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		logger.Error("Response copy failed", zap.Error(err))
+	}
+}
+
+func (h *httpToHTTPSProxy) writeRewrittenResponse(w http.ResponseWriter, resp *http.Response, contentEncoding string, replacer *strings.Replacer) {
 	var rewriteLimit int64
 	if config.HardenedMode() {
 		rewriteLimit = maxRewrittenBodyBytes
 	}
 	var body []byte
+	var err error
 	if rewriteLimit > 0 {
 		body, err = io.ReadAll(io.LimitReader(resp.Body, rewriteLimit+1))
 	} else {
@@ -358,8 +362,8 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 			return
 		}
 	}
-	body = replaceTextBody(resp.Header.Get("Content-Type"), body, route.respReplacer)
-	copyResponseHeaders(w, resp.Header, route.respReplacer, true)
+	body = replaceTextBody(resp.Header.Get("Content-Type"), body, replacer)
+	copyResponseHeaders(w, resp.Header, replacer, true)
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)

@@ -152,7 +152,7 @@ func TestHandleConnectChecksHijackSupportBeforeDial(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := &httpProxyHandler{ctx: context.Background(), logger: zap.NewNop()}
-	request := httptest.NewRequest(http.MethodConnect, "http://example.com:443", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodConnect, "http://example.com:443", nil)
 	response := httptest.NewRecorder()
 
 	// An invalid network address would fail dialing with 502. An unsupported
@@ -164,19 +164,20 @@ func TestHandleConnectChecksHijackSupportBeforeDial(t *testing.T) {
 }
 
 func TestCopyHeadersWithReplaceDropsUntrustedForwardingAndHopHeaders(t *testing.T) {
+	const privateHopHeader = "X-Private-Hop"
 	src := http.Header{
 		"Forwarded":           {"for=198.51.100.8"},
 		"X-Forwarded-For":     {"198.51.100.8"},
 		"X-Forwarded-Host":    {"attacker.example"},
 		"X-Real-Ip":           {"198.51.100.8"},
 		"Proxy-Authorization": {"Basic c2VjcmV0"},
-		"Connection":          {"X-Private-Hop"},
-		"X-Private-Hop":       {"secret"},
+		"Connection":          {privateHopHeader},
+		privateHopHeader:      {"secret"},
 		"X-Request-Id":        {"request-1"},
 	}
 	dst := make(http.Header)
 	copyHeadersWithReplace(dst, src, nil)
-	for _, name := range []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Real-Ip", "Proxy-Authorization", "X-Private-Hop"} {
+	for _, name := range []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Real-Ip", "Proxy-Authorization", privateHopHeader} {
 		if values := dst.Values(name); len(values) != 0 {
 			t.Errorf("forwarded %s = %v, want absent", name, values)
 		}
@@ -221,7 +222,7 @@ func TestHTTPProxyDoesNotFollowRedirectOutsideAllowList(t *testing.T) {
 		transport: transport,
 		entry:     config.EntryPoint{Target: port, AllowList: []*matcher.Matcher{allow}},
 	}
-	request := httptest.NewRequest(http.MethodGet, allowed.URL, nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, allowed.URL, nil)
 	request.RemoteAddr = "127.0.0.1:55555"
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

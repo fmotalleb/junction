@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"net/url"
@@ -136,14 +137,14 @@ func TestPublicListenerAndFlexiblePortRestrictionsAreOptIn(t *testing.T) {
 }
 
 func TestLimitedListenerReleasesPermitWhenConnectionCloses(t *testing.T) {
-	base, err := net.Listen("tcp", "127.0.0.1:0")
+	base, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	listener := newLimitedListener(base, 1)
 	defer listener.Close()
 
-	client1, err := net.Dial("tcp", listener.Addr().String())
+	client1, err := (&net.Dialer{}).DialContext(context.Background(), "tcp", listener.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +155,7 @@ func TestLimitedListenerReleasesPermitWhenConnectionCloses(t *testing.T) {
 	}
 	defer server1.Close()
 
-	client2, err := net.Dial("tcp", listener.Addr().String())
+	client2, err := (&net.Dialer{}).DialContext(context.Background(), "tcp", listener.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +194,7 @@ func TestSourceLimiterCapsEachSourceAndReleasesSlots(t *testing.T) {
 	if !ok {
 		t.Fatal("second source slot rejected")
 	}
-	if _, ok := limiter.acquire(rawAddr("192.0.2.1:1002")); ok {
+	if _, stillAllowed := limiter.acquire(rawAddr("192.0.2.1:1002")); stillAllowed {
 		t.Fatal("source exceeded its limit")
 	}
 	other, ok := limiter.acquire(rawAddr("192.0.2.2:1000"))
