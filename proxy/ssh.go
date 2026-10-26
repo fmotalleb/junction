@@ -63,6 +63,7 @@ func sshDialer(url *url.URL, dialer proxy.Dialer) (proxy.Dialer, error) {
 			}
 			knownHostsPath = filepath.Join(home, ".ssh", "known_hosts")
 		}
+		var err error
 		verifyHostKey, err = knownhosts.New(knownHostsPath)
 		if err != nil {
 			return nil, fmt.Errorf("load SSH known_hosts %q: %w", knownHostsPath, err)
