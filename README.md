@@ -343,6 +343,8 @@ junction run --listen 8443 \
       - `flexible-port`: Allows per-request port override using the `Junction-Port` HTTP header. When `allowed_ports` is set, requests for other ports are rejected. Hardened mode requires an explicit `allowed_ports` list.
         If the header is missing or empty, the `to` value (or the router default) is used.
       - HTTP requests default to port `80`. Hardened mode validates targetless CONNECT authorities and uses the authority port.
+    - `sni`:
+      - `sni-fragment-support`: Reassembles TLS ClientHello messages split across records. Without this feature, SNI routing uses the legacy single-read parser and 4 KiB buffer.
     - Other routers currently ignore feature flags (unknown features are ignored with a warning).
 
   - **`block_list`** (optional) [for sni, http-header, and http-static]:

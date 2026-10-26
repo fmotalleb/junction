@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 )
 
 const DefaultSNIPort = "443"
+
+const sniFragmentSupportFeature = "sni-fragment-support"
 
 var errSNIMissing = errors.New("SNI missing in ClientHello")
 
@@ -124,7 +127,7 @@ func handleClient(ctx context.Context, registry *Registry, index int, conn net.C
 		}
 	}
 
-	serverName, buf, n, err := readSNI(conn, logger)
+	serverName, buf, n, err := readSNI(conn, logger, slices.Contains(entry.Features, sniFragmentSupportFeature))
 	if err != nil {
 		_ = conn.Close()
 		return
@@ -198,14 +201,39 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 
 const sniReadTimeout = 15 * time.Second
 
-func readSNI(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
+func readSNI(conn net.Conn, logger *zap.Logger, fragmentSupport bool) ([]byte, []byte, int, error) {
 	// A client that connects and never sends its hello would otherwise park
 	// this goroutine and its socket forever: no timeout applies this early.
 	_ = conn.SetReadDeadline(time.Now().Add(sniReadTimeout))
 	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
+	if !fragmentSupport {
+		return readSNILegacy(conn, logger)
+	}
+	return readSNIFragments(conn, logger)
+}
 
+// readSNILegacy preserves the original one-read behavior and its small,
+// fixed-size buffer. Fragmented ClientHello messages require the opt-in mode.
+func readSNILegacy(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		logger.Debug("client read failed", zap.Error(err))
+		return nil, nil, 0, err
+	}
+	name := tls.ExtractSNI(buf[:n])
+	if len(name) == 0 {
+		logger.Debug("SNI missing", zap.String("client", conn.RemoteAddr().String()))
+		return nil, nil, 0, errSNIMissing
+	}
+	return name, buf, n, nil
+}
+
+// readSNIFragments reassembles a ClientHello split across TLS records. Its
+// buffer grows only as needed, up to the existing protocol limit.
+func readSNIFragments(conn net.Conn, logger *zap.Logger) ([]byte, []byte, int, error) {
 	const maxClientHelloBytes = 64 << 10
-	buf := make([]byte, 0, maxClientHelloBytes)
+	buf := make([]byte, 0, 4096)
 	for {
 		var header [5]byte
 		if _, err := io.ReadFull(conn, header[:]); err != nil {

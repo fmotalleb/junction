@@ -129,6 +129,13 @@ func (r *Registry) registerEntry(index int, entry config.EntryPoint, compiled co
 	if exists && (group.routing != entry.Routing || group.listen != entry.Listen) {
 		return fmt.Errorf("tag %q must use one routing mode and listen address", key)
 	}
+	if exists && entry.Routing == config.RouterSNI {
+		groupSupportsFragments := slices.Contains(group.entries[0].entry.Features, sniFragmentSupportFeature)
+		entrySupportsFragments := slices.Contains(entry.Features, sniFragmentSupportFeature)
+		if groupSupportsFragments != entrySupportsFragments {
+			return fmt.Errorf("tag %q must use the same SNI fragment-support feature on every entry", key)
+		}
+	}
 	if !exists {
 		group = routeGroup{routing: entry.Routing, listen: entry.Listen}
 		r.primary[index] = true
