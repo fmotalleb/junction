@@ -30,6 +30,7 @@ type compiledEntry struct {
 	targetURL    *url.URL
 	reqReplacer  *strings.Replacer
 	respReplacer *strings.Replacer
+	static       *compiledStaticResponse
 }
 
 // Registry holds the routers that can serve an entry point together with the
@@ -94,13 +95,19 @@ func compileEntryPoint(entry config.EntryPoint, index int) (compiledEntry, error
 	}
 	compiled := compiledEntry{entry: entry, chain: chain}
 	if entry.Routing != config.RouterHTTPToHTTPS {
+		if entry.Routing == config.RouterHTTPStatic {
+			compiled.static, err = compileStaticResponse(entry)
+			if err != nil {
+				return compiledEntry{}, fmt.Errorf("entry point %d has an invalid static HTTP response: %w", index, err)
+			}
+		}
 		return compiled, nil
 	}
 	compiled.targetURL, compiled.reqReplacer, compiled.respReplacer, err = buildHTTPSEntryConfig(entry)
 	if err != nil {
 		return compiledEntry{}, fmt.Errorf("entry point %d has an invalid HTTPS route: %w", index, err)
 	}
-	if compiled.targetURL != nil && (compiled.targetURL.Scheme != "https" || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
+	if compiled.targetURL != nil && (compiled.targetURL.Scheme != httpsScheme || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
 		return compiledEntry{}, fmt.Errorf("entry point %d HTTPS target must have an HTTPS URL with a host and no userinfo", index)
 	}
 	return compiled, nil
@@ -111,7 +118,7 @@ func (r *Registry) registerEntry(index int, entry config.EntryPoint, compiled co
 		r.primary[index] = true
 		return nil
 	}
-	if entry.Routing != config.RouterHTTPHeader && entry.Routing != config.RouterHTTPToHTTPS && entry.Routing != config.RouterSNI {
+	if entry.Routing != config.RouterHTTPHeader && entry.Routing != config.RouterHTTPStatic && entry.Routing != config.RouterHTTPToHTTPS && entry.Routing != config.RouterSNI {
 		return fmt.Errorf("entry point %d uses a tag with a router that does not support grouped routes", index)
 	}
 	key := *entry.Tag
@@ -155,7 +162,7 @@ func validateHardenedEntryPoint(entry config.EntryPoint, routing config.Router) 
 	if !config.HardenedMode() {
 		return nil
 	}
-	if (routing == config.RouterSNI || routing == config.RouterHTTPHeader) &&
+	if (routing == config.RouterSNI || routing == config.RouterHTTPHeader || routing == config.RouterHTTPStatic) &&
 		!entry.Listen.Addr().IsLoopback() && len(entry.AllowFrom) == 0 && !entry.PublicAccess {
 		return errors.New("unrestricted non-loopback SNI/HTTP listeners require public_access = true or explicit allow_from rules")
 	}
@@ -203,6 +210,8 @@ func validateEntryTarget(entry config.EntryPoint, routing config.Router) error {
 		if entry.Target == "" {
 			return errors.New("http-to-https target URL is required for every route")
 		}
+	case config.RouterHTTPStatic:
+		return nil
 	}
 	return nil
 }

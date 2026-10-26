@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	texttemplate "text/template"
-	"time"
 
 	"github.com/fmotalleb/go-tools/log"
 	"go.uber.org/zap"
@@ -67,7 +66,7 @@ func validResponseHeaderName(name string) bool {
 	return true
 }
 
-func httpStaticHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
+func httpStaticHandler(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterHTTPStatic {
 		return false, nil
 	}
@@ -75,18 +74,28 @@ func httpStaticHandler(ctx context.Context, entry config.EntryPoint) (bool, erro
 		zap.String("router", string(entry.Routing)),
 		zap.String("listen", entry.Listen.String()),
 	)
-	response, err := compileStaticResponse(entry)
-	if err != nil {
-		return true, err
+	route, prepared := registry.Route(index)
+	response := route.static
+	if !prepared || response == nil {
+		var err error
+		response, err = compileStaticResponse(entry)
+		if err != nil {
+			return true, err
+		}
 	}
 	server := &http.Server{
-		ReadHeaderTimeout: 30 * time.Second,
+		ReadHeaderTimeout: hardenedHeaderTimeout(),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 		Addr:              entry.Listen.String(),
-		Handler:           &staticHTTPProxy{logger: logger, entry: entry, response: response},
+		Handler: &staticHTTPProxy{
+			logger:   logger,
+			registry: registry,
+			entry:    entry,
+			response: response,
+		},
 	}
 	logger.Info("static HTTP endpoint booted")
-	if err := server.ListenAndServe(); err != nil {
+	if err := serveHTTPServer(ctx, server); err != nil {
 		logger.Error("HTTP server error", zap.Error(err))
 		return true, fmt.Errorf("failed to start listener for static HTTP endpoint: %w", err)
 	}
@@ -95,6 +104,7 @@ func httpStaticHandler(ctx context.Context, entry config.EntryPoint) (bool, erro
 
 type staticHTTPProxy struct {
 	logger   *zap.Logger
+	registry *Registry
 	entry    config.EntryPoint
 	response *compiledStaticResponse
 }
@@ -105,7 +115,8 @@ type staticHTTPTemplateData struct {
 }
 
 func (h *staticHTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !h.entry.AllowedHost(r.Host) || !h.entry.AllowedFrom(addrFromRemote(r.RemoteAddr)) {
+	response, ok := h.selectRoute(r)
+	if !ok {
 		http.Error(w, "request is not allowed", http.StatusForbidden)
 		return
 	}
@@ -118,13 +129,13 @@ func (h *staticHTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data := staticHTTPTemplateData{URL: &requestURL, Method: r.Method}
-	body, err := executeStaticContent(h.response.content, data)
+	body, err := executeStaticContent(response.content, data)
 	if err != nil {
 		h.logger.Error("failed to render static response content", zap.Error(err))
 		http.Error(w, "failed to render response", http.StatusInternalServerError)
 		return
 	}
-	for name, headerTemplate := range h.response.headers {
+	for name, headerTemplate := range response.headers {
 		value, err := executeStaticHeader(headerTemplate, data)
 		if err != nil {
 			h.logger.Error("failed to render static response header", zap.String("header", name), zap.Error(err))
@@ -133,13 +144,31 @@ func (h *staticHTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set(name, value)
 	}
-	if h.response.statusCode != http.StatusNoContent && h.response.statusCode != http.StatusNotModified {
+	if response.statusCode != http.StatusNoContent && response.statusCode != http.StatusNotModified {
 		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	}
-	w.WriteHeader(h.response.statusCode)
-	if r.Method != http.MethodHead && h.response.statusCode != http.StatusNoContent && h.response.statusCode != http.StatusNotModified {
+	w.WriteHeader(response.statusCode)
+	if r.Method != http.MethodHead && response.statusCode != http.StatusNoContent && response.statusCode != http.StatusNotModified {
 		_, _ = w.Write(body)
 	}
+}
+
+func (h *staticHTTPProxy) selectRoute(r *http.Request) (*compiledStaticResponse, bool) {
+	entry := h.entry
+	response := h.response
+	if entry.Tag != nil && h.registry != nil {
+		remote := addrFromRemote(r.RemoteAddr)
+		for _, candidate := range h.registry.GroupRoutes(*entry.Tag) {
+			if candidate.entry.AllowedHost(r.Host) && candidate.entry.AllowedFrom(remote) {
+				return candidate.static, candidate.static != nil
+			}
+		}
+		return nil, false
+	}
+	if !entry.AllowedHost(r.Host) || !entry.AllowedFrom(addrFromRemote(r.RemoteAddr)) {
+		return nil, false
+	}
+	return response, response != nil
 }
 
 func executeStaticContent(t *template.Template, data staticHTTPTemplateData) ([]byte, error) {

@@ -9,6 +9,7 @@ type Router string
 
 const (
 	RouterHTTPHeader  Router = "http-header"
+	RouterHTTPStatic  Router = "http-static"
 	RouterSNI         Router = "sni"
 	RouterTCPRaw      Router = "tcp-raw"
 	RouterUDPRaw      Router = "udp-raw"
