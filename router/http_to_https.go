@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/fmotalleb/go-tools/log"
 	"go.uber.org/zap"
