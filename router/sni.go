@@ -171,7 +171,15 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 
 	// Bound the buffered ClientHello replay: relayTraffic only takes over
 	// afterwards, so an unbounded write here would outlive every timeout.
-	_ = server.SetWriteDeadline(time.Now().Add(proxy.DialTimeout()))
+	writeTimeout := proxy.DialTimeout()
+	if writeTimeout <= 0 {
+		writeTimeout = entry.GetTimeout()
+	}
+	writeDeadline := time.Now().Add(writeTimeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(writeDeadline) {
+		writeDeadline = ctxDeadline
+	}
+	_ = server.SetWriteDeadline(writeDeadline)
 	if _, err := server.Write(buf[:n]); err != nil {
 		logger.Error("initial write failed", zap.Error(err))
 		return
