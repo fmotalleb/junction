@@ -207,6 +207,7 @@ junction run --listen 8443 \
 
     - `sni`: Uses SNI for hostname detection. Default port: `443`
     - `http-header`: Uses HTTP `Host` header. Default port: `80`
+    - `http-static`: Serves a configured templated response without proxying the request
     - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port` in `to` field
     - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field. **Note**: Proxy not supported
   - **`tag`** (optional):
@@ -245,11 +246,24 @@ junction run --listen 8443 \
       Proxy3 --> Target["example.com:80"]
     ```
 
-  - **`to`** (required):
+  - **`to`** (required except for `http-static`):
     Target destination:
 
     - For `sni`/`http-header`: Port number (string)
     - For `tcp-raw`/`udp-raw`: Complete `"ip:port"` address
+
+  - **`content`**, **`response_headers`**, and **`status_code`** (for `http-static`):
+    The response body and headers support Go templates with `.URL` and `.Method`.
+    `status_code` defaults to `200`. For example, redirect the requested host to HTTPS:
+
+    ```toml
+    [[entrypoints]]
+    routing = "http-static"
+    listen = "127.0.0.1:8080"
+    status_code = 302
+    response_headers = { "Location" = "https://{{ .URL.Hostname }}{{ .URL.RequestURI }}" }
+    content = ""
+    ```
 
   - **`timeout`** (optional):
     Connection timeout duration:

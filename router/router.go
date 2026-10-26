@@ -23,6 +23,7 @@ type Registry struct {
 func NewRegistry() *Registry {
 	r := &Registry{}
 	r.registerHandler(httpHandler)
+	r.registerHandler(httpStaticHandler)
 	r.registerHandler(httpToHTTPSHandler)
 	r.registerHandler(sniRouter)
 	r.registerHandler(tcpRouter)
