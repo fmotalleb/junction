@@ -18,21 +18,19 @@ import (
 // the proxy handshake, so a stalled upstream cannot pin a goroutine and sockets.
 const DefaultDialTimeout = 30 * time.Second
 
-// DialTimeout returns the hardened per-attempt deadline, or a compatibility
-// deadline when the opt-in hardening profile is disabled.
+// DialTimeout returns the hardened per-attempt deadline, or the configured
+// global request timeout when the opt-in hardening profile is disabled.
 func DialTimeout() time.Duration {
 	if config.HardenedMode() {
 		return DefaultDialTimeout
 	}
-	return 0
+	return (config.EntryPoint{}).GetTimeout()
 }
 
-// WithDialTimeout applies the hardening deadline only when hardened mode is on.
+// WithDialTimeout applies the per-attempt deadline while respecting any earlier
+// deadline already attached to ctx.
 func WithDialTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	if timeout := DialTimeout(); timeout > 0 {
-		return context.WithTimeout(ctx, timeout)
-	}
-	return context.WithCancel(ctx)
+	return context.WithTimeout(ctx, DialTimeout())
 }
 
 type generator func(*url.URL, proxy.Dialer) (proxy.Dialer, error)
