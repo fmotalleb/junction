@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/proxy"
-	"github.com/fmotalleb/junction/utils"
 )
 
 func dialTarget(ctx context.Context, proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Conn, error) {
@@ -48,11 +48,15 @@ type keepAliveConn interface {
 
 const keepAlivePeriod = 30 * time.Second
 
-const maxConcurrentTunnels = 1024
-const maxConcurrentTunnelsPerSource = 64
+const (
+	maxConcurrentTunnels          = 1024
+	maxConcurrentTunnelsPerSource = 64
+)
 
-const maxHTTPConnectionsPerListener = 1024
-const maxHTTPConnectionsPerSource = 64
+const (
+	maxHTTPConnectionsPerListener = 1024
+	maxHTTPConnectionsPerSource   = 64
+)
 
 type sourceLimiter struct {
 	mu     sync.Mutex
@@ -165,7 +169,7 @@ func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
 
 	errs.Go(
 		func() error {
-			if err := utils.Copy(dst, src); err != nil {
+			if _, err := io.Copy(dst, src); err != nil {
 				return errors.Join(errors.New("failed to write to dst"), err)
 			}
 			if halfCloser, ok := dst.(interface{ CloseWrite() error }); ok {
@@ -176,7 +180,7 @@ func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
 	)
 	errs.Go(
 		func() error {
-			if err := utils.Copy(src, dst); err != nil {
+			if _, err := io.Copy(src, dst); err != nil {
 				return errors.Join(errors.New("failed to write to dst"), err)
 			}
 			if halfCloser, ok := src.(interface{ CloseWrite() error }); ok {
@@ -229,7 +233,7 @@ func serveHTTPServer(ctx context.Context, server *http.Server) error {
 	if err != nil {
 		return err
 	}
-	var servingListener net.Listener = listener
+	servingListener := listener
 	if config.HardenedMode() {
 		servingListener = newLimitedListener(listener, maxHTTPConnectionsPerListener)
 	}

@@ -300,7 +300,7 @@ func TestParseDoesNotExposeInvalidDecodedValue(t *testing.T) {
 func TestParseReloadClearsRemovedFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	first := `{"core":{"fake_dns":{"answer":"127.0.0.1"}},"entrypoints":[{"routing":"sni","listen":"127.0.0.1:8443","to":"443"}]}`
-	if err := os.WriteFile(path, []byte(first), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(first), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var cfg config.Config
@@ -311,7 +311,7 @@ func TestParseReloadClearsRemovedFields(t *testing.T) {
 		t.Fatalf("initial config was not loaded: %+v", cfg)
 	}
 	second := `{"entrypoints":[{"routing":"sni","listen":"127.0.0.1:9443","to":"443"}]}`
-	if err := os.WriteFile(path, []byte(second), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(second), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := config.Parse(context.Background(), &cfg, path); err != nil {
@@ -330,7 +330,7 @@ func TestParseFailsForMalformedOrMissingInclude(t *testing.T) {
 		"missing include": `{"entrypoints":[],"include":["missing.json"]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+			if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			var cfg config.Config
@@ -344,7 +344,7 @@ func TestParseFailsForMalformedOrMissingInclude(t *testing.T) {
 func TestParseSkipsMissingIncludesByDefault(t *testing.T) {
 	t.Setenv("JUNCTION_HARDENED", "")
 	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{"entrypoints":[],"include":["missing.json"]}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"entrypoints":[],"include":["missing.json"]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var cfg config.Config
@@ -355,12 +355,12 @@ func TestParseSkipsMissingIncludesByDefault(t *testing.T) {
 
 func TestParseIncludesResolveRelativeAliasesAndPrecedence(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.Mkdir(filepath.Join(dir, "sub"), 0700); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	write := func(path, contents string) {
 		t.Helper()
-		if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -382,7 +382,7 @@ func TestParseDetectsIncludeCyclesThroughPathAliases(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "main.json")
 	contents := `{"include":["sub/../main.json"]}`
-	if err := os.WriteFile(mainPath, []byte(contents), 0600); err != nil {
+	if err := os.WriteFile(mainPath, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var cfg config.Config

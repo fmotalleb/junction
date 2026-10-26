@@ -29,8 +29,11 @@ type UDPClientManager struct {
 	bufferSize int
 }
 
-const maxUDPClientSessions = 4096
-const maxUDPClientSessionsPerSource = 64
+const (
+	maxUDPClientSessions          = 4096
+	maxUDPClientSessionsPerSource = 64
+)
+
 const (
 	defaultUDPBufferSize = 65507
 	maxUDPBufferSize     = 65507

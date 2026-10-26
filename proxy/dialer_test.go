@@ -127,7 +127,7 @@ func TestSSHProxyDialerRequiresKnownHosts(t *testing.T) {
 	host := "127.0.0.1:2222"
 	knownHostsPath := t.TempDir() + "/known_hosts"
 	line := knownhosts.Line([]string{host}, signer.PublicKey())
-	if err := os.WriteFile(knownHostsPath, []byte(line+"\n"), 0600); err != nil {
+	if err := os.WriteFile(knownHostsPath, []byte(line+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	proxyURL, err := url.Parse("ssh://user:password@" + host + "?known_hosts=" + url.QueryEscape(knownHostsPath))
