@@ -300,12 +300,13 @@ junction run --listen 8443 \
     - For `tcp-raw`/`udp-raw`: Complete `"ip:port"` address
     - Not used by `http-static`
 
-  - **`response_headers`** and **`content`** (for `http-static`):
+  - **`response_headers`**, **`content`**, and **`status_code`** (for `http-static`):
     `response_headers` is a map of response header names to values. Header values
     and `content` support Go templates. The template data provides `.URL`, a
     `net/url.URL` built from the request, and `.Method`. For example,
     `.URL.Hostname`, `.URL.Port`, `.URL.String`, `.URL.Scheme`, `.URL.Path`, and
     `.URL.RawQuery` are available. The body uses `html/template` escaping.
+    `status_code` is optional and defaults to `200`.
 
     ```toml
     [[entrypoints]]
@@ -317,14 +318,15 @@ junction run --listen 8443 \
 
   - **`content`**, **`response_headers`**, and **`status_code`** (for `http-static`):
     The response body and headers support Go templates with `.URL` and `.Method`.
-    `status_code` defaults to `200`. For example, redirect the requested host to HTTPS:
+    `status_code` defaults to `200`. To redirect every request to HTTPS on port
+    `443`, set a redirect status and render the request path and query into `Location`:
 
     ```toml
     [[entrypoints]]
     routing = "http-static"
     listen = "127.0.0.1:8080"
     status_code = 302
-    response_headers = { "Location" = "https://{{ .URL.Hostname }}{{ .URL.RequestURI }}" }
+    response_headers = { "Location" = "https://{{ .URL.Hostname }}:443{{ .URL.RequestURI }}" }
     content = ""
     ```
 
