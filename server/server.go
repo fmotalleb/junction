@@ -56,6 +56,7 @@ func Serve(ctx context.Context, c config.Config) error {
 	}
 	select {
 	case <-ctx.Done(): // normal behavior is context cancellation
+		log.FromContext(ctx).Info("shutdown requested", zap.Error(ctx.Err()))
 		return nil
 	default: // If wait group is done without context cancellation its an error in configuration
 		return ErrServerDiedBeforeContext
