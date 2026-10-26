@@ -45,6 +45,7 @@ type EntryPoint struct {
 	Target           string             `mapstructure:"to,omitempty" toml:"to,omitempty" yaml:"to,omitempty" json:"to,omitempty"`
 	ResponseHeaders  map[string]string  `mapstructure:"response_headers,omitempty" toml:"response_headers,omitempty" yaml:"response_headers,omitempty" json:"response_headers,omitempty"`
 	Content          string             `mapstructure:"content,omitempty" toml:"content,omitempty" yaml:"content,omitempty" json:"content,omitempty"`
+	StatusCode       int                `mapstructure:"status_code,omitempty" toml:"status_code,omitempty" yaml:"status_code,omitempty" json:"status_code,omitempty"`
 	Timeout          time.Duration      `mapstructure:"timeout,omitempty" toml:"timeout,omitempty" yaml:"timeout,omitempty" json:"timeout,omitempty"`
 
 	// Tag used for grouping entrypoints of auto-router kind

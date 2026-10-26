@@ -20,13 +20,21 @@ import (
 )
 
 type compiledStaticResponse struct {
-	content *template.Template
-	headers map[string]*texttemplate.Template
+	content    *template.Template
+	headers    map[string]*texttemplate.Template
+	statusCode int
 }
 
 const httpsScheme = "https"
 
 func compileStaticResponse(entry config.EntryPoint) (*compiledStaticResponse, error) {
+	statusCode := entry.StatusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	if statusCode < 200 || statusCode > 599 {
+		return nil, errors.New("status_code must be between 200 and 599")
+	}
 	content, err := template.New("static-content").Option("missingkey=error").Parse(entry.Content)
 	if err != nil {
 		return nil, fmt.Errorf("parse content template: %w", err)
@@ -42,7 +50,7 @@ func compileStaticResponse(entry config.EntryPoint) (*compiledStaticResponse, er
 		}
 		headers[name] = compiled
 	}
-	return &compiledStaticResponse{content: content, headers: headers}, nil
+	return &compiledStaticResponse{content: content, headers: headers, statusCode: statusCode}, nil
 }
 
 func validResponseHeaderName(name string) bool {
@@ -136,8 +144,11 @@ func (h *staticHTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set(name, value)
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-	if r.Method != http.MethodHead {
+	if response.statusCode != http.StatusNoContent && response.statusCode != http.StatusNotModified {
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	}
+	w.WriteHeader(response.statusCode)
+	if r.Method != http.MethodHead && response.statusCode != http.StatusNoContent && response.statusCode != http.StatusNotModified {
 		_, _ = w.Write(body)
 	}
 }
