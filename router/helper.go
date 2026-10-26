@@ -169,11 +169,10 @@ func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
 	// Wait for the first error or closure
 	err := errs.Wait()
 	if err != nil {
-		if errors.Is(err, net.ErrClosed) {
-			logger.Debug("connection closed (normal)", zap.Error(err))
-		} else {
-			logger.Warn("connection collapsed", zap.Error(err))
-		}
+		// A relay usually ends because one side closed, reset, or stopped
+		// receiving. These are expected client/network conditions and can be
+		// extremely frequent on a busy proxy, so retain details at debug level.
+		logger.Debug("connection relay ended", zap.Error(err))
 	}
 }
 
