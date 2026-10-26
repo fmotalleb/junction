@@ -11,6 +11,8 @@ import (
 
 	"golang.org/x/net/proxy"
 
+	"github.com/fmotalleb/go-tools/constants"
+	"github.com/fmotalleb/go-tools/env"
 	"github.com/fmotalleb/junction/config"
 )
 
@@ -24,7 +26,7 @@ func DialTimeout() time.Duration {
 	if config.HardenedMode() {
 		return DefaultDialTimeout
 	}
-	return (config.EntryPoint{}).GetTimeout()
+	return env.DurationOr("TIMEOUT", constants.Day)
 }
 
 // WithDialTimeout applies the per-attempt deadline while respecting any earlier
