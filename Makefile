@@ -73,7 +73,8 @@ lint: ## golangci-lint
 
 .PHONY: lint-check
 lint-check: ## check Go lint without applying fixes
-	go tool golangci-lint run
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	golangci-lint run
 
 .PHONY: vet
 vet: ## go vet
