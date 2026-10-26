@@ -48,7 +48,8 @@ var rootCmd = &cobra.Command{
   • Flexible routing via: SNI (TLS), HTTP
   • Docker-ready deployment
 	• Internal support for singbox`,
-	Version: git.String(),
+	Version:      git.String(),
+	SilenceUsage: true,
 	PersistentPreRun: func(_ *cobra.Command, _ []string) {
 		if debug {
 			log.SetDebugDefaults()
