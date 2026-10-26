@@ -110,7 +110,7 @@ type staticHTTPProxy struct {
 }
 
 type staticHTTPTemplateData struct {
-	URL    url.URL
+	URL    *url.URL
 	Method string
 }
 
@@ -128,7 +128,7 @@ func (h *staticHTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			requestURL.Scheme = httpsScheme
 		}
 	}
-	data := staticHTTPTemplateData{URL: requestURL, Method: r.Method}
+	data := staticHTTPTemplateData{URL: &requestURL, Method: r.Method}
 	body, err := executeStaticContent(response.content, data)
 	if err != nil {
 		h.logger.Error("failed to render static response content", zap.Error(err))
