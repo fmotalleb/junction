@@ -10,12 +10,30 @@ import (
 	"time"
 
 	"golang.org/x/net/proxy"
+
+	"github.com/fmotalleb/junction/config"
 )
 
-// DefaultDialTimeout bounds a single dial attempt, including the proxy
-// handshake, so a stalled upstream can not pin a goroutine and two sockets
-// until the process is restarted.
+// DefaultDialTimeout bounds a single dial attempt in hardened mode, including
+// the proxy handshake, so a stalled upstream cannot pin a goroutine and sockets.
 const DefaultDialTimeout = 30 * time.Second
+
+// DialTimeout returns the hardened per-attempt deadline, or a compatibility
+// deadline when the opt-in hardening profile is disabled.
+func DialTimeout() time.Duration {
+	if config.HardenedMode() {
+		return DefaultDialTimeout
+	}
+	return 0
+}
+
+// WithDialTimeout applies the hardening deadline only when hardened mode is on.
+func WithDialTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if timeout := DialTimeout(); timeout > 0 {
+		return context.WithTimeout(ctx, timeout)
+	}
+	return context.WithCancel(ctx)
+}
 
 type generator func(*url.URL, proxy.Dialer) (proxy.Dialer, error)
 
@@ -29,30 +47,31 @@ func registerGenerator(g generator) {
 // Supported schemes include socks5:// and ssh://.
 // The chain is built in order, with each proxy connecting through the previous one.
 func NewDialer(chain []*url.URL) (proxy.Dialer, error) {
+	return NewDialerWithDestinationPolicy(chain, nil, nil)
+}
+
+// NewDialerWithDestinationPolicy builds a proxy chain and enforces CIDR policy
+// at the final direct dial. Since chained proxies may resolve destinations
+// remotely, destination policy cannot be guaranteed through a proxy chain.
+func NewDialerWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []string) (proxy.Dialer, error) {
+	policy, err := parseDestinationPolicy(allowCIDRs, blockCIDRs)
+	if err != nil {
+		return nil, err
+	}
+	if policy != nil && len(chain) != 0 {
+		return nil, errors.New("destination CIDR policy cannot be enforced through a proxy chain that resolves destinations remotely")
+	}
 	var dialer proxy.Dialer = proxy.Direct
+	if policy != nil {
+		dialer = destinationPolicyDialer{policy: policy}
+	}
 	// Build the proxy chain from last to first
 	for _, addr := range chain {
 		if addr == nil {
 			return nil, errors.New("proxy URL is nil")
 		}
-		if addr.Hostname() == "" {
-			return nil, fmt.Errorf("proxy URL %q must include a host", addr.Redacted())
-		}
-		switch addr.Scheme {
-		case "socks5", "socks5h":
-			if addr.Port() == "" {
-				return nil, fmt.Errorf("proxy URL %q must include a port", addr.Redacted())
-			}
-		case "ssh":
-			if addr.Port() == "" {
-				addr.Host = net.JoinHostPort(addr.Hostname(), "22")
-			}
-		}
-		if port := addr.Port(); port != "" {
-			portNumber, err := strconv.Atoi(port)
-			if err != nil || portNumber < 1 || portNumber > 65535 {
-				return nil, fmt.Errorf("proxy URL %q has an invalid port", addr.Redacted())
-			}
+		if err := prepareProxyAddress(addr); err != nil {
+			return nil, err
 		}
 		d, err := generateDialer(*addr, dialer)
 		if err != nil {
@@ -62,10 +81,37 @@ func NewDialer(chain []*url.URL) (proxy.Dialer, error) {
 			dialer = d
 			continue
 		}
-		return nil, fmt.Errorf("unsupported proxy scheme %q", addr.Scheme)
+		if config.HardenedMode() {
+			return nil, fmt.Errorf("unsupported proxy scheme %q", addr.Scheme)
+		}
 	}
 
 	return dialer, nil
+}
+
+func prepareProxyAddress(addr *url.URL) error {
+	if addr.Hostname() == "" {
+		return fmt.Errorf("proxy URL %q must include a host", config.RedactURL(addr.String()))
+	}
+	switch addr.Scheme {
+	case "socks5", "socks5h":
+		if addr.Port() == "" {
+			return fmt.Errorf("proxy URL %q must include a port", config.RedactURL(addr.String()))
+		}
+	case "ssh":
+		if addr.Port() == "" {
+			addr.Host = net.JoinHostPort(addr.Hostname(), "22")
+		}
+	}
+	port := addr.Port()
+	if port == "" {
+		return nil
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return fmt.Errorf("proxy URL %q has an invalid port", config.RedactURL(addr.String()))
+	}
+	return nil
 }
 
 // Chain is a reusable, context aware front end for a proxy chain. Build it once
@@ -81,6 +127,16 @@ var _ proxy.Dialer = (*Chain)(nil)
 // NewChain builds the dialer chain for the given proxy URLs.
 func NewChain(chain []*url.URL) (*Chain, error) {
 	d, err := NewDialer(chain)
+	if err != nil {
+		return nil, err
+	}
+	return &Chain{dialer: d}, nil
+}
+
+// NewChainWithDestinationPolicy builds a reusable chain with optional direct
+// destination CIDR restrictions.
+func NewChainWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []string) (*Chain, error) {
+	d, err := NewDialerWithDestinationPolicy(chain, allowCIDRs, blockCIDRs)
 	if err != nil {
 		return nil, err
 	}

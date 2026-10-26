@@ -196,8 +196,17 @@ export const EntryPointForm: React.FC<EntryPointFormProps> = ({
           </div>
 
           <ArrayInput label="Allowed Client Addresses" values={formData.allow_from || []} onChange={(values) => handleFieldChange('allow_from', values)} placeholder="127.0.0.1, 192.168.1.*" />
+          {(formData.routing === 'sni' || formData.routing === 'http-header') && (
+            <label className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-gray-200">
+              <input type="checkbox" checked={formData.public_access || false} onChange={(e) => handleFieldChange('public_access', e.target.checked)} className="mt-1" />
+              <span><strong>Allow unrestricted public access</strong><br />Use only when every remote client may use this listener. Prefer Allowed Client Addresses to restrict access.</span>
+            </label>
+          )}
           <ArrayInput label="Blocked Client Addresses" values={formData.block_from || []} onChange={(values) => handleFieldChange('block_from', values)} placeholder="10.0.0.7" />
+          <ArrayInput label="Allowed Destination CIDRs" values={formData.destination_allow || []} onChange={(values) => handleFieldChange('destination_allow', values)} placeholder="203.0.113.0/24" />
+          <ArrayInput label="Blocked Destination CIDRs" values={formData.destination_block || []} onChange={(values) => handleFieldChange('destination_block', values)} placeholder="127.0.0.0/8, 10.0.0.0/8" />
           <ArrayInput label="Features" values={formData.features || []} onChange={(values) => handleFieldChange('features', values)} placeholder="flexible-port" />
+          <ArrayInput label="Allowed Target Ports" values={formData.allowed_ports || []} onChange={(values) => handleFieldChange('allowed_ports', values)} placeholder="80, 443" />
 
           {/* Proxy URLs */}
 

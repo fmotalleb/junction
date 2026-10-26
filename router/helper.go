@@ -4,38 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
-	"net/url"
+	"net/netip"
+	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/fmotalleb/junction/proxy"
-	"github.com/fmotalleb/junction/utils"
+	"github.com/fmotalleb/junction/config"
 )
-
-func dialTarget(ctx context.Context, proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Conn, error) {
-	chain, err := proxy.NewChain(proxyAddr)
-	if err != nil {
-		logger.Error("failed to create SOCKS5 dialer", zap.Error(err))
-		return nil, err
-	}
-
-	// The context bounds the connect and the proxy handshake; a silent upstream
-	// otherwise left this goroutine and both sockets parked indefinitely.
-	dialCtx, cancel := context.WithTimeout(ctx, proxy.DefaultDialTimeout)
-	defer cancel()
-
-	conn, err := chain.DialContext(dialCtx, "tcp", target)
-	if err != nil {
-		logger.Debug("failed to connect to target", zap.Error(err))
-		return nil, err
-	}
-	setKeepAlive(conn)
-	return conn, nil
-}
 
 type keepAliveConn interface {
 	SetKeepAlive(bool) error
@@ -44,7 +25,62 @@ type keepAliveConn interface {
 
 const keepAlivePeriod = 30 * time.Second
 
-const maxConcurrentTunnels = 1024
+const (
+	maxConcurrentTunnels          = 1024
+	maxConcurrentTunnelsPerSource = 64
+)
+
+const (
+	maxHTTPConnectionsPerListener = 1024
+	maxHTTPConnectionsPerSource   = 64
+)
+
+type sourceLimiter struct {
+	mu     sync.Mutex
+	active map[string]int
+	limit  int
+}
+
+func newSourceLimiter(limit int) *sourceLimiter {
+	return &sourceLimiter{active: make(map[string]int), limit: limit}
+}
+
+func (l *sourceLimiter) acquire(addr net.Addr) (func(), bool) {
+	key := sourceIPKey(addr)
+	l.mu.Lock()
+	if l.active[key] >= l.limit {
+		l.mu.Unlock()
+		return nil, false
+	}
+	l.active[key]++
+	l.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			l.mu.Lock()
+			if l.active[key] <= 1 {
+				delete(l.active, key)
+			} else {
+				l.active[key]--
+			}
+			l.mu.Unlock()
+		})
+	}, true
+}
+
+func sourceIPKey(addr net.Addr) string {
+	if addr == nil {
+		return "<unknown>"
+	}
+	host := addr.String()
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	if ip, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil {
+		return ip.Unmap().String()
+	}
+	return host
+}
 
 // setKeepAlive lets the OS detect peers that vanished without a FIN/RST. Such
 // peers otherwise leave the relay blocked until the entry timeout expires.
@@ -110,7 +146,7 @@ func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
 
 	errs.Go(
 		func() error {
-			if err := utils.Copy(dst, src); err != nil {
+			if _, err := io.Copy(dst, src); err != nil {
 				return errors.Join(errors.New("failed to write to dst"), err)
 			}
 			if halfCloser, ok := dst.(interface{ CloseWrite() error }); ok {
@@ -121,7 +157,7 @@ func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
 	)
 	errs.Go(
 		func() error {
-			if err := utils.Copy(src, dst); err != nil {
+			if _, err := io.Copy(src, dst); err != nil {
 				return errors.Join(errors.New("failed to write to dst"), err)
 			}
 			if halfCloser, ok := src.(interface{ CloseWrite() error }); ok {
@@ -170,8 +206,16 @@ func buildFieldMissing(service, field string) error {
 }
 
 func serveHTTPServer(ctx context.Context, server *http.Server) error {
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", server.Addr)
+	if err != nil {
+		return err
+	}
+	servingListener := listener
+	if config.HardenedMode() {
+		servingListener = newLimitedListener(listener, maxHTTPConnectionsPerListener)
+	}
 	errCh := make(chan error, 1)
-	go func() { errCh <- server.ListenAndServe() }()
+	go func() { errCh <- server.Serve(servingListener) }()
 	select {
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
@@ -191,4 +235,85 @@ func serveHTTPServer(ctx context.Context, server *http.Server) error {
 		}
 		return err
 	}
+}
+
+type limitedListener struct {
+	net.Listener
+	permits chan struct{}
+	sources *sourceLimiter
+	done    chan struct{}
+	close   sync.Once
+}
+
+func newLimitedListener(listener net.Listener, limit int) *limitedListener {
+	return &limitedListener{
+		Listener: listener,
+		permits:  make(chan struct{}, limit),
+		sources:  newSourceLimiter(maxHTTPConnectionsPerSource),
+		done:     make(chan struct{}),
+	}
+}
+
+func (l *limitedListener) Accept() (net.Conn, error) {
+	for {
+		conn, err := l.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		releaseSource, ok := l.sources.acquire(conn.RemoteAddr())
+		if !ok {
+			_ = conn.Close()
+			continue
+		}
+		select {
+		case l.permits <- struct{}{}:
+			select {
+			case <-l.done:
+				<-l.permits
+				releaseSource()
+				_ = conn.Close()
+				return nil, net.ErrClosed
+			default:
+				return &limitedConn{Conn: conn, release: func() {
+					<-l.permits
+					releaseSource()
+				}}, nil
+			}
+		case <-l.done:
+			releaseSource()
+			_ = conn.Close()
+			return nil, net.ErrClosed
+		}
+	}
+}
+
+func (l *limitedListener) Close() error {
+	l.close.Do(func() { close(l.done) })
+	return l.Listener.Close()
+}
+
+type limitedConn struct {
+	net.Conn
+	release func()
+	close   sync.Once
+}
+
+func (c *limitedConn) Close() error {
+	err := c.Conn.Close()
+	c.close.Do(c.release)
+	return err
+}
+
+func (c *limitedConn) CloseWrite() error {
+	if conn, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return conn.CloseWrite()
+	}
+	return nil
+}
+
+func (c *limitedConn) CloseRead() error {
+	if conn, ok := c.Conn.(interface{ CloseRead() error }); ok {
+		return conn.CloseRead()
+	}
+	return nil
 }

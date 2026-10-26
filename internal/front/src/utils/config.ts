@@ -89,10 +89,13 @@ export const importConfig = (jsonString: string): NetworkConfig => {
       if (!isRecord(value)) {
         throw new Error('Each entry point must be an object');
       }
-      for (const field of ['block_list', 'allow_list', 'allow_from', 'block_from', 'proxy', 'features']) {
+      for (const field of ['block_list', 'allow_list', 'allow_from', 'block_from', 'destination_allow', 'destination_block', 'proxy', 'features', 'allowed_ports']) {
         if (value[field] !== undefined && (!Array.isArray(value[field]) || !value[field].every((item) => typeof item === 'string'))) {
           throw new Error(`${field} must be an array of strings`);
         }
+      }
+      if (value.public_access !== undefined && typeof value.public_access !== 'boolean') {
+        throw new Error('public_access must be a boolean');
       }
       const routing = typeof value.routing === 'string' ? value.routing : '';
       if (!['sni', 'http-header', 'http-to-https', 'tcp-raw', 'udp-raw'].includes(routing)) {
@@ -108,6 +111,7 @@ export const importConfig = (jsonString: string): NetworkConfig => {
         allow_list: (value.allow_list as string[] | undefined) ?? [],
         allow_from: (value.allow_from as string[] | undefined) ?? [],
         block_from: (value.block_from as string[] | undefined) ?? [],
+        allowed_ports: (value.allowed_ports as string[] | undefined) ?? [],
         proxy: (value.proxy as string[] | undefined) ?? [],
       };
     });

@@ -51,7 +51,11 @@ func newTestManager(t *testing.T, timeout time.Duration) (*UDPClientManager, *ne
 		Target:  target.LocalAddr().String(),
 		Timeout: timeout,
 	}
-	return NewUDPClientManager(ctx, zap.NewNop(), entry), serverConn, cancel
+	manager, err := NewUDPClientManager(ctx, zap.NewNop(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manager, serverConn, cancel
 }
 
 var testClient = &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 41234}
@@ -85,6 +89,73 @@ func TestSweepKeepsActiveClients(t *testing.T) {
 
 	m.Cleanup()
 	assert.Equal(t, 0, clientCount(m))
+}
+
+func TestUDPClientSessionLimitPerSource(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
+	m, serverConn, cancel := newTestManager(t, time.Hour)
+	defer cancel()
+
+	m.clientsMux.Lock()
+	for port := 1; port <= maxUDPClientSessionsPerSource; port++ {
+		addr := &net.UDPAddr{IP: append(net.IP(nil), testClient.IP...), Port: port}
+		m.clients[addr.String()] = &UDPClientConn{clientAddr: addr}
+	}
+	m.clientsMux.Unlock()
+
+	if client := m.createClientConnection(&net.UDPAddr{IP: testClient.IP, Port: 65000}, serverConn); client != nil {
+		t.Fatal("session from a source at its cap was created")
+	}
+	if got := clientCount(m); got != maxUDPClientSessionsPerSource {
+		t.Fatalf("source sessions = %d, want %d", got, maxUDPClientSessionsPerSource)
+	}
+}
+
+func TestUDPBufferSizeValidation(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		want  int
+		bad   bool
+	}{
+		{"", defaultUDPBufferSize, false},
+		{"1", 1, false},
+		{"65507", maxUDPBufferSize, false},
+		{"0", 0, true},
+		{"-1", 0, true},
+		{"65508", 0, true},
+		{"nope", 0, true},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := udpBufferSize(tc.input)
+			if tc.bad {
+				if err == nil {
+					t.Fatalf("udpBufferSize(%q) succeeded with %d", tc.input, got)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("udpBufferSize(%q) = %d, %v; want %d, nil", tc.input, got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestInvalidUDPBufferIsOnlyRejectedInHardenedMode(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	t.Setenv("UDP_BUFFER", "invalid")
+	manager, err := NewUDPClientManager(context.Background(), zap.NewNop(), config.EntryPoint{})
+	if err != nil {
+		t.Fatalf("default mode rejected invalid UDP_BUFFER: %v", err)
+	}
+	if manager.bufferSize != defaultUDPBufferSize {
+		t.Fatalf("invalid UDP_BUFFER fallback = %d, want %d", manager.bufferSize, defaultUDPBufferSize)
+	}
+	manager.Cleanup()
+
+	t.Setenv("JUNCTION_HARDENED", "1")
+	if _, err := NewUDPClientManager(context.Background(), zap.NewNop(), config.EntryPoint{}); err == nil {
+		t.Fatal("hardened mode accepted an invalid UDP_BUFFER")
+	}
 }
 
 // TestSweeperRetiresIdleClientsOnItsOwn replaces the per-client timer goroutines:

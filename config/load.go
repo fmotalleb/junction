@@ -19,7 +19,11 @@ const (
 	maxConfigBytes    = 4 << 20
 	maxConfigIncludes = 128
 	maxIncludeDepth   = 16
+	httpScheme        = "http"
+	httpsScheme       = "https"
 )
+
+var errConfigIncludeCycle = errors.New("configuration include cycle")
 
 type configLoader struct {
 	ctx     context.Context
@@ -36,11 +40,17 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 	if err := l.ctx.Err(); err != nil {
 		return nil, err
 	}
-	if depth > maxIncludeDepth {
+	if HardenedMode() && depth > maxIncludeDepth {
 		return nil, fmt.Errorf("configuration includes exceed maximum depth %d", maxIncludeDepth)
 	}
 	if path == "" && parent == "" {
-		data, err := io.ReadAll(io.LimitReader(os.Stdin, maxConfigBytes+1))
+		var data []byte
+		var err error
+		if HardenedMode() {
+			data, err = io.ReadAll(io.LimitReader(os.Stdin, maxConfigBytes+1))
+		} else {
+			data, err = io.ReadAll(os.Stdin)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read configuration from stdin: %w", err)
 		}
@@ -52,11 +62,13 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 		return nil, err
 	}
 	if _, seen := l.visited[key]; seen {
-		return nil, fmt.Errorf("configuration include cycle at %q", safeConfigPath(key))
+		return nil, fmt.Errorf("%w at %q", errConfigIncludeCycle, safeConfigPath(key))
 	}
-	l.count++
-	if l.count > maxConfigIncludes {
-		return nil, fmt.Errorf("configuration includes exceed maximum count %d", maxConfigIncludes)
+	if HardenedMode() {
+		l.count++
+		if l.count > maxConfigIncludes {
+			return nil, fmt.Errorf("configuration includes exceed maximum count %d", maxConfigIncludes)
+		}
 	}
 	l.visited[key] = struct{}{}
 	defer delete(l.visited, key)
@@ -74,20 +86,32 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 		return nil, fmt.Errorf("configuration %q: %w", safeConfigPath(key), err)
 	}
 	delete(current, "include")
+	return l.readIncluded(current, key, depth, includes)
+}
 
+func (l *configLoader) readIncluded(current map[string]any, key string, depth int, includes []string) (map[string]any, error) {
 	merged := make(map[string]any)
 	for _, pattern := range includes {
 		paths, err := l.expand(pattern, key)
 		if err != nil {
-			return nil, fmt.Errorf("resolve include %q from %q: %w", redactURL(pattern), safeConfigPath(key), err)
+			if HardenedMode() {
+				return nil, fmt.Errorf("resolve include %q from %q: %w", RedactURL(pattern), safeConfigPath(key), err)
+			}
+			continue
 		}
 		if len(paths) == 0 {
-			return nil, fmt.Errorf("include %q from %q matched no files", redactURL(pattern), safeConfigPath(key))
+			if HardenedMode() {
+				return nil, fmt.Errorf("include %q from %q matched no files", RedactURL(pattern), safeConfigPath(key))
+			}
+			continue
 		}
 		for _, include := range paths {
 			child, err := l.read(include, key, depth+1)
 			if err != nil {
-				return nil, err
+				if l.ctx.Err() != nil || HardenedMode() || errors.Is(err, errConfigIncludeCycle) {
+					return nil, err
+				}
+				continue
 			}
 			mergeConfig(merged, child)
 		}
@@ -97,7 +121,7 @@ func (l *configLoader) read(path, parent string, depth int) (map[string]any, err
 }
 
 func (l *configLoader) parse(data []byte, ext, path string) (map[string]any, error) {
-	if len(data) > maxConfigBytes {
+	if HardenedMode() && len(data) > maxConfigBytes {
 		return nil, fmt.Errorf("configuration %q exceeds %d bytes", safeConfigPath(path), maxConfigBytes)
 	}
 	v := viper.New()
@@ -110,55 +134,75 @@ func (l *configLoader) parse(data []byte, ext, path string) (map[string]any, err
 
 func (l *configLoader) readBytes(path string) ([]byte, string, error) {
 	u, err := url.Parse(path)
-	if err == nil && (u.Scheme == "http" || u.Scheme == "https") {
-		if u.Scheme == "http" && os.Getenv("JUNCTION_ALLOW_INSECURE_CONFIG_HTTP") != "1" {
+	if err == nil && isHTTPConfigURL(u) {
+		if HardenedMode() && u.Scheme == httpScheme && os.Getenv("JUNCTION_ALLOW_INSECURE_CONFIG_HTTP") != "1" {
 			return nil, "", errors.New("remote configuration requires HTTPS (set JUNCTION_ALLOW_INSECURE_CONFIG_HTTP=1 to allow HTTP temporarily)")
 		}
-		ctx, cancel := context.WithTimeout(l.ctx, 15*time.Second)
-		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
-		if err != nil {
-			return nil, "", fmt.Errorf("create remote configuration request: %w", err)
-		}
-		if u.User != nil {
-			password, _ := u.User.Password()
-			req.SetBasicAuth(u.User.Username(), password)
-		}
-		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, "", fmt.Errorf("fetch remote configuration %q: request failed", redactURL(path))
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return nil, "", fmt.Errorf("fetch remote configuration %q: HTTP %s", redactURL(path), resp.Status)
-		}
-		data, err := io.ReadAll(io.LimitReader(resp.Body, maxConfigBytes+1))
-		if err != nil {
-			return nil, "", fmt.Errorf("read remote configuration %q: %w", redactURL(path), err)
-		}
-		return data, filepath.Ext(u.Path), nil
+		return l.readRemoteBytes(path, u)
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- local config paths are canonicalized and intentionally user-selected.
 	if err != nil {
 		return nil, "", fmt.Errorf("read configuration %q: %w", safeConfigPath(path), err)
 	}
 	return data, filepath.Ext(path), nil
 }
 
+func isHTTPConfigURL(u *url.URL) bool {
+	return u.Scheme == httpScheme || u.Scheme == httpsScheme
+}
+
+func (l *configLoader) readRemoteBytes(path string, u *url.URL) ([]byte, string, error) {
+	requestCtx := l.ctx
+	cancel := func() {}
+	if HardenedMode() {
+		requestCtx, cancel = context.WithTimeout(l.ctx, 15*time.Second)
+	}
+	defer cancel()
+	req, requestErr := http.NewRequestWithContext(requestCtx, http.MethodGet, path, nil)
+	if requestErr != nil {
+		return nil, "", fmt.Errorf("create remote configuration request: %w", requestErr)
+	}
+	if u.User != nil {
+		password, _ := u.User.Password()
+		req.SetBasicAuth(u.User.Username(), password)
+	}
+	client := http.DefaultClient
+	if HardenedMode() {
+		client = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("fetch remote configuration %q: request failed", RedactURL(path))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("fetch remote configuration %q: HTTP %s", RedactURL(path), resp.Status)
+	}
+	var data []byte
+	if HardenedMode() {
+		data, err = io.ReadAll(io.LimitReader(resp.Body, maxConfigBytes+1))
+	} else {
+		data, err = io.ReadAll(resp.Body)
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("read remote configuration %q: %w", RedactURL(path), err)
+	}
+	return data, filepath.Ext(u.Path), nil
+}
+
 func (l *configLoader) expand(pattern, parent string) ([]string, error) {
 	if u, err := url.Parse(pattern); err == nil && u.Scheme != "" {
-		if u.Scheme != "http" && u.Scheme != "https" {
+		if !isHTTPConfigURL(u) {
 			return nil, fmt.Errorf("unsupported include scheme %q", u.Scheme)
 		}
-		if base, err := url.Parse(parent); err == nil && (base.Scheme == "http" || base.Scheme == "https") {
+		if base, err := url.Parse(parent); err == nil && isHTTPConfigURL(base) {
 			resolved := base.ResolveReference(u)
 			return []string{resolved.String()}, nil
 		}
 		return []string{u.String()}, nil
 	}
 	if !filepath.IsAbs(pattern) {
-		if parentURL, err := url.Parse(parent); err == nil && (parentURL.Scheme == "http" || parentURL.Scheme == "https") {
+		if parentURL, err := url.Parse(parent); err == nil && isHTTPConfigURL(parentURL) {
 			resolved := parentURL.ResolveReference(&url.URL{Path: pattern})
 			return []string{resolved.String()}, nil
 		}
@@ -169,11 +213,11 @@ func (l *configLoader) expand(pattern, parent string) ([]string, error) {
 
 func canonicalConfigPath(path, parent string) (string, error) {
 	u, err := url.Parse(path)
-	if err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+	if err == nil && isHTTPConfigURL(u) {
 		return u.String(), nil
 	}
 	if !filepath.IsAbs(path) {
-		if parentURL, parseErr := url.Parse(parent); parseErr == nil && (parentURL.Scheme == "http" || parentURL.Scheme == "https") {
+		if parentURL, parseErr := url.Parse(parent); parseErr == nil && isHTTPConfigURL(parentURL) {
 			return parentURL.ResolveReference(&url.URL{Path: path}).String(), nil
 		}
 		if parent == "" {
@@ -233,10 +277,12 @@ func mergeConfig(dst, src map[string]any) {
 }
 
 func safeConfigPath(path string) string {
-	return redactURL(path)
+	return RedactURL(path)
 }
 
-func redactURL(raw string) string {
+// RedactURL removes userinfo and values from query parameters that may carry
+// credentials or tokens before a URL is written to logs or diagnostics.
+func RedactURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "[invalid configuration URL]"

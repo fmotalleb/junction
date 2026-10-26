@@ -10,21 +10,15 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/fmotalleb/go-tools/log"
 	"go.uber.org/zap"
 
 	"github.com/fmotalleb/junction/config"
 	"github.com/fmotalleb/junction/proxy"
-)
-
-var (
-	httpsGroupMu sync.Mutex
-	httpsGroups  = map[string][]config.EntryPoint{}
 )
 
 // httpToHTTPSHandler starts an HTTP server that reverse-proxies to an HTTPS backend.
@@ -41,18 +35,9 @@ var (
 //	Entry.Proxy         - optional SOCKS5 chain, same as http_header.go
 //	Entry.Timeout       - upstream timeout
 //	Entry.Tag           - optional tag to group multiple entries under one listener
-func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, error) {
+func httpToHTTPSHandler(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterHTTPToHTTPS {
 		return false, nil
-	}
-
-	// --- Tag registration ---
-	if entry.Tag != nil {
-		isFirst := registerHTTPSTaggedEntry(*entry.Tag, entry)
-		if !isFirst {
-			// Not the first entry → do not start another listener.
-			return true, nil
-		}
 	}
 
 	logger := log.FromContext(ctx).
@@ -60,40 +45,48 @@ func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, err
 		With(
 			zap.String("router", string(entry.Routing)),
 			zap.String("listen", entry.Listen.String()),
-			zap.String("target", entry.Target),
+			zap.String("target", config.RedactURL(entry.Target)),
 		)
 
 	if entry.Target == "" && entry.Tag == nil {
 		return true, errors.New("http_to_https: entry.Target is required (or use Tag to group entries), e.g. https://google.com")
 	}
-	if _, err := proxy.NewChain(entry.Proxy); err != nil {
-		return true, fmt.Errorf("invalid http_to_https proxy chain: %w", err)
+	compiled, prepared := registry.Route(index)
+	if !prepared {
+		var err error
+		compiled.chain, err = proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
+		if err != nil {
+			return true, err
+		}
+		compiled.targetURL, compiled.reqReplacer, compiled.respReplacer, err = buildHTTPSEntryConfig(entry)
+		if err != nil {
+			return true, err
+		}
+		compiled.transport = newProxyTransport(compiled.chain)
 	}
-
-	targetURL, reqReplacer, respReplacer, err := buildHTTPSEntryConfig(entry)
-	if err != nil {
-		return true, err
-	}
-	if targetURL != nil && (targetURL.Scheme != "https" || targetURL.Host == "" || targetURL.User != nil) {
+	if compiled.targetURL != nil && (compiled.targetURL.Scheme != httpsScheme || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
 		return true, errors.New("http_to_https target must be an HTTPS URL with a host and no userinfo")
 	}
 
 	server := &http.Server{
-		ReadHeaderTimeout: 30 * time.Second,
+		ReadHeaderTimeout: hardenedHeaderTimeout(),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		Addr:              entry.Listen.String(),
 		Handler: &httpToHTTPSProxy{
-			ctx:          ctx,
-			logger:       logger,
-			entry:        entry,
-			tag:          entry.Tag,
-			targetURL:    targetURL,
-			reqReplacer:  reqReplacer,
-			respReplacer: respReplacer,
+			ctx:       ctx,
+			logger:    logger,
+			entry:     entry,
+			registry:  registry,
+			tag:       entry.Tag,
+			baseRoute: httpsRoute{entry: entry, targetURL: compiled.targetURL, reqReplacer: compiled.reqReplacer, respReplacer: compiled.respReplacer, chain: compiled.chain, transport: compiled.transport},
 		},
 	}
 
-	logger.Info("HTTP->HTTPS proxy booted", zap.Any("target", targetURL))
+	targetSummary := ""
+	if compiled.targetURL != nil {
+		targetSummary = config.RedactURL(compiled.targetURL.String())
+	}
+	logger.Info("HTTP->HTTPS proxy booted", zap.String("target", targetSummary))
 	if err := serveHTTPServer(ctx, server); err != nil {
 		logger.Error("HTTP server error", zap.Error(err))
 		return true, errors.Join(
@@ -102,20 +95,6 @@ func httpToHTTPSHandler(ctx context.Context, entry config.EntryPoint) (bool, err
 		)
 	}
 	return true, nil
-}
-
-func registerHTTPSTaggedEntry(tag string, entry config.EntryPoint) bool {
-	httpsGroupMu.Lock()
-	defer httpsGroupMu.Unlock()
-
-	group, ok := httpsGroups[tag]
-	if !ok {
-		httpsGroups[tag] = []config.EntryPoint{entry}
-		return true // first entry → should start server
-	}
-
-	httpsGroups[tag] = append(group, entry)
-	return false // listener already running
 }
 
 // buildHTTPSEntryConfig parses the target URL and host replacers from an EntryPoint.
@@ -137,7 +116,13 @@ func buildHTTPSEntryConfig(entry config.EntryPoint) (*url.URL, *strings.Replacer
 		if !ok {
 			return nil, nil, nil, errors.New("invalid replace map structure, expected string -> string map")
 		}
-		for upstream, localAddr := range replaceMap {
+		upstreams := make([]string, 0, len(replaceMap))
+		for upstream := range replaceMap {
+			upstreams = append(upstreams, upstream)
+		}
+		sort.Strings(upstreams)
+		for _, upstream := range upstreams {
+			localAddr := replaceMap[upstream]
 			local, ok := localAddr.(string)
 			if !ok {
 				return nil, nil, nil, errors.New("invalid replace map structure, expected string -> string map, right side does not look like a string")
@@ -157,13 +142,12 @@ func buildHTTPSEntryConfig(entry config.EntryPoint) (*url.URL, *strings.Replacer
 }
 
 type httpToHTTPSProxy struct {
-	ctx          context.Context
-	logger       *zap.Logger
-	entry        config.EntryPoint
-	tag          *string
-	targetURL    *url.URL
-	reqReplacer  *strings.Replacer
-	respReplacer *strings.Replacer
+	ctx       context.Context
+	logger    *zap.Logger
+	entry     config.EntryPoint
+	registry  *Registry
+	tag       *string
+	baseRoute httpsRoute
 }
 
 type httpsRoute struct {
@@ -171,6 +155,8 @@ type httpsRoute struct {
 	targetURL    *url.URL
 	reqReplacer  *strings.Replacer
 	respReplacer *strings.Replacer
+	chain        *proxy.Chain
+	transport    *http.Transport
 }
 
 func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +174,11 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstreamURL.Path = singleJoiningSlash(route.targetURL.Path, r.URL.Path)
 	upstreamURL.RawQuery = r.URL.RawQuery
 
-	body, err := rewriteRequestBody(r, route.reqReplacer, maxRewrittenBodyBytes)
+	var rewriteLimit int64
+	if config.HardenedMode() {
+		rewriteLimit = maxRewrittenBodyBytes
+	}
+	body, err := rewriteRequestBody(r, route.reqReplacer, rewriteLimit)
 	if err != nil {
 		http.Error(w, "request body too large or unreadable", http.StatusRequestEntityTooLarge)
 		return
@@ -214,12 +204,7 @@ func (h *httpToHTTPSProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // ok=false when the request must not be forwarded.
 func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) (httpsRoute, bool) {
 	remoteAddr := addrFromRemote(r.RemoteAddr)
-	route := httpsRoute{
-		entry:        h.entry,
-		targetURL:    h.targetURL,
-		reqReplacer:  h.reqReplacer,
-		respReplacer: h.respReplacer,
-	}
+	route := h.baseRoute
 
 	if h.tag == nil {
 		if !route.entry.AllowedFrom(remoteAddr) {
@@ -230,9 +215,7 @@ func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) 
 		return route, true
 	}
 
-	httpsGroupMu.Lock()
-	group := httpsGroups[*h.tag]
-	httpsGroupMu.Unlock()
+	group := h.registry.GroupRoutes(*h.tag)
 
 	// targetHost is the Host header the client sent; for HTTPS reverse-proxy
 	// we match on the incoming Host (what the client thinks it's talking to).
@@ -241,23 +224,18 @@ func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) 
 		incomingHost = r.Header.Get("Host")
 	}
 
-	for _, ep := range group {
-		if !ep.Allowed(incomingHost) || !ep.AllowedFrom(remoteAddr) {
+	for _, compiled := range group {
+		ep := compiled.entry
+		if !ep.AllowedHost(incomingHost) || !ep.AllowedFrom(remoteAddr) {
 			continue
-		}
-		// Rebuild per-entry config so each tagged entry can point at a
-		// distinct HTTPS backend with its own replacers.
-		targetURL, reqReplacer, respReplacer, err := buildHTTPSEntryConfig(ep)
-		if err != nil {
-			h.logger.Error("failed to build config for matched tag entry", zap.Error(err))
-			http.Error(w, "internal configuration error", http.StatusInternalServerError)
-			return route, false
 		}
 		route = httpsRoute{
 			entry:        ep,
-			targetURL:    targetURL,
-			reqReplacer:  reqReplacer,
-			respReplacer: respReplacer,
+			targetURL:    compiled.targetURL,
+			reqReplacer:  compiled.reqReplacer,
+			respReplacer: compiled.respReplacer,
+			chain:        compiled.chain,
+			transport:    compiled.transport,
 		}
 		return route, true
 	}
@@ -278,11 +256,17 @@ func rewriteRequestBody(r *http.Request, reqReplacer *strings.Replacer, limit in
 	if r.Body == nil || reqReplacer == nil || r.Header.Get("Content-Encoding") != "" || !isTextContentType(r.Header.Get("Content-Type")) {
 		return r.Body, nil
 	}
-	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	var bodyBytes []byte
+	var err error
+	if limit > 0 {
+		bodyBytes, err = io.ReadAll(io.LimitReader(r.Body, limit+1))
+	} else {
+		bodyBytes, err = io.ReadAll(r.Body)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(bodyBytes)) > limit {
+	if limit > 0 && int64(len(bodyBytes)) > limit {
 		return nil, fmt.Errorf("request body exceeds rewrite limit of %d bytes", limit)
 	}
 	if len(bodyBytes) == 0 {
@@ -296,16 +280,16 @@ func rewriteRequestBody(r *http.Request, reqReplacer *strings.Replacer, limit in
 // forward sends the upstream request and mirrors the response back to the
 // client, applying the response replacers on the way.
 func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upstreamURL url.URL, req *http.Request) {
-	chain, err := proxy.NewChain(route.entry.Proxy)
-	if err != nil {
-		http.Error(w, "SOCKS5 dialer error", http.StatusInternalServerError)
-		return
+	transport := route.transport
+	if transport == nil {
+		chain, err := proxy.NewChainWithDestinationPolicy(route.entry.Proxy, route.entry.DestinationAllow, route.entry.DestinationBlock)
+		if err != nil {
+			http.Error(w, "proxy route unavailable", http.StatusInternalServerError)
+			return
+		}
+		transport = newProxyTransport(chain)
+		defer transport.CloseIdleConnections()
 	}
-	transport := newProxyTransport(chain)
-	// This transport only lives for the current request; without closing its
-	// pooled connection here it kept a socket and two goroutines alive until
-	// the origin happened to hang up.
-	defer transport.CloseIdleConnections()
 
 	client := &http.Client{
 		Transport: transport,
@@ -319,48 +303,78 @@ func (h *httpToHTTPSProxy) forward(w http.ResponseWriter, route httpsRoute, upst
 	// the path and query are client supplied.
 	resp, err := client.Do(req)
 	if err != nil {
-		h.logger.Error("Request to target failed", zap.String("url", upstreamURL.String()), zap.Error(err))
+		h.logger.Error("Request to target failed",
+			zap.String("url", config.RedactURL(upstreamURL.String())),
+			zap.String("error", safeUpstreamError(err)),
+		)
 		http.Error(w, "Request failed", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
 	if route.respReplacer == nil || !isTextContentType(resp.Header.Get("Content-Type")) {
-		copyResponseHeaders(w, resp.Header, nil, false)
-		w.WriteHeader(resp.StatusCode)
-		if _, err := io.Copy(w, resp.Body); err != nil {
-			h.logger.Error("Response copy failed", zap.Error(err))
-		}
+		streamUpstreamResponse(w, resp, h.logger)
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRewrittenBodyBytes+1))
+	contentEncoding := strings.TrimSpace(resp.Header.Get("Content-Encoding"))
+	if contentEncoding != "" && !strings.EqualFold(contentEncoding, "gzip") {
+		// Encodings we do not decode cannot be safely rewritten. Pass them
+		// through untouched and stream without consuming the rewrite buffer.
+		streamUpstreamResponse(w, resp, h.logger)
+		return
+	}
+	h.writeRewrittenResponse(w, resp, contentEncoding, route.respReplacer)
+}
+
+func streamUpstreamResponse(w http.ResponseWriter, resp *http.Response, logger *zap.Logger) {
+	copyResponseHeaders(w, resp.Header, nil, false)
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		logger.Error("Response copy failed", zap.Error(err))
+	}
+}
+
+func (h *httpToHTTPSProxy) writeRewrittenResponse(w http.ResponseWriter, resp *http.Response, contentEncoding string, replacer *strings.Replacer) {
+	var rewriteLimit int64
+	if config.HardenedMode() {
+		rewriteLimit = maxRewrittenBodyBytes
+	}
+	var body []byte
+	var err error
+	if rewriteLimit > 0 {
+		body, err = io.ReadAll(io.LimitReader(resp.Body, rewriteLimit+1))
+	} else {
+		body, err = io.ReadAll(resp.Body)
+	}
 	if err != nil {
 		h.logger.Error("Response read failed", zap.Error(err))
 		http.Error(w, "Upstream read failed", http.StatusBadGateway)
 		return
 	}
-	if int64(len(body)) > maxRewrittenBodyBytes {
+	if rewriteLimit > 0 && int64(len(body)) > rewriteLimit {
 		http.Error(w, "upstream response too large to rewrite", http.StatusBadGateway)
 		return
 	}
-	contentEncoding := resp.Header.Get("Content-Encoding")
 	if strings.EqualFold(contentEncoding, "gzip") {
-		body, err = decodeBody(contentEncoding, body, maxRewrittenBodyBytes)
+		body, err = decodeBody(contentEncoding, body, rewriteLimit)
 		if err != nil {
 			http.Error(w, "upstream response could not be decoded", http.StatusBadGateway)
 			return
 		}
-	} else if contentEncoding != "" {
-		copyResponseHeaders(w, resp.Header, nil, false)
-		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write(body)
-		return
 	}
-	body = replaceTextBody(resp.Header.Get("Content-Type"), body, route.respReplacer)
-	copyResponseHeaders(w, resp.Header, route.respReplacer, true)
+	body = replaceTextBody(resp.Header.Get("Content-Type"), body, replacer)
+	copyResponseHeaders(w, resp.Header, replacer, true)
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
+}
+
+func safeUpstreamError(err error) string {
+	var requestErr *url.Error
+	if errors.As(err, &requestErr) {
+		return requestErr.Err.Error()
+	}
+	return err.Error()
 }
 
 func decodeBody(contentEncoding string, body []byte, limit int64) ([]byte, error) {
@@ -372,11 +386,16 @@ func decodeBody(contentEncoding string, body []byte, limit int64) ([]byte, error
 		return nil, err
 	}
 	defer gr.Close()
-	uncompressed, err := io.ReadAll(io.LimitReader(gr, limit+1))
+	var uncompressed []byte
+	if limit > 0 {
+		uncompressed, err = io.ReadAll(io.LimitReader(gr, limit+1))
+	} else {
+		uncompressed, err = io.ReadAll(gr)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(uncompressed)) > limit {
+	if limit > 0 && int64(len(uncompressed)) > limit {
 		return nil, fmt.Errorf("decompressed response exceeds %d bytes", limit)
 	}
 	return uncompressed, nil
@@ -414,7 +433,7 @@ func copyHeadersWithReplace(dst, src http.Header, replacer *strings.Replacer) {
 	connectionHeaders := connectionHeaderNames(src)
 	for k, vv := range src {
 		// skip hop-by-hop headers
-		if isHopHeader(k) || connectionHeaders[strings.ToLower(k)] {
+		if isHopHeader(k) || isUntrustedForwardingHeader(k) || connectionHeaders[strings.ToLower(k)] {
 			continue
 		}
 		for _, v := range vv {
@@ -423,6 +442,15 @@ func copyHeadersWithReplace(dst, src http.Header, replacer *strings.Replacer) {
 			}
 			dst.Add(k, v)
 		}
+	}
+}
+
+func isUntrustedForwardingHeader(name string) bool {
+	switch strings.ToLower(name) {
+	case "forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-port", "x-forwarded-proto", "x-real-ip", "x-client-ip", "x-cluster-client-ip":
+		return true
+	default:
+		return false
 	}
 }
 

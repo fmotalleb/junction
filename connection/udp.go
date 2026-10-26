@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/fmotalleb/go-tools/env"
 	"go.uber.org/zap"
 
 	"github.com/fmotalleb/junction/config"
@@ -23,9 +24,20 @@ type UDPClientManager struct {
 	createMu   sync.Mutex
 	closing    bool
 	readers    sync.WaitGroup
+	workers    sync.WaitGroup
+	cancel     context.CancelFunc
+	bufferSize int
 }
 
-const maxUDPClientSessions = 4096
+const (
+	maxUDPClientSessions          = 4096
+	maxUDPClientSessionsPerSource = 64
+)
+
+const (
+	defaultUDPBufferSize = 65507
+	maxUDPBufferSize     = 65507
+)
 
 type UDPClientConn struct {
 	clientAddr *net.UDPAddr
@@ -38,15 +50,34 @@ type UDPClientConn struct {
 // single sweeper goroutine that retires idle clients. Idle detection is done
 // centrally instead of with one timer goroutine per client, so a busy entrypoint
 // does not grow a timer for every address it has ever seen.
-func NewUDPClientManager(ctx context.Context, logger *zap.Logger, entry config.EntryPoint) *UDPClientManager {
-	m := &UDPClientManager{
-		ctx:     ctx,
-		logger:  logger,
-		entry:   entry,
-		clients: make(map[string]*UDPClientConn),
+func NewUDPClientManager(ctx context.Context, logger *zap.Logger, entry config.EntryPoint) (*UDPClientManager, error) {
+	bufferSize := defaultUDPBufferSize
+	if config.HardenedMode() {
+		var err error
+		bufferSize, err = udpBufferSize(os.Getenv("UDP_BUFFER"))
+		if err != nil {
+			return nil, err
+		} else if raw := os.Getenv("UDP_BUFFER"); raw == "" {
+			bufferSize = defaultUDPBufferSize
+		}
+	} else if size, err := strconv.Atoi(os.Getenv("UDP_BUFFER")); err == nil && size > 0 {
+		bufferSize = size
 	}
-	go m.sweepIdleClients(ctx)
-	return m
+	managerCtx, cancel := context.WithCancel(ctx)
+	m := &UDPClientManager{
+		ctx:        managerCtx,
+		logger:     logger,
+		entry:      entry,
+		clients:    make(map[string]*UDPClientConn),
+		cancel:     cancel,
+		bufferSize: bufferSize,
+	}
+	m.workers.Add(1)
+	go func() {
+		defer m.workers.Done()
+		m.sweepIdleClients(managerCtx)
+	}()
+	return m, nil
 }
 
 func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, serverConn *net.UDPConn) {
@@ -60,6 +91,7 @@ func (m *UDPClientManager) HandlePacket(clientAddr *net.UDPAddr, data []byte, se
 	client.lastSeen.Store(time.Now().UnixNano())
 
 	// Forward packet to target
+	_ = client.targetConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	_, err := client.targetConn.Write(data)
 	if err != nil {
 		m.logger.Error("failed to forward packet to target",
@@ -98,6 +130,9 @@ func (m *UDPClientManager) lookupOrCreate(clientKey string, clientAddr *net.UDPA
 }
 
 func (m *UDPClientManager) Cleanup() {
+	// Cancel first so an in-progress context-aware resolution/dial releases
+	// createMu and lets cleanup proceed.
+	m.cancel()
 	m.createMu.Lock()
 	m.closing = true
 	m.clientsMux.Lock()
@@ -109,16 +144,29 @@ func (m *UDPClientManager) Cleanup() {
 	m.clientsMux.Unlock()
 	m.createMu.Unlock()
 	m.readers.Wait()
+	m.workers.Wait()
 }
 
 func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serverConn *net.UDPConn) *UDPClientConn {
 	clientKey := clientAddr.String()
-	m.clientsMux.RLock()
-	full := len(m.clients) >= maxUDPClientSessions
-	m.clientsMux.RUnlock()
-	if full {
-		m.logger.Warn("UDP client session limit reached", zap.Int("limit", maxUDPClientSessions))
-		return nil
+	if config.HardenedMode() {
+		m.clientsMux.RLock()
+		full := len(m.clients) >= maxUDPClientSessions
+		sourceSessions := 0
+		for _, client := range m.clients {
+			if client.clientAddr.IP.Equal(clientAddr.IP) {
+				sourceSessions++
+			}
+		}
+		m.clientsMux.RUnlock()
+		if full {
+			m.logger.Debug("UDP client session limit reached", zap.Int("limit", maxUDPClientSessions))
+			return nil
+		}
+		if sourceSessions >= maxUDPClientSessionsPerSource {
+			m.logger.Debug("UDP per-source session limit reached", zap.Int("limit", maxUDPClientSessionsPerSource))
+			return nil
+		}
 	}
 
 	// Create connection to target
@@ -150,35 +198,46 @@ func (m *UDPClientManager) createClientConnection(clientAddr *net.UDPAddr, serve
 
 func (m *UDPClientManager) dialTarget() (*net.UDPConn, error) {
 	if len(m.entry.Proxy) > 0 {
-		return nil, errors.New("udp-raw does not support proxy chains")
+		if config.HardenedMode() {
+			return nil, errors.New("udp-raw does not support proxy chains")
+		}
+		m.logger.Warn("UDP proxying is not implemented; dialing target directly")
 	}
-	targetAddr, err := net.ResolveUDPAddr("udp", m.entry.Target)
+	dialCtx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(dialCtx, "udp", m.entry.Target)
 	if err != nil {
-		m.logger.Error("failed to resolve target address",
+		m.logger.Debug("failed to resolve or connect to target",
 			zap.String("target", m.entry.Target),
 			zap.Error(err))
 		return nil, err
 	}
-
-	targetConn, err := net.DialUDP("udp", nil, targetAddr)
-	if err != nil {
-		m.logger.Debug("failed to connect to target",
-			zap.String("target", m.entry.Target),
-			zap.Error(err))
-		return nil, err
+	targetConn, ok := conn.(*net.UDPConn)
+	if !ok {
+		_ = conn.Close()
+		return nil, errors.New("UDP dial returned a non-UDP connection")
 	}
-
 	return targetConn, nil
 }
 
-var bufferSize = sync.OnceValue(
-	func() int { return env.IntOr("UDP_BUFFER", 65507) },
-)
+func udpBufferSize(raw string) (int, error) {
+	if raw == "" {
+		return defaultUDPBufferSize, nil
+	}
+	size, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, errors.New("UDP_BUFFER must be an integer")
+	}
+	if size < 1 || size > maxUDPBufferSize {
+		return 0, errors.New("UDP_BUFFER must be between 1 and 65507 bytes")
+	}
+	return size, nil
+}
 
 func (m *UDPClientManager) handleTargetResponses(ctx context.Context, client *UDPClientConn, serverConn *net.UDPConn) {
 	defer m.readers.Done()
 	defer client.targetConn.Close()
-	size := bufferSize()
+	size := m.bufferSize
 	buffer := make([]byte, size)
 	clientKey := client.clientAddr.String()
 

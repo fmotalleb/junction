@@ -10,11 +10,15 @@ all: mod gen install build spell lint test
 
 .PHONY: precommit
 precommit: ## validate the branch before commit
-precommit: all vuln
+precommit: check vuln
 
 .PHONY: ci
 ci: ## CI build pipeline
-ci: precommit diff
+ci: check vuln diff
+
+.PHONY: check
+check: ## run check-only validation without changing source files
+check: mod-check spell-check lint-check vet test frontend-check
 
 .PHONY: help
 help:
@@ -34,6 +38,10 @@ run: ## go run
 .PHONY: mod
 mod: ## go mod tidy
 	go mod tidy
+
+.PHONY: mod-check
+mod-check: ## check module files without changing them
+	go mod tidy -diff
 
 .PHONY: gen
 gen: ## go generate
@@ -55,9 +63,26 @@ spell: ## misspell
 
 	go tool misspell -error -locale=US -w $$(git ls-files --cached --others --exclude-standard "*.md")
 
+.PHONY: spell-check
+spell-check: ## check spelling without changing files
+	go tool misspell -error -locale=US $$(git ls-files --cached --others --exclude-standard "*.md")
+
 .PHONY: lint
 lint: ## golangci-lint
 	go tool golangci-lint run --fix
+
+.PHONY: lint-check
+lint-check: ## check Go lint without applying fixes
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	golangci-lint run
+
+.PHONY: vet
+vet: ## go vet
+	go vet ./...
+
+.PHONY: frontend-check
+frontend-check: ## check frontend lint and types without changing files
+	cd internal/front && npm run lint && ./node_modules/.bin/tsc -b --pretty false
 
 .PHONY: vuln
 vuln: ## govulncheck

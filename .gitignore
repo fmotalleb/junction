@@ -47,3 +47,5 @@ __*
 
 # Editor and agent scratch directories
 .bolt/
+
+*.tsbuildinfo

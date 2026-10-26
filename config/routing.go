@@ -9,6 +9,7 @@ type Router string
 
 const (
 	RouterHTTPHeader  Router = "http-header"
+	RouterHTTPStatic  Router = "http-static"
 	RouterSNI         Router = "sni"
 	RouterTCPRaw      Router = "tcp-raw"
 	RouterUDPRaw      Router = "udp-raw"
@@ -38,7 +39,7 @@ func (r *Router) Decode(from reflect.Type, val interface{}) (any, error) {
 
 func (r *Router) IsValid() bool {
 	switch *r {
-	case RouterHTTPHeader, RouterSNI, RouterTCPRaw, RouterUDPRaw, RouterHTTPToHTTPS:
+	case RouterHTTPHeader, RouterHTTPStatic, RouterSNI, RouterTCPRaw, RouterUDPRaw, RouterHTTPToHTTPS:
 		return true
 	default:
 		return false

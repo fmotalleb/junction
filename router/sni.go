@@ -3,7 +3,6 @@ package router
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -19,45 +18,16 @@ import (
 
 const DefaultSNIPort = "443"
 
-var (
-	sniGroups     = make(map[string][]config.EntryPoint, 0)
-	groupMu       sync.Mutex
-	errSNIMissing = errors.New("SNI missing in ClientHello")
-)
+var errSNIMissing = errors.New("SNI missing in ClientHello")
 
-func sniRouter(ctx context.Context, entry config.EntryPoint) (bool, error) {
+func sniRouter(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) (bool, error) {
 	if entry.Routing != config.RouterSNI {
 		return false, nil
 	}
-	if _, err := proxy.NewChain(entry.Proxy); err != nil {
-		return true, fmt.Errorf("invalid SNI proxy chain: %w", err)
-	}
-
-	// Register entry by tag if available
-	if entry.Tag != nil {
-		if isFirst := registerTaggedEntry(*entry.Tag, entry); !isFirst {
-			return true, nil // listener already exists for this group
-		}
-	}
-
-	return true, serveSNIRouter(ctx, entry)
+	return true, serveSNIRouter(ctx, registry, index, entry)
 }
 
-func registerTaggedEntry(tag string, entry config.EntryPoint) bool {
-	groupMu.Lock()
-	defer groupMu.Unlock()
-
-	group, ok := sniGroups[tag]
-	if !ok {
-		group = make([]config.EntryPoint, 0)
-	}
-	first := len(group) == 0
-	group = append(group, entry)
-	sniGroups[tag] = group
-	return first
-}
-
-func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
+func serveSNIRouter(ctx context.Context, registry *Registry, index int, entry config.EntryPoint) error {
 	logger := log.FromContext(ctx).Named("router.sni").
 		With(
 			zap.String("router", string(entry.Routing)),
@@ -72,6 +42,7 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 	}
 	defer listener.Close()
 	active := make(chan struct{}, maxConcurrentTunnels)
+	sources := newSourceLimiter(maxConcurrentTunnelsPerSource)
 	var workers sync.WaitGroup
 	defer func() { workers.Wait() }()
 
@@ -101,22 +72,38 @@ func serveSNIRouter(ctx context.Context, entry config.EntryPoint) error {
 		retry.reset()
 
 		setKeepAlive(conn)
+		if !config.HardenedMode() {
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				handleClient(ctx, registry, index, conn, entry, logger)
+			}()
+			continue
+		}
+		releaseSource, ok := sources.acquire(conn.RemoteAddr())
+		if !ok {
+			logger.Debug("per-source SNI tunnel limit reached", zap.String("client", conn.RemoteAddr().String()))
+			_ = conn.Close()
+			continue
+		}
 		select {
 		case active <- struct{}{}:
 			workers.Add(1)
 			go func() {
 				defer workers.Done()
 				defer func() { <-active }()
-				handleClient(ctx, conn, entry, logger)
+				defer releaseSource()
+				handleClient(ctx, registry, index, conn, entry, logger)
 			}()
 		default:
+			releaseSource()
 			logger.Warn("maximum concurrent SNI tunnels reached", zap.Int("limit", maxConcurrentTunnels))
 			_ = conn.Close()
 		}
 	}
 }
 
-func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, logger *zap.Logger) {
+func handleClient(ctx context.Context, registry *Registry, index int, conn net.Conn, entry config.EntryPoint, logger *zap.Logger) {
 	remote := conn.RemoteAddr()
 	if entry.Tag == nil {
 		if !entry.AllowedFrom(remote) {
@@ -136,22 +123,22 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 	l := logger.With(zap.String("sni", sni))
 
 	if entry.Tag == nil {
-		if !entry.Allowed(sni) {
+		if !entry.AllowedHost(sni) {
 			l.Warn("SNI rejected")
 			_ = conn.Close()
 			return
 		}
-		proxyToTarget(ctx, conn, sni, buf, n, l, entry)
+		route, _ := registry.Route(index)
+		proxyToTarget(ctx, conn, sni, buf, n, l, entry, route.chain)
 		return
 	}
 
 	// Tagged routing
-	groupMu.Lock()
-	group := append([]config.EntryPoint(nil), sniGroups[*entry.Tag]...)
-	groupMu.Unlock()
-	for _, ep := range group {
-		if ep.Allowed(sni) && ep.AllowedFrom(remote) {
-			proxyToTarget(ctx, conn, sni, buf, n, l, ep)
+	group := registry.GroupRoutes(*entry.Tag)
+	for _, route := range group {
+		ep := route.entry
+		if ep.AllowedHost(sni) && ep.AllowedFrom(remote) {
+			proxyToTarget(ctx, conn, sni, buf, n, l, ep, route.chain)
 			return
 		}
 	}
@@ -161,13 +148,22 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 }
 
 // PROXY HANDLER.
-func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf []byte, n int, logger *zap.Logger, entry config.EntryPoint) {
+func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf []byte, n int, logger *zap.Logger, entry config.EntryPoint, chain *proxy.Chain) {
 	ctx, cancel := context.WithTimeout(parentCtx, entry.GetTimeout())
 	defer cancel()
 	defer client.Close()
 
 	target := net.JoinHostPort(sni, entry.GetTargetOr(DefaultSNIPort))
-	server, err := dialTarget(ctx, entry.Proxy, target, logger)
+	if chain == nil {
+		var err error
+		chain, err = proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
+		if err != nil {
+			return
+		}
+	}
+	dialCtx, cancelDial := proxy.WithDialTimeout(ctx)
+	server, err := chain.DialContext(dialCtx, "tcp", target)
+	cancelDial()
 	if err != nil {
 		return
 	}
@@ -175,7 +171,7 @@ func proxyToTarget(parentCtx context.Context, client net.Conn, sni string, buf [
 
 	// Bound the buffered ClientHello replay: relayTraffic only takes over
 	// afterwards, so an unbounded write here would outlive every timeout.
-	_ = server.SetWriteDeadline(time.Now().Add(proxy.DefaultDialTimeout))
+	_ = server.SetWriteDeadline(time.Now().Add(proxy.DialTimeout()))
 	if _, err := server.Write(buf[:n]); err != nil {
 		logger.Error("initial write failed", zap.Error(err))
 		return

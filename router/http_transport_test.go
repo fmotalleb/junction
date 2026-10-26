@@ -47,16 +47,32 @@ func TestHTTPHeaderReusesTransport(t *testing.T) {
 	defer cancel()
 
 	proxyPort := freePort(t)
+	targetHost, targetPort, _ := net.SplitHostPort(target)
 	entry := testEntry(t, "http-header", fmt.Sprintf("127.0.0.1:%d", proxyPort), "")
 	entry.Features = []string{"flexible-port"}
+	entry.AllowedPorts = []string{targetPort}
+	registry := NewRegistry()
 	go func() {
-		_, _ = httpHandler(ctx, entry)
+		_, _ = httpHandler(ctx, registry, -1, entry)
 	}()
 	time.Sleep(300 * time.Millisecond)
 
-	targetHost, targetPort, _ := net.SplitHostPort(target)
 	client := &http.Client{Timeout: 10 * time.Second}
 	base := runtime.NumGoroutine()
+	blockedReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/hello", proxyPort), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blockedReq.Host = targetHost
+	blockedReq.Header.Set("Junction-Port", "1")
+	blockedResp, err := client.Do(blockedReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = blockedResp.Body.Close()
+	if blockedResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("disallowed Junction-Port status = %d, want %d", blockedResp.StatusCode, http.StatusForbidden)
+	}
 
 	const n = 30
 	for i := range n {

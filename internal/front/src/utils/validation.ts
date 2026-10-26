@@ -9,7 +9,6 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   } else if (!isValidListenAddress(entryPoint.listen)) {
     errors.push({ field: 'listen', message: 'Invalid listen address format (e.g., 0.0.0.0:8443)' });
   }
-
   // Validate routing type
   const validRoutingTypes: RoutingType[] = ['sni', 'http-header', 'http-to-https', 'tcp-raw', 'udp-raw'];
   if (!validRoutingTypes.includes(entryPoint.routing)) {
@@ -19,7 +18,7 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
   // Validate destination
   if (!entryPoint.to.trim()) {
     errors.push({ field: 'to', message: 'Destination is required' });
-  } else if (entryPoint.routing === 'http-to-https' ? !isValidHttpsURL(entryPoint.to) : !isValidDestination(entryPoint.to)) {
+  } else if (entryPoint.routing === 'http-to-https' ? !isValidHttpsURL(entryPoint.to) : !isValidDestination(entryPoint.to, entryPoint.routing)) {
     errors.push({ field: 'to', message: 'Invalid destination format (e.g., 443 or example.com:443)' });
   }
 
@@ -40,40 +39,65 @@ export const validateEntryPoint = (entryPoint: EntryPoint): ValidationError[] =>
     });
   }
 
+  for (const field of ['destination_allow', 'destination_block'] as const) {
+    for (const cidr of entryPoint[field] || []) {
+      if (!isValidCIDR(cidr)) {
+        errors.push({ field, message: `Invalid CIDR: ${cidr}` });
+      }
+    }
+  }
+  if ((entryPoint.destination_allow?.length || entryPoint.destination_block?.length) && entryPoint.proxy?.length) {
+    errors.push({ field: 'proxy', message: 'Destination CIDR rules require a direct route without proxies' });
+  }
+  for (const port of entryPoint.allowed_ports || []) {
+    if (!isValidPort(port)) {
+      errors.push({ field: 'allowed_ports', message: `Invalid allowed port: ${port}` });
+    }
+  }
   return errors;
 };
 const isValidListenAddress = (address: string): boolean => {
-  const regex = /^(\[[0-9a-fA-F:.%]+\]|[a-zA-Z0-9.-]+):(\d{1,5})$/;
-  const match = address.match(regex);  
-  if (!match) return false;  
+  const portOnly = address.match(/^:?([0-9]{1,5})$/);
+  if (portOnly) return isValidPort(portOnly[1]);
 
-  const port = parseInt(match[2], 10);  
-  return port >= 1 && port <= 65535;  
-};  
+  const match = address.match(/^(\[[0-9a-fA-F:.%]+\]|(?:[0-9]{1,3}\.){3}[0-9]{1,3}):([0-9]{1,5})$/);
+  if (!match || !isValidPort(match[2])) return false;
+  const host = match[1];
+  if (!host.startsWith('[')) return host.split('.').every((octet) => Number(octet) <= 255);
+  try {
+    return new URL(`http://${address}`).hostname !== '';
+  } catch {
+    return false;
+  }
+};
 
-const isValidDestination = (destination: string): boolean => {  
-  // Port only (e.g., "443") or host:port (e.g., "example.com:443")  
-  if (/^\d{1,5}$/.test(destination)) {  
-    const port = parseInt(destination, 10);  
-    return port >= 1 && port <= 65535;  
-  }  
-  const regex = /^[a-zA-Z0-9.-]+:(\d{1,5})$/;  
-  const match = destination.match(regex);  
-  if (!match) return false;  
-
-  const port = parseInt(match[1], 10);  
-  return port >= 1 && port <= 65535;  
-};  
+const isValidDestination = (destination: string, routing: RoutingType): boolean => {
+  if (routing === 'sni' || routing === 'http-header') return isValidPort(destination);
+  if (routing !== 'tcp-raw' && routing !== 'udp-raw') return false;
+  try {
+    const parsed = new URL(`udp://${destination}`);
+    return parsed.hostname !== '' && isValidPort(parsed.port) && parsed.username === '' && parsed.password === '' && parsed.pathname === '/' && parsed.search === '' && parsed.hash === '';
+  } catch {
+    return false;
+  }
+};
 
 const isValidTimeout = (timeout: string): boolean => {
-  const regex = /^(?:\d+(?:ns|us|µs|ms|s|m|h))+$/;
+  if (timeout === '0') return true;
+  const regex = /^(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))+$/;
   return regex.test(timeout);
+};
+
+const isValidPort = (value: string): boolean => {
+  if (!/^\d{1,5}$/.test(value)) return false;
+  const port = Number(value);
+  return port >= 1 && port <= 65535;
 };
 
 const isValidProxyUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url);
-    return ['socks5:', 'ssh:'].includes(parsed.protocol);
+    return parsed.hostname !== '';
   } catch {
     return false;
   }
@@ -83,6 +107,23 @@ const isValidHttpsURL = (value: string): boolean => {
   try {
     const parsed = new URL(value);
     return parsed.protocol === 'https:' && parsed.hostname !== '' && parsed.username === '' && parsed.password === '';
+  } catch {
+    return false;
+  }
+};
+
+const isValidCIDR = (value: string): boolean => {
+  const parts = value.trim().split('/');
+  if (parts.length !== 2 || !/^\d+$/.test(parts[1])) return false;
+  const prefix = Number(parts[1]);
+  const address = parts[0];
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
+    return prefix <= 32 && address.split('.').every((octet) => Number(octet) <= 255);
+  }
+  if (!address.includes(':') || prefix > 128) return false;
+  try {
+    new URL(`http://[${address}]/`);
+    return true;
   } catch {
     return false;
   }

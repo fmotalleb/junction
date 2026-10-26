@@ -23,8 +23,12 @@ type handler struct {
 	resolvers []resolver // IP to return
 	forwarder string     // upstream DNS (e.g., "8.8.8.8:53")
 	allowList []matcher.Matcher
+	allowFrom []matcher.Matcher
+	inFlight  chan struct{}
 	ctx       context.Context
 }
+
+const maxDNSConcurrentRequests = 256
 
 type resolver struct {
 	ranger cidranger.Ranger
@@ -69,6 +73,7 @@ func newHandler(ctx context.Context, resolvers []resolver, forwarder string, all
 		resolvers: resolvers,
 		forwarder: forwarder,
 		allowList: allowList,
+		inFlight:  make(chan struct{}, maxDNSConcurrentRequests),
 	}
 }
 
@@ -89,7 +94,7 @@ func listen(ctx context.Context, listenAddr string) (net.PacketConn, error) {
 // Serve starts and runs a fake DNS server configured by cfg.
 // It validates configuration (requires at least one ReturnAddr entry with a result IP),
 // builds per-entry CIDR resolvers that map client source ranges to response IPs, and
-// binds a UDP listener on cfg.Listen or "0.0.0.0:53" to handle DNS queries.
+// binds a UDP listener on cfg.Listen or "127.0.0.1:53" to handle DNS queries.
 // A-type queries for names allowed by cfg.Allowed are answered from the matching resolver;
 // other queries are forwarded to cfg.Forwarder when configured or refused otherwise.
 // The listener is closed when ctx is done.
@@ -101,8 +106,8 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	logger := log.Of(ctx).Named("DNS")
 	sCtx := log.WithLogger(ctx, logger)
 
-	if len(cfg.ReturnAddr) == 0 {
-		return errors.New("fake DNS requires a return address (answer) to be configured")
+	if err := validateDNSConfig(cfg); err != nil {
+		return err
 	}
 
 	forwarder := ""
@@ -116,7 +121,11 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	}
 
 	h := newHandler(sCtx, resolvers, forwarder, cfg.Allowed)
-	listenAddr := "127.0.0.1:53"
+	h.allowFrom = cfg.AllowFrom
+	listenAddr := ":53"
+	if config.HardenedMode() {
+		listenAddr = "127.0.0.1:53"
+	}
 	if cfg.Listen != nil {
 		listenAddr = cfg.Listen.String()
 	}
@@ -125,6 +134,20 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 		logger.Error("failed to start server", zap.Error(err))
 		return err
 	}
+	return serveListener(ctx, logger, l, h)
+}
+
+func validateDNSConfig(cfg config.FakeDNS) error {
+	if len(cfg.ReturnAddr) == 0 {
+		return errors.New("fake DNS requires a return address (answer) to be configured")
+	}
+	if config.HardenedMode() && cfg.Listen != nil && !cfg.Listen.Addr().IsLoopback() && len(cfg.AllowFrom) == 0 {
+		return errors.New("fake DNS bound outside loopback requires allow_from client rules")
+	}
+	return nil
+}
+
+func serveListener(ctx context.Context, logger *zap.Logger, l net.PacketConn, h *handler) error {
 	stop := make(chan struct{})
 	defer close(stop)
 	go func() {
@@ -155,6 +178,28 @@ func (h *handler) IsAllowed(question string) bool {
 	q := strings.TrimRight(question, ".")
 	for _, m := range h.allowList {
 		if m.Match(q) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *handler) IsAllowedClient(addr net.Addr) bool {
+	if len(h.allowFrom) == 0 {
+		return true
+	}
+	if addr == nil {
+		return false
+	}
+	host, _, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		host = ip.String()
+	}
+	for _, rule := range h.allowFrom {
+		if rule.Match(host) {
 			return true
 		}
 	}
@@ -209,8 +254,7 @@ func (h *handler) forwardRequest(w dns.ResponseWriter, r *dns.Msg, logger *zap.L
 	ctx, cancel := context.WithTimeout(h.ctx, time.Second*10)
 	defer cancel()
 
-	// Otherwise forward to upstream
-	resp, exchangeErr := dns.ExchangeContext(ctx, r, h.forwarder)
+	resp, exchangeErr := exchangeUpstream(ctx, r, h.forwarder)
 	if exchangeErr != nil {
 		logger.Debug("failed to read result from forwarder", zap.Error(exchangeErr))
 		// Upstream failures are temporary server failures, not authoritative
@@ -226,6 +270,28 @@ func (h *handler) forwardRequest(w dns.ResponseWriter, r *dns.Msg, logger *zap.L
 	if err := w.WriteMsg(resp); err != nil {
 		logger.Warn("failed to write answer from forwarder", zap.Error(err))
 	}
+}
+
+func exchangeUpstream(ctx context.Context, request *dns.Msg, forwarder string) (*dns.Msg, error) {
+	client := &dns.Client{Net: "udp", Timeout: 5 * time.Second}
+	response, _, err := client.ExchangeContext(ctx, request, forwarder)
+	if err != nil {
+		return nil, err
+	}
+	if response == nil {
+		return nil, errors.New("upstream DNS returned an empty response")
+	}
+	if !response.Truncated {
+		return response, nil
+	}
+	response, _, err = (&dns.Client{Net: "tcp", Timeout: 5 * time.Second}).ExchangeContext(ctx, request, forwarder)
+	if err != nil {
+		return nil, err
+	}
+	if response == nil {
+		return nil, errors.New("upstream DNS returned an empty TCP response")
+	}
+	return response, nil
 }
 
 func (h *handler) sendRefusedResponse(w dns.ResponseWriter, r *dns.Msg, logger *zap.Logger) {
@@ -247,6 +313,19 @@ func (h *handler) handleEmptyQuestion(w dns.ResponseWriter, r *dns.Msg) {
 
 // ServeDNS implements dns.Handler.
 func (h *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+	if !h.IsAllowedClient(w.RemoteAddr()) {
+		h.sendRefusedResponse(w, r, h.logger())
+		return
+	}
+	if config.HardenedMode() {
+		select {
+		case h.inFlight <- struct{}{}:
+			defer func() { <-h.inFlight }()
+		default:
+			h.sendRefusedResponse(w, r, h.logger())
+			return
+		}
+	}
 	if len(r.Question) == 0 {
 		h.handleEmptyQuestion(w, r)
 		return

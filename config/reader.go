@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/fmotalleb/go-tools/decoder"
@@ -19,7 +20,9 @@ func Parse(ctx context.Context, dst *Config, path string) error {
 	}
 
 	if err := decoder.Decode(cfg); err != nil {
-		return fmt.Errorf("decode: %w", err)
+		// Decoder errors may include the rejected input value. Keep the error
+		// actionable without echoing configuration contents that may be secrets.
+		return errors.New("decode configuration: invalid field value (details omitted to avoid exposing secrets)")
 	}
 	*dst = candidate
 	return nil

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,6 +88,19 @@ func TestEntryPointAllowed(t *testing.T) {
 			assert.Equal(t, tc.want, e.Allowed(tc.host))
 		})
 	}
+}
+
+func TestEntryPointAllowedHostNormalizesAuthorities(t *testing.T) {
+	entry := entryWith(t, nil, []string{"example.com"}, nil, nil)
+	assert.True(t, entry.AllowedHost("EXAMPLE.COM.:443"))
+	assert.False(t, entry.AllowedHost("other.example.com:443"))
+
+	idnEntry := entryWith(t, nil, []string{"bücher.example"}, nil, nil)
+	assert.True(t, idnEntry.AllowedHost("XN--BCHER-KVA.EXAMPLE.:8443"))
+	assert.True(t, idnEntry.AllowedHost("bücher.example"))
+
+	ipEntry := entryWith(t, nil, []string{"regex:^::1$"}, nil, nil)
+	assert.True(t, ipEntry.AllowedHost("[::1]:443"))
 }
 
 func TestEntryPointAllowedFrom(t *testing.T) {
@@ -232,6 +246,7 @@ func TestStringToNetAddrPortHookSupportsIPv6(t *testing.T) {
 	for input, want := range map[string]string{
 		"[::1]:8443": "[::1]:8443",
 		"8443":       "127.0.0.1:8443",
+		":8443":      "127.0.0.1:8443",
 	} {
 		got, err := hookFn(reflect.TypeOf(""), portType, input)
 		assert.NoError(t, err)
@@ -239,10 +254,53 @@ func TestStringToNetAddrPortHookSupportsIPv6(t *testing.T) {
 	}
 }
 
+func TestRedactURLRemovesCredentials(t *testing.T) {
+	got := config.RedactURL("https://user:pass@example.com/path?token=secret&known=visible&api_key=key-secret")
+	for _, secret := range []string{"pass", "secret", "key-secret"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("RedactURL leaked %q in %q", secret, got)
+		}
+	}
+	if !strings.Contains(got, "known=visible") || !strings.Contains(got, "REDACTED") {
+		t.Fatalf("RedactURL lost safe query values or redaction markers: %q", got)
+	}
+}
+
+func TestHardenedModeIsOptIn(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	if config.HardenedMode() {
+		t.Fatal("hardened mode enabled without explicit opt-in")
+	}
+	t.Setenv("JUNCTION_HARDENED", "1")
+	if !config.HardenedMode() {
+		t.Fatal("hardened mode did not enable with explicit opt-in")
+	}
+}
+
+func TestParseDoesNotExposeInvalidDecodedValue(t *testing.T) {
+	const sentinel = "decoder-secret-sentinel"
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[[entrypoints]]\nrouting = \""+sentinel+"\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var cfg config.Config
+	err := config.Parse(context.Background(), &cfg, path)
+	if err == nil {
+		t.Fatal("Parse accepted an invalid router value")
+	}
+	if strings.Contains(err.Error(), sentinel) {
+		t.Fatalf("parse error leaked rejected configuration value %q: %v", sentinel, err)
+	}
+	if !strings.Contains(err.Error(), "decode configuration: invalid field value") {
+		t.Fatalf("parse error lost its safe diagnostic: %v", err)
+	}
+}
+
 func TestParseReloadClearsRemovedFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	first := `{"core":{"fake_dns":{"answer":"127.0.0.1"}},"entrypoints":[{"routing":"sni","listen":"127.0.0.1:8443","to":"443"}]}`
-	if err := os.WriteFile(path, []byte(first), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(first), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var cfg config.Config
@@ -253,7 +311,7 @@ func TestParseReloadClearsRemovedFields(t *testing.T) {
 		t.Fatalf("initial config was not loaded: %+v", cfg)
 	}
 	second := `{"entrypoints":[{"routing":"sni","listen":"127.0.0.1:9443","to":"443"}]}`
-	if err := os.WriteFile(path, []byte(second), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(second), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := config.Parse(context.Background(), &cfg, path); err != nil {
@@ -265,13 +323,14 @@ func TestParseReloadClearsRemovedFields(t *testing.T) {
 }
 
 func TestParseFailsForMalformedOrMissingInclude(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "1")
 	path := filepath.Join(t.TempDir(), "config.json")
 	for name, contents := range map[string]string{
 		"malformed":       `{"entrypoints":[`,
 		"missing include": `{"entrypoints":[],"include":["missing.json"]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+			if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			var cfg config.Config
@@ -279,5 +338,55 @@ func TestParseFailsForMalformedOrMissingInclude(t *testing.T) {
 				t.Fatal("Parse succeeded; want an error")
 			}
 		})
+	}
+}
+
+func TestParseSkipsMissingIncludesByDefault(t *testing.T) {
+	t.Setenv("JUNCTION_HARDENED", "")
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"entrypoints":[],"include":["missing.json"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var cfg config.Config
+	if err := config.Parse(context.Background(), &cfg, path); err != nil {
+		t.Fatalf("default mode rejected a missing include: %v", err)
+	}
+}
+
+func TestParseIncludesResolveRelativeAliasesAndPrecedence(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write := func(path, contents string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(dir, "sub", "base.json"), `{"core":{"fake_dns":{"answer":"10.0.0.1"}}}`)
+	write(filepath.Join(dir, "override.json"), `{"core":{"fake_dns":{"answer":"10.0.0.2"}}}`)
+	mainPath := filepath.Join(dir, "main.json")
+	write(mainPath, `{"include":["sub/../sub/base.json","override.json"],"core":{"fake_dns":{"answer":"10.0.0.3"}}}`)
+
+	var cfg config.Config
+	if err := config.Parse(context.Background(), &cfg, mainPath); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Core.FakeDNS == nil || len(cfg.Core.FakeDNS.ReturnAddr) != 1 || cfg.Core.FakeDNS.ReturnAddr[0].Result.String() != "10.0.0.3" {
+		t.Fatalf("including file did not override includes in order: %+v", cfg.Core.FakeDNS)
+	}
+}
+
+func TestParseDetectsIncludeCyclesThroughPathAliases(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.json")
+	contents := `{"include":["sub/../main.json"]}`
+	if err := os.WriteFile(mainPath, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var cfg config.Config
+	if err := config.Parse(context.Background(), &cfg, mainPath); err == nil {
+		t.Fatal("Parse accepted a recursive include through a normalized path alias")
 	}
 }
