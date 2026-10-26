@@ -79,9 +79,9 @@ var rootCmd = &cobra.Command{
 				if dump {
 					format, _ := cmd.Flags().GetString("format")
 					if redactDump {
-						redacted, err := redactConfig(&cfg)
-						if err != nil {
-							return err
+						redacted, redactErr := redactConfig(&cfg)
+						if redactErr != nil {
+							return redactErr
 						}
 						return dumpConf(redacted, format)
 					}

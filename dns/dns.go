@@ -106,11 +106,8 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 	logger := log.Of(ctx).Named("DNS")
 	sCtx := log.WithLogger(ctx, logger)
 
-	if len(cfg.ReturnAddr) == 0 {
-		return errors.New("fake DNS requires a return address (answer) to be configured")
-	}
-	if config.HardenedMode() && cfg.Listen != nil && !cfg.Listen.Addr().IsLoopback() && len(cfg.AllowFrom) == 0 {
-		return errors.New("fake DNS bound outside loopback requires allow_from client rules")
+	if err := validateDNSConfig(cfg); err != nil {
+		return err
 	}
 
 	forwarder := ""
@@ -137,6 +134,20 @@ func Serve(ctx context.Context, cfg config.FakeDNS) error {
 		logger.Error("failed to start server", zap.Error(err))
 		return err
 	}
+	return serveListener(ctx, logger, l, h)
+}
+
+func validateDNSConfig(cfg config.FakeDNS) error {
+	if len(cfg.ReturnAddr) == 0 {
+		return errors.New("fake DNS requires a return address (answer) to be configured")
+	}
+	if config.HardenedMode() && cfg.Listen != nil && !cfg.Listen.Addr().IsLoopback() && len(cfg.AllowFrom) == 0 {
+		return errors.New("fake DNS bound outside loopback requires allow_from client rules")
+	}
+	return nil
+}
+
+func serveListener(ctx context.Context, logger *zap.Logger, l net.PacketConn, h *handler) error {
 	stop := make(chan struct{})
 	watcherDone := make(chan struct{})
 	go func() {

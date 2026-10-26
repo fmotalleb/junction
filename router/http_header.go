@@ -161,13 +161,45 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- Tag group selection logic ---
+	entry, chain, transport, ok := h.selectRoute(w, r, remoteAddr, targetHost)
+	if !ok {
+		return
+	}
+	selectedPort, ok := h.requestTargetPort(w, r, entry)
+	if !ok {
+		return
+	}
+	targetHost, err = prepareTargetHost(cmp.Or(r.Host, r.Header.Get("Host")), selectedPort)
+	if err != nil {
+		http.Error(w, "malformed host value, refusing to process request", http.StatusBadRequest)
+		return
+	}
+	if chain == nil || transport == nil {
+		h.logger.Error("selected route was not prepared")
+		http.Error(w, "proxy route unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Debug("HTTP request received",
+		zap.String("method", r.Method),
+		zap.String("targetHost", targetHost),
+		zap.String("remoteAddr", r.RemoteAddr),
+	)
+	if r.Method == http.MethodConnect {
+		h.handleConnect(w, r, targetHost, entry, chain)
+		return
+	}
+	h.handleHTTPRequest(w, r, targetHost, entry, transport)
+}
+
+func (h *httpProxyHandler) selectRoute(w http.ResponseWriter, r *http.Request, remoteAddr net.Addr, targetHost string) (config.EntryPoint, *proxy.Chain, *http.Transport, bool) {
 	entry := h.entry
 	chain := h.chain
 	transport := h.transport
 	if h.tag == nil && !entry.AllowedFrom(remoteAddr) {
 		h.logger.Debug("connection rejected", zap.String("client", r.RemoteAddr))
 		w.WriteHeader(http.StatusForbidden)
-		return
+		return entry, nil, nil, false
 	}
 	if h.tag != nil {
 		group := h.registry.GroupRoutes(*h.tag)
@@ -190,26 +222,31 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				zap.String("client", r.RemoteAddr),
 			)
 			w.WriteHeader(http.StatusForbidden)
-			return
+			return entry, nil, nil, false
 		}
 	}
 
 	if !entry.AllowedHost(targetHost) {
 		h.logger.Warn("hostname rejected", zap.String("hostname", targetHost))
 		w.WriteHeader(http.StatusForbidden)
-		return
+		return entry, nil, nil, false
 	}
 	if !entry.AllowedFrom(remoteAddr) {
 		h.logger.Debug("connection rejected", zap.String("client", r.RemoteAddr))
 		w.WriteHeader(http.StatusForbidden)
-		return
+		return entry, nil, nil, false
 	}
+	return entry, chain, transport, true
+}
+
+func (h *httpProxyHandler) requestTargetPort(w http.ResponseWriter, r *http.Request, entry config.EntryPoint) (string, bool) {
 	selectedPort := entry.GetTargetOr(h.targetPort, DefaultHTTPPort)
 	if config.HardenedMode() {
+		var err error
 		selectedPort, err = targetPortForRequest(r, entry)
 		if err != nil {
 			http.Error(w, "CONNECT requests require a valid host:port authority", http.StatusBadRequest)
-			return
+			return "", false
 		}
 	}
 	if slices.Contains(entry.Features, flexiblePortFeature) {
@@ -217,33 +254,12 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if len(entry.AllowedPorts) > 0 && !slices.Contains(entry.AllowedPorts, requestedPort) {
 				h.logger.Warn("requested target port is not allowed", zap.String("port", requestedPort))
 				http.Error(w, "requested target port is not allowed", http.StatusForbidden)
-				return
+				return "", false
 			}
 			selectedPort = requestedPort
 		}
 	}
-	targetHost, err = prepareTargetHost(cmp.Or(r.Host, r.Header.Get("Host")), selectedPort)
-	if err != nil {
-		http.Error(w, "malformed host value, refusing to process request", http.StatusBadRequest)
-		return
-	}
-	if chain == nil || transport == nil {
-		h.logger.Error("selected route was not prepared")
-		http.Error(w, "proxy route unavailable", http.StatusInternalServerError)
-		return
-	}
-
-	h.logger.Debug("HTTP request received",
-		zap.String("method", r.Method),
-		zap.String("targetHost", targetHost),
-		zap.String("remoteAddr", r.RemoteAddr),
-	)
-
-	if r.Method == http.MethodConnect {
-		h.handleConnect(w, r, targetHost, entry, chain)
-	} else {
-		h.handleHTTPRequest(w, r, targetHost, entry, transport)
-	}
+	return selectedPort, true
 }
 
 func targetPortForRequest(r *http.Request, entry config.EntryPoint) (string, error) {

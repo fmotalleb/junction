@@ -68,50 +68,66 @@ func (r *Registry) Prepare(entries []config.EntryPoint) error {
 	r.primary = make(map[int]bool)
 	r.routes = make(map[int]compiledEntry)
 	for index, entry := range entries {
-		if err := validateEntryPoint(entry); err != nil {
-			return fmt.Errorf("entry point %d: %w", index, err)
-		}
-		chain, err := proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
+		compiled, err := compileEntryPoint(entry, index)
 		if err != nil {
-			return fmt.Errorf("entry point %d has an invalid proxy chain: %w", index, err)
-		}
-		compiled := compiledEntry{entry: entry, chain: chain}
-		if entry.Routing == config.RouterHTTPToHTTPS {
-			compiled.targetURL, compiled.reqReplacer, compiled.respReplacer, err = buildHTTPSEntryConfig(entry)
-			if err != nil {
-				return fmt.Errorf("entry point %d has an invalid HTTPS route: %w", index, err)
-			}
-			if compiled.targetURL != nil && (compiled.targetURL.Scheme != "https" || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
-				return fmt.Errorf("entry point %d HTTPS target must have an HTTPS URL with a host and no userinfo", index)
-			}
+			return err
 		}
 		r.routes[index] = compiled
 		if entry.Routing == config.RouterHTTPHeader || entry.Routing == config.RouterHTTPToHTTPS {
-			compiled.transport = newProxyTransport(chain)
+			compiled.transport = newProxyTransport(compiled.chain)
 			r.routes[index] = compiled
 		}
-		if entry.Tag != nil && entry.Routing != config.RouterHTTPHeader && entry.Routing != config.RouterHTTPToHTTPS && entry.Routing != config.RouterSNI {
-			return fmt.Errorf("entry point %d uses a tag with a router that does not support grouped routes", index)
+		if err := r.registerEntry(index, entry, compiled); err != nil {
+			return err
 		}
-		if entry.Tag == nil {
-			r.primary[index] = true
-			continue
-		}
-		key := *entry.Tag
-		if key == "" {
-			return fmt.Errorf("entry point %d has an empty tag", index)
-		}
-		group, exists := r.groups[key]
-		if exists && (group.routing != entry.Routing || group.listen != entry.Listen) {
-			return fmt.Errorf("tag %q must use one routing mode and listen address", key)
-		}
-		if !exists {
-			group = routeGroup{routing: entry.Routing, listen: entry.Listen}
-			r.primary[index] = true
-		}
-		group.entries = append(group.entries, compiled)
-		r.groups[key] = group
 	}
+	return nil
+}
+
+func compileEntryPoint(entry config.EntryPoint, index int) (compiledEntry, error) {
+	if err := validateEntryPoint(entry); err != nil {
+		return compiledEntry{}, fmt.Errorf("entry point %d: %w", index, err)
+	}
+	chain, err := proxy.NewChainWithDestinationPolicy(entry.Proxy, entry.DestinationAllow, entry.DestinationBlock)
+	if err != nil {
+		return compiledEntry{}, fmt.Errorf("entry point %d has an invalid proxy chain: %w", index, err)
+	}
+	compiled := compiledEntry{entry: entry, chain: chain}
+	if entry.Routing != config.RouterHTTPToHTTPS {
+		return compiled, nil
+	}
+	compiled.targetURL, compiled.reqReplacer, compiled.respReplacer, err = buildHTTPSEntryConfig(entry)
+	if err != nil {
+		return compiledEntry{}, fmt.Errorf("entry point %d has an invalid HTTPS route: %w", index, err)
+	}
+	if compiled.targetURL != nil && (compiled.targetURL.Scheme != "https" || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
+		return compiledEntry{}, fmt.Errorf("entry point %d HTTPS target must have an HTTPS URL with a host and no userinfo", index)
+	}
+	return compiled, nil
+}
+
+func (r *Registry) registerEntry(index int, entry config.EntryPoint, compiled compiledEntry) error {
+	if entry.Tag == nil {
+		r.primary[index] = true
+		return nil
+	}
+	if entry.Routing != config.RouterHTTPHeader && entry.Routing != config.RouterHTTPToHTTPS && entry.Routing != config.RouterSNI {
+		return fmt.Errorf("entry point %d uses a tag with a router that does not support grouped routes", index)
+	}
+	key := *entry.Tag
+	if key == "" {
+		return fmt.Errorf("entry point %d has an empty tag", index)
+	}
+	group, exists := r.groups[key]
+	if exists && (group.routing != entry.Routing || group.listen != entry.Listen) {
+		return fmt.Errorf("tag %q must use one routing mode and listen address", key)
+	}
+	if !exists {
+		group = routeGroup{routing: entry.Routing, listen: entry.Listen}
+		r.primary[index] = true
+	}
+	group.entries = append(group.entries, compiled)
+	r.groups[key] = group
 	return nil
 }
 
@@ -123,23 +139,45 @@ func validateEntryPoint(entry config.EntryPoint) error {
 	if !entry.Listen.IsValid() {
 		return errors.New("listen address is required and must be host:port")
 	}
-	if config.HardenedMode() {
-		if (routing == config.RouterSNI || routing == config.RouterHTTPHeader) &&
-			!entry.Listen.Addr().IsLoopback() && len(entry.AllowFrom) == 0 && !entry.PublicAccess {
-			return errors.New("unrestricted non-loopback SNI/HTTP listeners require public_access = true or explicit allow_from rules")
-		}
-		if entry.Timeout < 0 || entry.GetTimeout() <= 0 {
-			return errors.New("effective timeout must be positive; check TIMEOUT and the entry timeout")
-		}
-		if slices.Contains(entry.Features, flexiblePortFeature) && len(entry.AllowedPorts) == 0 {
-			return errors.New("flexible-port requires an explicit allowed_ports list")
-		}
+	if err := validateHardenedEntryPoint(entry, routing); err != nil {
+		return err
 	}
-	for _, port := range entry.AllowedPorts {
+	if err := validateAllowedPorts(entry.AllowedPorts); err != nil {
+		return err
+	}
+	return validateEntryTarget(entry, routing)
+}
+
+func validateHardenedEntryPoint(entry config.EntryPoint, routing config.Router) error {
+	if entry.Timeout < 0 {
+		return errors.New("effective timeout must be positive; check TIMEOUT and the entry timeout")
+	}
+	if !config.HardenedMode() {
+		return nil
+	}
+	if (routing == config.RouterSNI || routing == config.RouterHTTPHeader) &&
+		!entry.Listen.Addr().IsLoopback() && len(entry.AllowFrom) == 0 && !entry.PublicAccess {
+		return errors.New("unrestricted non-loopback SNI/HTTP listeners require public_access = true or explicit allow_from rules")
+	}
+	if entry.GetTimeout() <= 0 {
+		return errors.New("effective timeout must be positive; check TIMEOUT and the entry timeout")
+	}
+	if slices.Contains(entry.Features, flexiblePortFeature) && len(entry.AllowedPorts) == 0 {
+		return errors.New("flexible-port requires an explicit allowed_ports list")
+	}
+	return nil
+}
+
+func validateAllowedPorts(ports []string) error {
+	for _, port := range ports {
 		if err := isValidPort(port); err != nil {
 			return fmt.Errorf("invalid allowed_ports entry: %w", err)
 		}
 	}
+	return nil
+}
+
+func validateEntryTarget(entry config.EntryPoint, routing config.Router) error {
 	switch routing {
 	case config.RouterSNI:
 		if entry.Target != "" {

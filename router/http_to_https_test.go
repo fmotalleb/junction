@@ -3,6 +3,7 @@ package router
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -95,7 +96,7 @@ func TestHTTPSProxyStreamsUnsupportedEncodedTextResponse(t *testing.T) {
 		transport:    transport,
 		respReplacer: strings.NewReplacer("origin", "replacement"),
 	}
-	request, err := http.NewRequest(http.MethodGet, upstream.URL, nil)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, upstream.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

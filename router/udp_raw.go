@@ -48,9 +48,20 @@ func udpRouter(ctx context.Context, _ *Registry, _ int, entry config.EntryPoint)
 
 	logger.Info("raw UDP proxy booted")
 
+	listenerDone := make(chan struct{})
+	shutdownDone := make(chan struct{})
 	go func() {
-		<-ctx.Done()
+		defer close(shutdownDone)
+		select {
+		case <-ctx.Done():
+			_ = conn.Close()
+		case <-listenerDone:
+		}
+	}()
+	defer func() {
+		close(listenerDone)
 		_ = conn.Close()
+		<-shutdownDone
 	}()
 
 	buffer := make([]byte, 65507) // Max UDP payload size

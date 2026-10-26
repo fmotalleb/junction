@@ -127,8 +127,8 @@ func TestSSHProxyDialerRequiresKnownHosts(t *testing.T) {
 	host := "127.0.0.1:2222"
 	knownHostsPath := t.TempDir() + "/known_hosts"
 	line := knownhosts.Line([]string{host}, signer.PublicKey())
-	if err := os.WriteFile(knownHostsPath, []byte(line+"\n"), 0o600); err != nil {
-		t.Fatal(err)
+	if writeErr := os.WriteFile(knownHostsPath, []byte(line+"\n"), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
 	}
 	proxyURL, err := url.Parse("ssh://user:password@" + host + "?known_hosts=" + url.QueryEscape(knownHostsPath))
 	if err != nil {
@@ -140,8 +140,8 @@ func TestSSHProxyDialerRequiresKnownHosts(t *testing.T) {
 	}
 	sshClient := dialer.(*sshProxyDialer)
 	remote := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 2222}
-	if err := sshClient.config.HostKeyCallback(host, remote, signer.PublicKey()); err != nil {
-		t.Fatalf("trusted host key rejected: %v", err)
+	if callbackErr := sshClient.config.HostKeyCallback(host, remote, signer.PublicKey()); callbackErr != nil {
+		t.Fatalf("trusted host key rejected: %v", callbackErr)
 	}
 	_, wrongKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

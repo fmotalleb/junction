@@ -18,11 +18,11 @@ import (
 const exampleDomain = "example.com"
 
 func TestExchangeUpstreamRetriesTruncatedUDPOverTCP(t *testing.T) {
-	udpConn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	udpConn, err := (&net.ListenConfig{}).ListenPacket(context.Background(), "udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	tcpListener, err := net.Listen("tcp", udpConn.LocalAddr().String())
+	tcpListener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", udpConn.LocalAddr().String())
 	if err != nil {
 		_ = udpConn.Close()
 		t.Fatal(err)

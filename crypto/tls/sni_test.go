@@ -2,6 +2,7 @@ package tls_test
 
 import (
 	"embed"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,15 +58,19 @@ func TestExtractSNIRejectsMalformedAndAcceptsFragmentedRecords(t *testing.T) {
 	}
 
 	hello := testData["google.com"]
-	recordLen := int(hello[3])<<8 | int(hello[4])
-	firstPayload := recordLen / 2
+	recordSize := binary.BigEndian.Uint16(hello[3:5])
+	recordLen := int(recordSize)
+	firstPayloadSize := recordSize / 2
+	firstPayload := int(firstPayloadSize)
 	first := append([]byte(nil), hello[:5+firstPayload]...)
-	first[3] = byte(firstPayload >> 8)
-	first[4] = byte(firstPayload)
+	binary.BigEndian.PutUint16(first[3:5], firstPayloadSize)
 	secondPayload := hello[5+firstPayload : 5+recordLen]
-	second := []byte{0x16, hello[1], hello[2], byte(len(secondPayload) >> 8), byte(len(secondPayload))}
+	second := []byte{0x16, hello[1], hello[2], 0, 0}
+	binary.BigEndian.PutUint16(second[3:5], recordSize-firstPayloadSize)
 	second = append(second, secondPayload...)
-	fragmented := append(first, second...)
+	fragmented := make([]byte, 0, len(first)+len(second))
+	fragmented = append(fragmented, first...)
+	fragmented = append(fragmented, second...)
 	if got := string(tls.ExtractSNI(fragmented)); got != "google.com" {
 		t.Fatalf("fragmented ClientHello SNI = %q, want google.com", got)
 	}

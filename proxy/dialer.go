@@ -70,24 +70,8 @@ func NewDialerWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []s
 		if addr == nil {
 			return nil, errors.New("proxy URL is nil")
 		}
-		if addr.Hostname() == "" {
-			return nil, fmt.Errorf("proxy URL %q must include a host", config.RedactURL(addr.String()))
-		}
-		switch addr.Scheme {
-		case "socks5", "socks5h":
-			if addr.Port() == "" {
-				return nil, fmt.Errorf("proxy URL %q must include a port", config.RedactURL(addr.String()))
-			}
-		case "ssh":
-			if addr.Port() == "" {
-				addr.Host = net.JoinHostPort(addr.Hostname(), "22")
-			}
-		}
-		if port := addr.Port(); port != "" {
-			portNumber, err := strconv.Atoi(port)
-			if err != nil || portNumber < 1 || portNumber > 65535 {
-				return nil, fmt.Errorf("proxy URL %q has an invalid port", config.RedactURL(addr.String()))
-			}
+		if err := prepareProxyAddress(addr); err != nil {
+			return nil, err
 		}
 		d, err := generateDialer(*addr, dialer)
 		if err != nil {
@@ -103,6 +87,31 @@ func NewDialerWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []s
 	}
 
 	return dialer, nil
+}
+
+func prepareProxyAddress(addr *url.URL) error {
+	if addr.Hostname() == "" {
+		return fmt.Errorf("proxy URL %q must include a host", config.RedactURL(addr.String()))
+	}
+	switch addr.Scheme {
+	case "socks5", "socks5h":
+		if addr.Port() == "" {
+			return fmt.Errorf("proxy URL %q must include a port", config.RedactURL(addr.String()))
+		}
+	case "ssh":
+		if addr.Port() == "" {
+			addr.Host = net.JoinHostPort(addr.Hostname(), "22")
+		}
+	}
+	port := addr.Port()
+	if port == "" {
+		return nil
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return fmt.Errorf("proxy URL %q has an invalid port", config.RedactURL(addr.String()))
+	}
+	return nil
 }
 
 // Chain is a reusable, context aware front end for a proxy chain. Build it once
