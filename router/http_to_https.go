@@ -64,7 +64,7 @@ func httpToHTTPSHandler(ctx context.Context, registry *Registry, index int, entr
 		}
 		compiled.transport = newProxyTransport(compiled.chain)
 	}
-	if compiled.targetURL != nil && (compiled.targetURL.Scheme != "https" || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
+	if compiled.targetURL != nil && (compiled.targetURL.Scheme != httpsScheme || compiled.targetURL.Host == "" || compiled.targetURL.User != nil) {
 		return true, errors.New("http_to_https target must be an HTTPS URL with a host and no userinfo")
 	}
 

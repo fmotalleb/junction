@@ -214,7 +214,7 @@ junction run --listen 8443 \
     - Port only: `":port"` (binds to `127.0.0.1:port`)
     - Integer: `port` (binds to `127.0.0.1:port`)
 
-    In hardened mode, unrestricted non-loopback `sni` and `http-header` listeners
+    In hardened mode, unrestricted non-loopback `sni`, `http-header`, and `http-static` listeners
     must set `public_access = true` or define `allow_from` rules. In the default
     compatibility mode, listeners start without that opt-in.
 
@@ -223,6 +223,7 @@ junction run --listen 8443 \
 
     - `sni`: Uses SNI for hostname detection. Default port: `443`
     - `http-header`: Uses HTTP `Host` header. Default port: `80`
+    - `http-static`: Returns configured response headers and a templated body without forwarding the request
     - `tcp-raw`: Raw TCP forwarding. Requires complete `ip:port` in `to` field
     - `udp-raw`: Raw UDP forwarding. Requires complete `ip:port` in `to` field.
       Proxy chains are not implemented and fall back to direct traffic by default.
@@ -236,7 +237,7 @@ junction run --listen 8443 \
       Rules are checked in configuration order; the first matching entrypoint is used.
       All entrypoints in a tag group must:
         - use the same listen address
-        - use the same routing mode (`sni`, `http-header`, or `http-to-https`)
+        - use the same routing mode (`sni`, `http-header`, `http-static`, or `http-to-https`)
         - specify the same tag identifier
       Tags are not supported for `tcp-raw` or `udp-raw`.
 
@@ -270,11 +271,27 @@ junction run --listen 8443 \
       Proxy3 --> Target["example.com:80"]
     ```
 
-  - **`to`** (required):
+  - **`to`** (required for forwarding routers):
     Target destination:
 
     - For `sni`/`http-header`: Port number (string)
     - For `tcp-raw`/`udp-raw`: Complete `"ip:port"` address
+    - Not used by `http-static`
+
+  - **`response_headers`** and **`content`** (for `http-static`):
+    `response_headers` is a map of response header names to values. Header values
+    and `content` support Go templates. The template data provides `.URL`, a
+    `net/url.URL` built from the request, and `.Method`. For example,
+    `.URL.Hostname`, `.URL.Port`, `.URL.String`, `.URL.Scheme`, `.URL.Path`, and
+    `.URL.RawQuery` are available. The body uses `html/template` escaping.
+
+    ```toml
+    [[entrypoints]]
+    routing = "http-static"
+    listen = "127.0.0.1:8085"
+    response_headers = { "Content-Type" = "text/plain; charset=utf-8", "X-Request-Host" = "{{ .URL.Host }}" }
+    content = "host={{ .URL.Hostname }} port={{ .URL.Port }} url={{ .URL.String }}"
+    ```
 
   - **`timeout`** (optional):
     Connection timeout duration:
@@ -291,11 +308,11 @@ junction run --listen 8443 \
       - HTTP requests default to port `80`. Hardened mode validates targetless CONNECT authorities and uses the authority port.
     - Other routers currently ignore feature flags (unknown features are ignored with a warning).
 
-  - **`block_list`** (optional) [only when using sni,http-header]:
+  - **`block_list`** (optional) [for sni, http-header, and http-static]:
     List of hostnames/patterns to block.
     - Supports wildcards (e.g., `"*.example.com"`, `"glob:*.example.com"`)
     - Supports Regular Expression (contain check) (e.g. `"regex:badword"`, `"grep:bad.+word"`)
-  - **`allow_list`** (optional) [only when using sni,http-header]:
+  - **`allow_list`** (optional) [for sni, http-header, and http-static]:
     List of hostnames/patterns to allow. If specified, only listed hosts are allowed.
     - Supports wildcards (e.g., `"*.example.com"`)
     - Supports Regular Expression (e.g. `"regex:allowed"`, `"grep:.+google.com^"`)
