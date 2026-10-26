@@ -117,7 +117,7 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 	l := logger.With(zap.String("sni", sni))
 
 	if entry.Tag == nil {
-		if !entry.Allowed(sni) {
+		if !entry.AllowedHost(sni) {
 			l.Warn("SNI rejected")
 			_ = conn.Close()
 			return
@@ -128,7 +128,7 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 
 	// Tagged routing
 	for _, ep := range sniGroups[*entry.Tag] {
-		if ep.Allowed(sni) && ep.AllowedFrom(remote) {
+		if ep.AllowedHost(sni) && ep.AllowedFrom(remote) {
 			go proxyToTarget(ctx, conn, sni, buf, n, l, ep)
 			return
 		}

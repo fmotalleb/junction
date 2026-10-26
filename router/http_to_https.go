@@ -231,7 +231,7 @@ func (h *httpToHTTPSProxy) resolveRoute(w http.ResponseWriter, r *http.Request) 
 	}
 
 	for _, ep := range group {
-		if !ep.Allowed(incomingHost) || !ep.AllowedFrom(remoteAddr) {
+		if !ep.AllowedHost(incomingHost) || !ep.AllowedFrom(remoteAddr) {
 			continue
 		}
 		// Rebuild per-entry config so each tagged entry can point at a

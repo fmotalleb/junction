@@ -73,7 +73,7 @@ func (e *EntryPoint) GetTargetOr(def ...string) string {
 	return cmp.Or(items...)
 }
 
-func (e *EntryPoint) Allowed(name string) bool {
+func (e *EntryPoint) AllowedHost(name string) bool {
 	if len(e.BlockList) != 0 {
 		for _, b := range e.BlockList {
 			if b.Match(name) {

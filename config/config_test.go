@@ -80,7 +80,7 @@ func TestEntryPointAllowed(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := entryWith(t, tc.block, tc.allow, nil, nil)
-			assert.Equal(t, tc.want, e.Allowed(tc.host))
+			assert.Equal(t, tc.want, e.AllowedHost(tc.host))
 		})
 	}
 }

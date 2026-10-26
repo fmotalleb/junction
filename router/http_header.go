@@ -178,7 +178,7 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		matched := false
 
 		for _, ep := range group {
-			if ep.Allowed(targetHost) && ep.AllowedFrom(remoteAddr) {
+			if ep.AllowedHost(targetHost) && ep.AllowedFrom(remoteAddr) {
 				entry = ep
 				matched = true
 				break
@@ -195,7 +195,7 @@ func (h *httpProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !entry.Allowed(targetHost) {
+	if !entry.AllowedHost(targetHost) {
 		h.logger.Warn("hostname rejected", zap.String("hostname", targetHost))
 		w.WriteHeader(http.StatusForbidden)
 		return
