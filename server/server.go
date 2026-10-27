@@ -34,8 +34,8 @@ func Serve(ctx context.Context, c config.Config) error {
 			},
 		)
 	}
-	if c.Core.Pprof {
-		pprofListen := c.Core.PprofListen
+	if c.Core.Pprof.Enable {
+		pprofListen := c.Core.Pprof.Listen
 		if pprofListen == "" {
 			pprofListen = "127.0.0.1:6060"
 		}
