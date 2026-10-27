@@ -5,6 +5,9 @@ include = [
   "https://example.conf/example.toml",  # Remote HTTPS configuration
 ]
 
+[core]
+pprof = false # Enable Go pprof endpoints at http://127.0.0.1:6060/debug/pprof/
+
 [core.fake_dns]
 listen = "127.0.0.1:5453"               # Listen address for fake DNS server (UDP address)
 answer = "127.0.0.1"                    # IP address in response to allowed A record queries (ip address of server running this software)

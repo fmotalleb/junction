@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/pprof"
 	"sync"
 	"time"
 
@@ -32,6 +34,13 @@ func Serve(ctx context.Context, c config.Config) error {
 			},
 		)
 	}
+	if c.Core.Pprof {
+		wg.Go(func() {
+			if err := servePprof(ctx); err != nil {
+				log.FromContext(ctx).Named("pprof").Warn("pprof server stopped", zap.Error(err))
+			}
+		})
+	}
 	for _, e := range c.EntryPoints {
 		wg.Go(
 			func() {
@@ -49,6 +58,30 @@ func Serve(ctx context.Context, c config.Config) error {
 	default: // If wait group is done without context cancellation its an error in configuration
 		return ErrServerDiedBeforeContext
 	}
+}
+
+func servePprof(ctx context.Context) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	server := &http.Server{
+		Addr:              "127.0.0.1:6060",
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		<-ctx.Done()
+		_ = server.Close()
+	}()
+	err := server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 // runDNS starts the DNS service with the provided configuration and context.
