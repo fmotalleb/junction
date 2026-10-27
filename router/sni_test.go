@@ -22,10 +22,19 @@ func TestSNITunnelReapsRelay(t *testing.T) {
 			}
 			client, conn := relayTCPPair(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			entry := config.EntryPoint{Target: port, Timeout: time.Minute}
+			entry := config.EntryPoint{
+				Routing: config.RouterSNI,
+				Listen:  mustAddrPort(t, "127.0.0.1:8443"),
+				Target:  port,
+				Timeout: time.Minute,
+			}
+			registry := NewRegistry()
+			if err := registry.Prepare([]config.EntryPoint{entry}); err != nil {
+				t.Fatal(err)
+			}
 			handlerDone := make(chan struct{})
 			go func() {
-				handleClient(ctx, conn, entry, zap.NewNop())
+				handleClient(ctx, registry, 0, conn, entry, zap.NewNop())
 				close(handlerDone)
 			}()
 			handshakeDone := make(chan struct{})

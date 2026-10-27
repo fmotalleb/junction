@@ -92,26 +92,6 @@ func (e *EntryPoint) GetTargetOr(def ...string) string {
 	return cmp.Or(items...)
 }
 
-func (e *EntryPoint) AllowedHost(name string) bool {
-	if len(e.BlockList) != 0 {
-		for _, b := range e.BlockList {
-			if b.Match(name) {
-				return false
-			}
-		}
-	}
-	if len(e.AllowList) != 0 {
-		for _, a := range e.AllowList {
-			if a.Match(name) {
-				return true
-			}
-		}
-		return false
-	}
-
-	return true
-}
-
 // AllowedHost applies host rules to normalized forms of a hostname. Ports are
 // removed before matching; IPv4/IPv6 literals, case, trailing dots, and IDNA
 // Unicode/ASCII forms therefore do not change the policy result.

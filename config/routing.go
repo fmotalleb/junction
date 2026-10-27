@@ -14,7 +14,6 @@ const (
 	RouterTCPRaw      Router = "tcp-raw"
 	RouterUDPRaw      Router = "udp-raw"
 	RouterHTTPToHTTPS Router = "http-to-https"
-	RouterHTTPStatic  Router = "http-static"
 )
 
 func (r *Router) Decode(from reflect.Type, val interface{}) (any, error) {
