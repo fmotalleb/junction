@@ -77,11 +77,16 @@ func servePprof(ctx context.Context, listen string) error {
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	serveDone := make(chan struct{})
 	go func() {
-		<-ctx.Done()
-		_ = server.Close()
+		select {
+		case <-ctx.Done():
+			_ = server.Close()
+		case <-serveDone:
+		}
 	}()
 	err := server.ListenAndServe()
+	close(serveDone)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
