@@ -162,6 +162,23 @@ junction run --listen 8443 \
     Defaults to `127.0.0.1:6060`; the pprof index is at
     `http://127.0.0.1:6060/debug/pprof/` with the default address.
 
+  TOML:
+
+  ```toml
+  [core.pprof]
+  enable = true
+  listen = "127.0.0.1:6060"
+  ```
+
+  YAML:
+
+  ```yaml
+  core:
+    pprof:
+      enable: true
+      listen: "127.0.0.1:6060"
+  ```
+
   - fake_dns: object or string of fake DNS config:
     In order to create a simple dns server to manipulate requests into this server (needs manual IP configuration)
     Limitations:

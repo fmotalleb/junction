@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Junction configuration",
+  "type": "object",
+  "properties": {
+    "include": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Additional configuration files to merge."
+    },
+    "core": {
+      "type": "object",
+      "properties": {
+        "pprof": {
+          "type": "object",
+          "description": "Go pprof HTTP listener settings.",
+          "properties": {
+            "enable": {
+              "type": "boolean",
+              "default": false,
+              "description": "Start the pprof listener."
+            },
+            "listen": {
+              "type": "string",
+              "default": "127.0.0.1:6060",
+              "description": "TCP listener address for pprof endpoints."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "entrypoints": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    }
+  },
+  "additionalProperties": true
+}

@@ -4,3 +4,7 @@ include = [
   "./example/*.toml",
 ]
 
+[core.pprof]
+enable = false
+listen = "127.0.0.1:6060"
+
