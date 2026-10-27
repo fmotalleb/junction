@@ -61,7 +61,10 @@ func NewDialerWithDestinationPolicy(chain []*url.URL, allowCIDRs, blockCIDRs []s
 	if policy != nil && len(chain) != 0 {
 		return nil, errors.New("destination CIDR policy cannot be enforced through a proxy chain that resolves destinations remotely")
 	}
-	var dialer proxy.Dialer = proxy.Direct
+	// net.Dialer implements ContextDialer, unlike proxy.Direct. Starting with
+	// it lets cancellation interrupt direct connects instead of abandoning a
+	// goroutine blocked in Dial.
+	var dialer proxy.Dialer = &net.Dialer{}
 	if policy != nil {
 		dialer = destinationPolicyDialer{policy: policy}
 	}

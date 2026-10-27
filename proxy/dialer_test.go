@@ -45,6 +45,16 @@ func TestUnknownProxySchemeFallsBackUnlessHardened(t *testing.T) {
 	}
 }
 
+func TestDirectChainUsesContextAwareDialer(t *testing.T) {
+	chain, err := NewChain(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := chain.dialer.(proxy.ContextDialer); !ok {
+		t.Fatalf("direct chain dialer %T does not support context cancellation", chain.dialer)
+	}
+}
+
 // A proxy that accepts the socket but never answers must not park the dialer:
 // every such dial held a goroutine and two sockets for the lifetime of the
 // process.
@@ -54,8 +64,9 @@ func TestChainDialHonorsContextOnStalledProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
+	acceptDone := make(chan struct{})
 	go func() {
+		defer close(acceptDone)
 		var held []net.Conn
 		defer func() {
 			for _, c := range held {
@@ -70,6 +81,10 @@ func TestChainDialHonorsContextOnStalledProxy(t *testing.T) {
 			held = append(held, conn)
 		}
 	}()
+	t.Cleanup(func() {
+		_ = l.Close()
+		<-acceptDone
+	})
 
 	chain, err := NewChain([]*url.URL{{
 		Scheme: "socks5",
