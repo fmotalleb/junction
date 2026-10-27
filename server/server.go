@@ -35,8 +35,12 @@ func Serve(ctx context.Context, c config.Config) error {
 		)
 	}
 	if c.Core.Pprof {
+		pprofListen := c.Core.PprofListen
+		if pprofListen == "" {
+			pprofListen = "127.0.0.1:6060"
+		}
 		wg.Go(func() {
-			if err := servePprof(ctx); err != nil {
+			if err := servePprof(ctx, pprofListen); err != nil {
 				log.FromContext(ctx).Named("pprof").Warn("pprof server stopped", zap.Error(err))
 			}
 		})
@@ -60,7 +64,7 @@ func Serve(ctx context.Context, c config.Config) error {
 	}
 }
 
-func servePprof(ctx context.Context) error {
+func servePprof(ctx context.Context, listen string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
@@ -69,7 +73,7 @@ func servePprof(ctx context.Context) error {
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	server := &http.Server{
-		Addr:              "127.0.0.1:6060",
+		Addr:              listen,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}

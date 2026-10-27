@@ -158,7 +158,9 @@ junction run --listen 8443 \
   Some specific global configurations are stored here
 
   - `pprof`: set to `true` to serve Go profiling endpoints at
-    `http://127.0.0.1:6060/debug/pprof/`. The listener binds to loopback only.
+    `http://127.0.0.1:6060/debug/pprof/` by default.
+  - `pprof_listen`: listener address for pprof, such as `127.0.0.1:6060` or
+    `:6060`. Defaults to `127.0.0.1:6060` when omitted.
 
   - fake_dns: object or string of fake DNS config:
     In order to create a simple dns server to manipulate requests into this server (needs manual IP configuration)

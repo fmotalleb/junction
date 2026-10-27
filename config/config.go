@@ -21,8 +21,9 @@ type Config struct {
 }
 
 type CoreCfg struct {
-	FakeDNS *FakeDNS `mapstructure:"fake_dns" toml:"fake_dns,omitempty" yaml:"fake_dns,omitempty" json:"fake_dns,omitempty"`
-	Pprof   bool     `mapstructure:"pprof,omitempty" toml:"pprof,omitempty" yaml:"pprof,omitempty" json:"pprof,omitempty"`
+	FakeDNS     *FakeDNS `mapstructure:"fake_dns" toml:"fake_dns,omitempty" yaml:"fake_dns,omitempty" json:"fake_dns,omitempty"`
+	Pprof       bool     `mapstructure:"pprof,omitempty" toml:"pprof,omitempty" yaml:"pprof,omitempty" json:"pprof,omitempty"`
+	PprofListen string   `mapstructure:"pprof_listen,omitempty" toml:"pprof_listen,omitempty" yaml:"pprof_listen,omitempty" json:"pprof_listen,omitempty"`
 }
 
 type EntryPoint struct {

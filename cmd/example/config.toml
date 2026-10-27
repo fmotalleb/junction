@@ -7,6 +7,7 @@ include = [
 
 [core]
 pprof = false # Enable Go pprof endpoints at http://127.0.0.1:6060/debug/pprof/
+pprof_listen = "127.0.0.1:6060" # Pprof listener address; defaults to loopback if omitted
 
 [core.fake_dns]
 listen = "127.0.0.1:5453"               # Listen address for fake DNS server (UDP address)
