@@ -85,3 +85,20 @@ func TestSNITunnelReapsRelay(t *testing.T) {
 		})
 	}
 }
+
+func TestSNIClientReadStopsOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	conn, peer := net.Pipe()
+	defer peer.Close()
+	done := make(chan struct{})
+	go func() {
+		handleClient(ctx, NewRegistry(), 0, conn, config.EntryPoint{Routing: config.RouterSNI}, zap.NewNop())
+		close(done)
+	}()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("SNI ClientHello read remained blocked after context cancellation")
+	}
+}

@@ -118,6 +118,17 @@ func serveSNIRouter(ctx context.Context, registry *Registry, index int, entry co
 }
 
 func handleClient(ctx context.Context, registry *Registry, index int, conn net.Conn, entry config.EntryPoint, logger *zap.Logger) {
+	closeDone := make(chan struct{})
+	stopClose := context.AfterFunc(ctx, func() {
+		defer close(closeDone)
+		_ = conn.Close()
+	})
+	defer func() {
+		if !stopClose() {
+			<-closeDone
+		}
+	}()
+
 	remote := conn.RemoteAddr()
 	if entry.Tag == nil {
 		if !entry.AllowedFrom(remote) {
