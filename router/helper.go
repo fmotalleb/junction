@@ -4,15 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/fmotalleb/junction/proxy"
-	"github.com/fmotalleb/junction/utils"
 )
 
 func dialTarget(ctx context.Context, proxyAddr []*url.URL, target string, logger *zap.Logger) (net.Conn, error) {
@@ -83,50 +82,41 @@ func (a *acceptRetry) wait(ctx context.Context) bool {
 
 func (a *acceptRetry) reset() { a.delay = 0 }
 
-// relayTraffic concurrently relays data between two network connections in both directions until either connection is closed or an error occurs.
-// It also enforces ctx: without the watcher below a tunnel whose peers went
-// silent was held open until the process was restarted.
-// Logs connection closure and errors for diagnostic purposes.
+// relayTraffic closes both connections on the first EOF, I/O error, or context
+// cancellation, then joins both copy workers before returning. The caller owns
+// shutdown; copy workers only report completion and never wait on one another.
 func relayTraffic(ctx context.Context, src, dst net.Conn, logger *zap.Logger) {
-	defer func() {
-		_ = src.Close()
-		_ = dst.Close()
-	}()
-
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = src.Close()
-			_ = dst.Close()
-		case <-stop:
+	// Buffer both results so a worker can always report its exit, including
+	// while the owner is closing sockets after cancellation.
+	results := make(chan error, 2)
+	pump := func(to, from net.Conn, direction string) {
+		_, err := io.Copy(to, from)
+		if err != nil {
+			err = fmt.Errorf("%s: %w", direction, err)
 		}
-	}()
+		results <- err
+	}
+	go pump(dst, src, "client to target")
+	go pump(src, dst, "target to client")
 
-	errs, _ := errgroup.WithContext(ctx)
-	errs.Go(
-		func() error {
-			if err := utils.Copy(dst, src); err != nil {
-				return errors.Join(errors.New("failed to write to dst"), err)
-			} else {
-				return nil
-			}
-		},
-	)
-	errs.Go(
-		func() error {
-			if err := utils.Copy(src, dst); err != nil {
-				return errors.Join(errors.New("failed to write to dst"), err)
-			} else {
-				return nil
-			}
-		},
-	)
-	// Wait for the first error or closure
-	err := errs.Wait()
+	completed := 0
+	var err error
+	select {
+	case err = <-results:
+		completed++
+	case <-ctx.Done():
+	}
+	// Closing both sockets unblocks reads and writes in the other direction.
+	// This intentionally tears down the entire tunnel on a TCP half-close too.
+	_ = src.Close()
+	_ = dst.Close()
+	for ; completed < 2; completed++ {
+		if copyErr := <-results; err == nil {
+			err = copyErr
+		}
+	}
 	if err != nil {
-		if errors.Is(err, net.ErrClosed) {
+		if ctx.Err() != nil || errors.Is(err, net.ErrClosed) || errors.Is(err, io.ErrClosedPipe) {
 			logger.Debug("connection closed (normal)", zap.Error(err))
 		} else {
 			logger.Warn("connection collapsed", zap.Error(err))

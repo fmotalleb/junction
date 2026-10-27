@@ -146,3 +146,72 @@ func TestSSHProxyDialerLeaksConnections(t *testing.T) {
 		t.Errorf("goroutine leak: base=%d after=%d\n%s", base, after, buf[:sz])
 	}
 }
+
+// Block channel-close packets until the SSH transport is closed. This models a
+// peer that stopped reading while the SSH transport's write buffers are full.
+type blockedSSHTransport struct {
+	net.Conn
+	blockWrites atomic.Bool
+	closed      chan struct{}
+	closeOnce   sync.Once
+}
+
+func (c *blockedSSHTransport) Write(p []byte) (int, error) {
+	if c.blockWrites.Load() {
+		<-c.closed
+		return 0, net.ErrClosed
+	}
+	return c.Conn.Write(p)
+}
+
+func (c *blockedSSHTransport) Close() error {
+	c.closeOnce.Do(func() { close(c.closed) })
+	return c.Conn.Close()
+}
+
+type blockedSSHTransportDialer struct {
+	conn *blockedSSHTransport
+}
+
+func (d *blockedSSHTransportDialer) Dial(network, addr string) (net.Conn, error) {
+	c, err := (&net.Dialer{}).DialContext(context.Background(), network, addr)
+	if err != nil {
+		return nil, err
+	}
+	d.conn = &blockedSSHTransport{Conn: c, closed: make(chan struct{})}
+	return d.conn, nil
+}
+
+func TestSSHTunnelCloseReapsBlockedTransport(t *testing.T) {
+	srv := newSSHServer(t)
+	defer srv.stop()
+	parent := &blockedSSHTransportDialer{}
+	d := &sshProxyDialer{
+		addr: srv.l.Addr().String(),
+		//nolint:gosec // Fixture: the in-process SSH server has no real host key.
+		config: &gossh.ClientConfig{User: "u", HostKeyCallback: gossh.InsecureIgnoreHostKey()},
+		dialer: parent,
+	}
+	tunnel, err := d.Dial("tcp", "example.com:443")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parent.conn.Close()
+	parent.conn.blockWrites.Store(true)
+	done := make(chan struct{})
+	go func() {
+		_ = tunnel.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Error("tunnel Close blocked sending channel-close before closing the SSH transport")
+		_ = parent.conn.Close()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Error("tunnel Close did not exit after transport cleanup")
+		}
+	}
+}

@@ -129,13 +129,13 @@ type sshTunnelConn struct {
 }
 
 func (c *sshTunnelConn) Close() error {
-	err := c.Conn.Close()
 	c.once.Do(func() {
-		// Closing the client closes the mux, which closes the transport socket
-		// and lets every session goroutine exit.
+		// Close the transport before the channel: channel.Close sends an SSH
+		// message and can block forever if the peer stopped reading. Closing
+		// the transport first also releases blocked mux reads and writes.
 		_ = c.client.Close()
 	})
-	return err
+	return c.Conn.Close()
 }
 
 func ignoreHostKey(_ string, _ net.Addr, _ gossh.PublicKey) error {

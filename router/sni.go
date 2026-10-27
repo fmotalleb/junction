@@ -122,14 +122,14 @@ func handleClient(ctx context.Context, conn net.Conn, entry config.EntryPoint, l
 			_ = conn.Close()
 			return
 		}
-		go proxyToTarget(ctx, conn, sni, buf, n, l, entry)
+		proxyToTarget(ctx, conn, sni, buf, n, l, entry)
 		return
 	}
 
 	// Tagged routing
 	for _, ep := range sniGroups[*entry.Tag] {
 		if ep.AllowedHost(sni) && ep.AllowedFrom(remote) {
-			go proxyToTarget(ctx, conn, sni, buf, n, l, ep)
+			proxyToTarget(ctx, conn, sni, buf, n, l, ep)
 			return
 		}
 	}

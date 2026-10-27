@@ -412,6 +412,26 @@ Once running, the application will be accessible on the configured ports.
 
 ## 🛠 **Development**
 
+### Profiling relay goroutines
+
+Enable `core.pprof.enable` and capture an aggregated goroutine profile from the
+configured listener:
+
+```bash
+curl -s 'http://127.0.0.1:6060/debug/pprof/goroutine?debug=1' > goroutines.txt
+```
+
+The `debug=2` stack dump is capped at 64 MiB by Go and can end mid-stack when there
+are many goroutines. Use `debug=1` or the binary profile without a `debug` query
+parameter to capture the complete profile.
+
+SNI, raw TCP, and HTTP CONNECT relays close both endpoints on the first EOF, I/O
+error, or context cancellation, then wait for both copy workers to exit. A TCP
+half-close also shuts down the entire tunnel. A peer that disappears without a
+FIN/RST, or an EOF hidden behind a blocked write, may only be detected by TCP
+keepalive or the entry timeout. The entry timeout bounds total tunnel lifetime;
+it is not an idle timeout.
+
 ### Debugging with VS Code
 
 Create a local `.vscode/launch.json` (it is git-ignored) with a **"Launch Package"**
